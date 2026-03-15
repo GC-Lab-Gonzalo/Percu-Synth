@@ -41,6 +41,7 @@ CRGB leds[NUM_LEDS];
 
 uint8_t  modo       = 0;
 bool     dirFwd     = true;
+bool     apagado    = false;
 
 // Valores leídos de pots
 uint8_t  brillo     = 40;
@@ -215,14 +216,20 @@ void loop() {
     delay(80);
     FastLED.clear();
   }
-  if (botonPresionado(4)) {  // BTN5 (0) → apagar todo
-    FastLED.clear();
-    FastLED.show();
-    Serial.println("Apagado");
-    delay(300);
+  if (botonPresionado(4)) {  // BTN5 (0) → apagar / reanudar (toggle)
+    apagado = !apagado;
+    if (apagado) {
+      FastLED.clear();
+      FastLED.show();
+      Serial.println("Apagado");
+    } else {
+      Serial.println("Reanudado");
+    }
   }
 
   // ── Renderizar frame ─────────────────────────────────────
+  if (apagado) return;  // no renderizar mientras esté apagado
+
   if (ahora - ultimoFrame >= velocidad) {
     ultimoFrame = ahora;
     apagarInternos();
