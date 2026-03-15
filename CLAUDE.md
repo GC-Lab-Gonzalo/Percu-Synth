@@ -47,7 +47,13 @@ Each firmware is a standalone Arduino sketch (`.ino`). There is no centralized b
 | I2S BCK (BCLK) | 41 |
 | Buttons | 44, 42, 0, 45, 47 |
 | Potentiometers | ADC 1, 2, 8, 10 |
-| Piezo sensors (MIDI_Drum) | ADC 4, 5, 6, 7 |
+| Piezo sensors | ADC 4, 5, 6, 7 |
+| LED WS2812 data | 46 |
+| MIDI DIN-5 TX | 43 |
+| I2C SDA (MPU6050) | 21 |
+| I2C SCL (MPU6050) | 38 |
+| External sensor A | ADC 3 |
+| External sensor B | ADC 9 |
 
 Audio output targets a **PCM5102 DAC** via I2S at 44.1 kHz, 16-bit stereo.
 
