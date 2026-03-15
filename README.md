@@ -52,6 +52,12 @@ Los firmwares del repositorio son ejemplos concretos de estas posibilidades. El 
 | Botones | 44, 42, 0, 45, 47 |
 | Potenciómetros | ADC 1, 2, 8, 10 |
 | Piezos | ADC 4, 5, 6, 7 |
+| LED WS2812 (datos) | 46 |
+| MIDI DIN-5 TX | 43 |
+| I2C SDA (MPU6050) | 21 |
+| I2C SCL (MPU6050) | 38 |
+| Sensor externo A | ADC 3 |
+| Sensor externo B | ADC 9 |
 
 Todos los firmwares de audio generan señal a **44.1 kHz, 16-bit estéreo** a través del DAC PCM5102.
 
@@ -71,6 +77,12 @@ Los siguientes firmwares son los primeros desarrollados para el laboratorio. El 
 - Convierte golpes físicos y gestos en mensajes MIDI USB
 - Tres modalidades de entrada: botones, sensores piezoeléctricos e IMU
 - Compatible con cualquier software o hardware que reciba MIDI (canal 9)
+
+### `test_leds` — Prueba de Tira LED WS2812
+- 6 modos de animación: sólido, chase, rainbow, twinkle, pulso, meteor
+- LEDs 1-6 (SMD internos) siempre apagados — LEDs 7 en adelante activos
+- Botones cambian modo y dirección; POTs controlan brillo, color, velocidad y parámetro extra
+- Requiere librería **FastLED**
 
 ### `synth_basico` — Sintetizador Polifónico
 - 5 voces con morphing de forma de onda (senoidal → cuadrada → diente de sierra)
