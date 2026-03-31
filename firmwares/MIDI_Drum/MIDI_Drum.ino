@@ -12,7 +12,7 @@ MPU6050 mpu;
 // ---- BOTONES ----
 #define NUM_BUTTONS 5
 const int buttonPins[NUM_BUTTONS]      = {42, 44, 45, 47, 0};
-const uint8_t buttonNotes[NUM_BUTTONS] = {36, 38, 42, 46, 51};
+const uint8_t buttonNotes[NUM_BUTTONS] = {36, 38, 42, 46, 49};
 bool lastState[NUM_BUTTONS];
 
 // ---- COLA DE BOTONES ----
@@ -36,7 +36,7 @@ void encolarBoton(int idx) {
 // ---- PIEZOS ----
 #define NUM_PIEZOS 4
 const int piezoPins[NUM_PIEZOS]        = {4, 5, 6, 7};
-const uint8_t piezoNotes[NUM_PIEZOS]   = {49, 45, 47, 43};
+const uint8_t piezoNotes[NUM_PIEZOS]   = {51, 45, 47, 43};
 const char* piezoNames[NUM_PIEZOS]     = {"CRASH","TOM1","TOM2","FLOOR TOM"};
 
 const int UMBRAL_PIEZO = 300;
