@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — Step Sequencer (Live)</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0d0d14;
+  --bg2:     #161621;
+  --bg3:     #1e1e2c;
+  --bg4:     #24243a;
+  --border:  #2e2e44;
+  --accent:  #00e5a0;
+  --accent2: #7c5cff;
+  --warn:    #ffcc44;
+  --err:     #ff5555;
+  --text:    #d0d0e8;
+  --dim:     #5a5a80;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  padding: 14px;
+  font-size: 13px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: var(--bg2);
+}
+.logo-title { font-size: 17px; font-weight: bold; letter-spacing: 5px; color: var(--accent); }
+.logo-sub   { font-size: 10px; color: var(--dim); letter-spacing: 3px; margin-left: 8px; }
+#status     { font-size: 11px; color: var(--dim); }
+.live-dot   { display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--err);margin-right:6px; }
+.live-dot.on{ background:var(--accent); box-shadow:0 0 6px var(--accent); }
+
+section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--dim);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* MIDI panel */
+.midi-row {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.midi-row label { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+.midi-row select, .midi-row button {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 4px;
+  letter-spacing: 1px; cursor: pointer;
+}
+.midi-row button:hover { border-color: var(--accent); color: var(--accent); }
+.midi-row select { min-width: 200px; }
+
+/* Transport */
+.transport { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.transport button {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 12px; padding: 8px 16px; border-radius: 4px;
+  cursor: pointer; letter-spacing: 2px;
+}
+.transport button:hover { border-color: var(--accent); color: var(--accent); }
+.transport button.playing { background: var(--accent); color: var(--bg); }
+.transport label { font-size: 11px; color: var(--dim); letter-spacing: 2px; }
+
+/* Grid */
+.grid-wrapper { overflow-x: auto; }
+table.grid { border-collapse: separate; border-spacing: 3px; margin: 0 auto; }
+table.grid th.step-num {
+  width: 28px; height: 18px; font-size: 9px; color: var(--dim);
+  text-align: center; font-weight: normal;
+}
+table.grid th.step-num.beat    { color: var(--accent); }
+table.grid th.step-num.current { color: var(--warn); font-weight: bold; }
+table.grid td.track-label {
+  width: 150px; padding-right: 8px; text-align: right;
+  font-size: 11px; color: var(--dim); letter-spacing: 1px;
+}
+table.grid td.track-label .name { color: var(--text); cursor: pointer; }
+table.grid td.track-label .name.muted { color: var(--err); text-decoration: line-through; }
+table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
+.cell {
+  width: 28px; height: 28px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 3px; cursor: pointer;
+  transition: background 0.08s, border-color 0.08s;
+}
+.cell.beat { background: var(--bg4); }
+.cell:hover { border-color: var(--accent); }
+.cell.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.cell.current-step { outline: 2px solid var(--warn); outline-offset: -2px; }
+
+/* FX panel */
+.fx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+.fx-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px;
+}
+.fx-card label {
+  display: block; font-size: 9px; color: var(--dim);
+  letter-spacing: 2px; margin-bottom: 4px;
+}
+.fx-card .val { font-size: 13px; color: var(--accent); font-weight: bold; }
+.fx-card input[type=range] { width: 100%; margin-top: 6px; }
+.fx-card button.tog {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text); font-family: inherit; padding: 6px;
+  border-radius: 3px; cursor: pointer; letter-spacing: 2px; font-size: 11px;
+}
+.fx-card button.tog.on { background: var(--warn); color: var(--bg); border-color: var(--warn); }
+
+/* Tracks (sample upload) */
+.tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.track-card {
+  background: var(--bg3); border: 2px solid var(--border);
+  border-radius: 8px; padding: 12px;
+}
+.track-card .track-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.track-card .track-head input.name-in {
+  background: transparent; border: none; color: var(--accent);
+  font-family: inherit; font-size: 13px; font-weight: bold;
+  letter-spacing: 2px; width: 100px;
+}
+.track-card .track-head input.name-in:focus { outline: 1px solid var(--accent); }
+.track-card canvas {
+  width: 100%; height: 50px; background: var(--bg);
+  border-radius: 3px; margin: 6px 0; display: block;
+}
+.track-card .controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.track-card button.btn {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 10px; padding: 5px 10px;
+  border-radius: 3px; cursor: pointer; letter-spacing: 1px;
+}
+.track-card button.btn:hover { border-color: var(--accent); color: var(--accent); }
+.track-card button.btn.del:hover { border-color: var(--err); color: var(--err); }
+.track-card input[type=file] { display: none; }
+.track-card .size-info { font-size: 9px; color: var(--dim); margin-top: 4px; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn-primary {
+  background: var(--accent); border: none; color: var(--bg);
+  font-family: inherit; font-size: 13px; font-weight: bold;
+  padding: 12px 24px; border-radius: 4px; cursor: pointer; letter-spacing: 3px;
+}
+.btn-primary:hover { background: #00ffb4; }
+.btn-secondary {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: inherit; font-size: 12px; padding: 10px 18px;
+  border-radius: 4px; cursor: pointer; letter-spacing: 2px;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+.log {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 8px 12px; height: 110px; overflow-y: auto;
+  font-size: 11px; color: var(--dim); white-space: pre-wrap;
+}
+.hint { font-size: 10px; color: var(--dim); margin-top: 6px; }
+.kbd  { display: inline-block; background: var(--bg); border: 1px solid var(--border);
+        border-radius: 3px; padding: 1px 5px; font-size: 10px; color: var(--accent); }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tabs button {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--dim);
+  padding: 6px 14px; font-family: inherit; cursor: pointer;
+  letter-spacing: 2px; border-radius: 4px 4px 0 0; font-size: 11px;
+}
+.tabs button.active { background: var(--bg3); color: var(--accent); border-bottom-color: var(--bg3); }
+.tab-body { display: none; }
+.tab-body.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <span class="logo-title">PERCUSYNTH</span>
+    <span class="logo-sub">STEP SEQUENCER · LIVE</span>
+  </div>
+  <div id="status"><span class="live-dot" id="live-dot"></span>desconectado</div>
+</div>
+
+<!-- ============ MIDI CONNECTION ============ -->
+<section>
+  <div class="section-title">CONEXIÓN MIDI</div>
+  <div class="midi-row">
+    <button id="midi-init">▶ HABILITAR WEB MIDI</button>
+    <label>INPUT:</label>
+    <select id="midi-in"><option>—</option></select>
+    <label>OUTPUT:</label>
+    <select id="midi-out"><option>—</option></select>
+    <button id="midi-connect">CONECTAR</button>
+    <button id="midi-sync-push">↑ PUSH PATRÓN</button>
+  </div>
+  <div class="hint">Requiere Chrome/Edge. Al conectar, el patrón local se envía al PercuSynth y empezás a recibir el clock + step actual.</div>
+</section>
+
+<!-- ============ TABS ============ -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="seq">SECUENCIADOR</button>
+  <button class="tab-btn" data-tab="samples">SAMPLES & FIRMWARE</button>
+</div>
+
+<!-- ============ TAB: SEQUENCER ============ -->
+<div class="tab-body active" id="tab-seq">
+
+  <!-- Transport -->
+  <section>
+    <div class="section-title">TRANSPORT</div>
+    <div class="transport">
+      <button id="play-btn">▶ PLAY</button>
+      <button id="stop-btn">■ STOP</button>
+      <button id="reset-btn">⟲ RESET</button>
+      <button id="clear-btn">CLEAR PATRÓN</button>
+      <button id="example-btn">EJEMPLO ROCK</button>
+      <button id="random-btn">RANDOMIZE</button>
+      <span style="font-size:11px;color:var(--dim);">step <span id="cur-step" style="color:var(--warn)">—</span> / 16</span>
+    </div>
+    <div class="hint">PLAY/STOP envían 0xFA/0xFC al PercuSynth → engancha al DAW también.</div>
+  </section>
+
+  <!-- Pattern Grid -->
+  <section>
+    <div class="section-title">PATRÓN — 6×16</div>
+    <div class="grid-wrapper">
+      <table class="grid" id="grid"></table>
+    </div>
+    <div class="hint">Click = on/off (envía al PercuSynth en vivo). <span class="kbd">click en nombre</span> = mute/unmute.</div>
+  </section>
+
+  <!-- FX Panel -->
+  <section>
+    <div class="section-title">SÍNTESIS &amp; FX — CC ch16</div>
+    <div class="fx-grid">
+      <div class="fx-card"><label>BPM <span class="val" id="bpm-val">120</span></label>
+        <input type="range" id="bpm" min="40" max="200" value="120"></div>
+      <div class="fx-card"><label>SWING <span class="val" id="swing-val">0%</span></label>
+        <input type="range" id="swing" min="0" max="127" value="0"></div>
+      <div class="fx-card"><label>PITCH <span class="val" id="pitch-val">1.00×</span></label>
+        <input type="range" id="pitch" min="0" max="127" value="64"></div>
+      <div class="fx-card"><label>HPF <span class="val" id="hpf-val">20Hz</span></label>
+        <input type="range" id="hpf" min="0" max="127" value="0"></div>
+      <div class="fx-card"><label>LPF <span class="val" id="lpf-val">12kHz</span></label>
+        <input type="range" id="lpf" min="0" max="127" value="76"></div>
+      <div class="fx-card"><label>VOL <span class="val" id="vol-val">60%</span></label>
+        <input type="range" id="vol" min="0" max="127" value="76"></div>
+      <div class="fx-card"><label>BITCRUSH <span class="val" id="crush-val">0%</span></label>
+        <input type="range" id="crush" min="0" max="127" value="0"></div>
+      <div class="fx-card"><label>STUTTER</label>
+        <button class="tog" id="stutter">OFF</button></div>
+      <div class="fx-card"><label>REVERSE</label>
+        <button class="tog" id="reverse">OFF</button></div>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section>
+    <div class="section-title">LOG</div>
+    <div id="log" class="log"></div>
+  </section>
+</div>
+
+<!-- ============ TAB: SAMPLES & FIRMWARE ============ -->
+<div class="tab-body" id="tab-samples">
+  <section>
+    <div class="section-title">SAMPLES (cargá MP3/WAV/OGG por pista)</div>
+    <div id="tracks" class="tracks"></div>
+    <div class="hint">Los samples se hornean en el firmware. Después de cargar todos, generá un nuevo .ino y flasheá.</div>
+  </section>
+  <section>
+    <div class="section-title">GENERAR FIRMWARE</div>
+    <div class="actions">
+      <button id="generate-btn" class="btn-primary">⬇ DESCARGAR .INO</button>
+      <button id="export-pattern" class="btn-secondary">⬇ PATRÓN JSON</button>
+      <button id="import-pattern" class="btn-secondary">⬆ IMPORTAR JSON</button>
+      <input id="import-pattern-input" type="file" accept=".json" style="display:none;">
+      <span id="total-size" style="font-size:11px;color:var(--dim);"></span>
+    </div>
+    <div class="hint">Arduino IDE → board ESP32-S3 → Tools/USB Mode = "USB-OTG (TinyUSB)" → Upload.</div>
+  </section>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const SR         = 44100;
+const NUM_TRACKS = 6;
+const NUM_STEPS  = 16;
+const DEFAULT_NAMES = ['KICK','SNARE','HAT','PERC','TOM','CRASH'];
+const DEFAULT_NOTES = [36, 38, 42, 46, 49, 51];
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const REMOTE_CH  = 15;            // ch16 (0-based)
+
+// CC numbers (deben coincidir con el firmware)
+const CC = {
+  BPM: 20, SWING: 21, PITCH: 22, HPF: 23, VOL: 24, LPF: 25,
+  CRUSH: 26, STUTTER: 27, REVERSE: 28,
+};
+const REMOTE_NOTES = {
+  MUTE_BASE: 96,    // 96..101 = mute T0..T5
+  PLAY: 120, STOP: 121, RESET: 122,
+  STEP_FEEDBACK_BASE: 100,  // 100..115 = step actual del firmware
+};
+
+// ============================================================
+// STATE
+// ============================================================
+const tracks = Array.from({length: NUM_TRACKS}, (_, i) => ({
+  name:      DEFAULT_NAMES[i],
+  note:      DEFAULT_NOTES[i],
+  filename:  null,
+  int16Data: null,
+  duration:  0,
+  mute:      false,
+}));
+let pattern = Array.from({length: NUM_TRACKS}, (_, t) =>
+  // default rock beat
+  [t===0?1:0, 0, 0, 0,  t===1?1:0, 0, 0, 0,  t===0?1:0, 0, 0, 0,  t===1?1:0, 0, 0, t===0?1:0]
+);
+let playing = false;
+let currentStep = -1;
+
+let midiAccess = null;
+let midiIn  = null;
+let midiOut = null;
+let isLive  = false;
+
+let bpm = 120, swing = 0, pitch = 64, hpf = 0, lpf = 76, vol = 76, crush = 0;
+let stutterOn = false, reverseOn = false;
+
+let audioCtx     = null;
+let audioBuffers = new Array(NUM_TRACKS).fill(null);
+
+// ============================================================
+// UTIL
+// ============================================================
+function log(msg) {
+  const el = document.getElementById('log');
+  if (!el) return;
+  const t  = new Date().toLocaleTimeString();
+  el.textContent += `[${t}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+function setStatus(s, live=null) {
+  document.getElementById('status').innerHTML = `<span class="live-dot ${isLive?'on':''}" id="live-dot"></span>${s}`;
+}
+function noteName(n) { return NOTE_NAMES[n%12] + (Math.floor(n/12)-1); }
+
+// ============================================================
+// WEB MIDI
+// ============================================================
+async function initMidi() {
+  if (!navigator.requestMIDIAccess) {
+    log('✗ Web MIDI no soportado. Usá Chrome/Edge.');
+    return;
+  }
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    midiAccess.onstatechange = refreshMidiDevices;
+    refreshMidiDevices();
+    log('✓ Web MIDI inicializado.');
+  } catch (e) {
+    log('✗ Web MIDI denegado: ' + e.message);
+  }
+}
+
+function refreshMidiDevices() {
+  const inSel  = document.getElementById('midi-in');
+  const outSel = document.getElementById('midi-out');
+  inSel.innerHTML  = '<option value="">— elegí —</option>';
+  outSel.innerHTML = '<option value="">— elegí —</option>';
+  let auto = null;
+  for (const [id, p] of midiAccess.inputs) {
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = p.name;
+    inSel.appendChild(opt);
+    if (/percu|esp32/i.test(p.name)) auto = id;
+  }
+  if (auto) inSel.value = auto;
+  auto = null;
+  for (const [id, p] of midiAccess.outputs) {
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = p.name;
+    outSel.appendChild(opt);
+    if (/percu|esp32/i.test(p.name)) auto = id;
+  }
+  if (auto) outSel.value = auto;
+}
+
+function connectMidi() {
+  const inId  = document.getElementById('midi-in').value;
+  const outId = document.getElementById('midi-out').value;
+  if (midiIn)  midiIn.onmidimessage = null;
+  midiIn  = inId  ? midiAccess.inputs.get(inId)  : null;
+  midiOut = outId ? midiAccess.outputs.get(outId) : null;
+  if (midiIn)  midiIn.onmidimessage = onMidiMessage;
+  isLive  = !!midiOut;
+  _warnedNoOut = false;
+  _midiSendCount = 0;
+  setStatus(isLive ? `conectado a ${midiOut.name}` : 'sólo input');
+  log(`MIDI: in=${midiIn?.name||'-'}  out=${midiOut?.name||'-'}`);
+  if (!isLive) log('⚠ Elegí OUTPUT también — sin output no se envían patrones.');
+  if (isLive) pushFullPattern();
+}
+
+let _cellEchoCount = 0;
+function onMidiMessage(ev) {
+  const d = ev.data;
+  if (d[0] === 0xF8) return;                                    // clock
+  if (d[0] === 0xFA) { playing = true;  updatePlayBtn(); return; }
+  if (d[0] === 0xFC) { playing = false; updatePlayBtn(); highlightStep(-1); return; }
+  const status = d[0] & 0xF0, chan = d[0] & 0x0F;
+  if (status === 0x90 && chan === REMOTE_CH) {                  // step feedback
+    const note = d[1];
+    if (note >= REMOTE_NOTES.STEP_FEEDBACK_BASE && note < REMOTE_NOTES.STEP_FEEDBACK_BASE + NUM_STEPS) {
+      highlightStep(note - REMOTE_NOTES.STEP_FEEDBACK_BASE);
+    }
+  }
+  if (status === 0xA0 && chan === REMOTE_CH) {                  // Poly AT = eco firmware
+    _cellEchoCount++;
+    const t = Math.floor(d[1] / 16), s = d[1] % 16;
+    if (_cellEchoCount <= 5 || _cellEchoCount % 10 === 0) {
+      log(`✓ firmware confirmó celda t=${t} s=${s} = ${d[2]>0?'ON':'off'}  (total echos: ${_cellEchoCount})`);
+    }
+  }
+  if (status === 0xB0 && chan === REMOTE_CH) {                  // eco CC desde pots locales
+    applyIncomingCC(d[1], d[2]);
+  }
+}
+
+let _midiSendCount = 0;
+let _warnedNoOut   = false;
+function midiSend(bytes) {
+  if (!midiOut) {
+    if (!_warnedNoOut) {
+      _warnedNoOut = true;
+      log('⚠ MIDI OUT no conectado — apretá CONECTAR. Los cambios NO se envían al PercuSynth.');
+    }
+    return;
+  }
+  midiOut.send(bytes);
+  _midiSendCount++;
+  // pulso visual cada envío
+  const dot = document.getElementById('live-dot');
+  if (dot) { dot.style.background = '#ffcc44'; setTimeout(() => dot.style.background = '', 60); }
+  // log compacto cada 8 envíos
+  if (_midiSendCount % 8 === 0) {
+    log(`→ ${_midiSendCount} mensajes MIDI enviados  (último: ${bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ')})`);
+  }
+}
+function sendCell(t, s, on) { midiSend([0x90 | REMOTE_CH, t * 16 + s, on ? 127 : 0]); }
+function sendCC(cc, v)     { midiSend([0xB0 | REMOTE_CH, cc, v & 0x7F]); }
+function sendMuteToggle(t) { midiSend([0x90 | REMOTE_CH, REMOTE_NOTES.MUTE_BASE + t, 127]); }
+function sendPlay()        { midiSend([0x90 | REMOTE_CH, REMOTE_NOTES.PLAY,  127]); }
+function sendStop()        { midiSend([0x90 | REMOTE_CH, REMOTE_NOTES.STOP,  127]); }
+function sendReset()       { midiSend([0x90 | REMOTE_CH, REMOTE_NOTES.RESET, 127]); }
+
+function pushFullPattern() {
+  if (!midiOut) return;
+  for (let t = 0; t < NUM_TRACKS; t++)
+    for (let s = 0; s < NUM_STEPS; s++)
+      sendCell(t, s, pattern[t][s]);
+  pushAllFx();
+  log('✓ patrón + FX enviados al PercuSynth');
+}
+function pushAllFx() {
+  sendCC(CC.BPM,    Math.round((bpm - 40) / 160 * 127));
+  sendCC(CC.SWING,  swing);
+  sendCC(CC.PITCH,  pitch);
+  sendCC(CC.HPF,    hpf);
+  sendCC(CC.VOL,    vol);
+  sendCC(CC.LPF,    lpf);
+  sendCC(CC.CRUSH,  crush);
+  sendCC(CC.STUTTER, stutterOn ? 127 : 0);
+  sendCC(CC.REVERSE, reverseOn ? 127 : 0);
+}
+
+// Pots locales del PercuSynth → mover sliders sin echo back
+function applyIncomingCC(cc, v) {
+  switch (cc) {
+    case CC.BPM:   bpm   = Math.round(40 + v / 127 * 160); document.getElementById('bpm').value = bpm; updateFxLabel('bpm', bpm); break;
+    case CC.SWING: swing = v; document.getElementById('swing').value = v; updateFxLabel('swing', v); break;
+    case CC.PITCH: pitch = v; document.getElementById('pitch').value = v; updateFxLabel('pitch', v); break;
+    case CC.HPF:   hpf   = v; document.getElementById('hpf').value   = v; updateFxLabel('hpf', v); break;
+    case CC.VOL:   vol   = v; document.getElementById('vol').value   = v; updateFxLabel('vol', v); break;
+    case CC.LPF:   lpf   = v; document.getElementById('lpf').value   = v; updateFxLabel('lpf', v); break;
+    case CC.CRUSH: crush = v; document.getElementById('crush').value = v; updateFxLabel('crush', v); break;
+    case CC.STUTTER: stutterOn = (v >= 64); document.getElementById('stutter').classList.toggle('on', stutterOn); document.getElementById('stutter').textContent = stutterOn?'ON':'OFF'; break;
+    case CC.REVERSE: reverseOn = (v >= 64); document.getElementById('reverse').classList.toggle('on', reverseOn); document.getElementById('reverse').textContent = reverseOn?'ON':'OFF'; break;
+  }
+}
+
+// ============================================================
+// FX LABEL HELPERS
+// ============================================================
+function updateFxLabel(id, v) {
+  const el = document.getElementById(id + '-val');
+  if (!el) return;
+  switch (id) {
+    case 'bpm':   el.textContent = bpm; break;
+    case 'swing': el.textContent = Math.round(swing/127*40) + '%'; break;
+    case 'pitch': { const r = Math.pow(2, (v/127 - 0.5) * 2); el.textContent = r.toFixed(2)+'×'; break; }
+    case 'hpf':   { const f = 20 + (v/127)*(v/127)*3980; el.textContent = (f<1000?Math.round(f)+'Hz':(f/1000).toFixed(1)+'kHz'); break; }
+    case 'lpf':   { const f = 200 + (v/127)*19800; el.textContent = (f<1000?Math.round(f)+'Hz':(f/1000).toFixed(1)+'kHz'); break; }
+    case 'vol':   el.textContent = Math.round(v/127*100)+'%'; break;
+    case 'crush': el.textContent = Math.round(v/127*100)+'%'; break;
+  }
+}
+
+// ============================================================
+// GRID
+// ============================================================
+function renderGrid() {
+  const tbl = document.getElementById('grid');
+  let html = '<thead><tr><th></th>';
+  for (let s = 0; s < NUM_STEPS; s++) {
+    const cls = ['step-num', s%4===0?'beat':'', s===currentStep?'current':''].filter(Boolean).join(' ');
+    html += `<th class="${cls}">${s+1}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (let t = 0; t < NUM_TRACKS; t++) {
+    html += `<tr><td class="track-label">
+      <div class="name ${tracks[t].mute?'muted':''}" data-trk="${t}">${tracks[t].name}</div>
+      <div class="note">${noteName(tracks[t].note)} · ${tracks[t].note}</div>
+    </td>`;
+    for (let s = 0; s < NUM_STEPS; s++) {
+      const cls = ['cell'];
+      if (s%4===0)            cls.push('beat');
+      if (pattern[t][s])      cls.push('on');
+      if (s===currentStep)    cls.push('current-step');
+      html += `<td><div class="${cls.join(' ')}" data-t="${t}" data-s="${s}"></div></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  tbl.innerHTML = html;
+  tbl.querySelectorAll('.cell').forEach(c => {
+    c.addEventListener('click', e => {
+      const t = +e.target.dataset.t, s = +e.target.dataset.s;
+      pattern[t][s] = pattern[t][s] ? 0 : 1;
+      e.target.classList.toggle('on');
+      sendCell(t, s, pattern[t][s]);
+    });
+  });
+  tbl.querySelectorAll('.name').forEach(el => {
+    el.addEventListener('click', e => {
+      const t = +e.target.dataset.trk;
+      tracks[t].mute = !tracks[t].mute;
+      sendMuteToggle(t);
+      renderGrid();
+    });
+  });
+}
+
+function highlightStep(step) {
+  currentStep = step;
+  document.getElementById('cur-step').textContent = step >= 0 ? (step+1) : '—';
+  document.querySelectorAll('.cell.current-step').forEach(c => c.classList.remove('current-step'));
+  if (step >= 0) {
+    document.querySelectorAll(`.cell[data-s="${step}"]`).forEach(c => c.classList.add('current-step'));
+  }
+  document.querySelectorAll('th.step-num').forEach((th, i) => th.classList.toggle('current', i === step));
+}
+
+function updatePlayBtn() {
+  document.getElementById('play-btn').classList.toggle('playing', playing);
+  document.getElementById('play-btn').textContent = playing ? '❚❚ PAUSE' : '▶ PLAY';
+}
+
+// ============================================================
+// SAMPLES (mismo flujo que antes — para regenerar firmware)
+// ============================================================
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: SR });
+  return audioCtx;
+}
+async function loadFile(idx, file) {
+  setStatus('decodificando ' + file.name + '...');
+  try {
+    const ab    = await file.arrayBuffer();
+    const ctx   = getCtx();
+    const raw   = await ctx.decodeAudioData(ab.slice(0));
+    const L     = raw.length;
+    let mono = new Float32Array(L);
+    if (raw.numberOfChannels === 1) mono.set(raw.getChannelData(0));
+    else {
+      const a = raw.getChannelData(0), b = raw.getChannelData(1);
+      for (let i = 0; i < L; i++) mono[i] = (a[i] + b[i]) * 0.5;
+    }
+    if (raw.sampleRate !== SR) {
+      const off = new OfflineAudioContext(1, Math.ceil(L * SR / raw.sampleRate), SR);
+      const src = off.createBufferSource();
+      src.buffer = raw;
+      src.connect(off.destination);
+      src.start(0);
+      const rendered = await off.startRendering();
+      mono = rendered.getChannelData(0);
+    }
+    let pk = 0;
+    for (let i = 0; i < mono.length; i++) { const a = Math.abs(mono[i]); if (a>pk) pk = a; }
+    const g = pk > 0 ? 0.95 / pk : 1.0;
+    const N = mono.length;
+    const i16 = new Int16Array(N);
+    for (let i = 0; i < N; i++) i16[i] = Math.round(Math.max(-32768, Math.min(32767, mono[i] * g * 32767)));
+    tracks[idx].int16Data = i16;
+    tracks[idx].duration  = N / SR;
+    tracks[idx].filename  = file.name;
+    const pb = ctx.createBuffer(1, N, SR);
+    pb.getChannelData(0).set(mono.map(v => v * g));
+    audioBuffers[idx] = pb;
+    renderTrackCard(idx); updateTotalSize();
+    log(`✓ T${idx} "${file.name}" → ${(N/SR).toFixed(2)}s`);
+  } catch (e) { log(`✗ ${e.message}`); }
+  setStatus(isLive ? 'live' : 'listo');
+}
+function clearTrack(idx) {
+  tracks[idx].int16Data = null;
+  tracks[idx].filename  = null;
+  audioBuffers[idx]     = null;
+  renderTrackCard(idx); updateTotalSize();
+}
+function drawWaveform(canvas, i16) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth;
+  const h = canvas.height = canvas.clientHeight;
+  ctx.fillStyle = '#0d0d14'; ctx.fillRect(0,0,w,h);
+  if (!i16 || i16.length === 0) {
+    ctx.fillStyle = '#5a5a80'; ctx.font = '10px Courier New';
+    ctx.fillText('— sin sample —', 8, h/2+3); return;
+  }
+  ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 1; ctx.beginPath();
+  const step = Math.max(1, Math.floor(i16.length / w));
+  for (let x = 0; x < w; x++) {
+    let mn = 32767, mx = -32768;
+    for (let i = x*step; i < Math.min((x+1)*step, i16.length); i++) {
+      if (i16[i] < mn) mn = i16[i];
+      if (i16[i] > mx) mx = i16[i];
+    }
+    ctx.moveTo(x+0.5, h/2 - (mx/32768)*(h/2-2));
+    ctx.lineTo(x+0.5, h/2 - (mn/32768)*(h/2-2));
+  }
+  ctx.stroke();
+}
+function renderTrackCard(i) {
+  const card = document.getElementById(`track-${i}`); if (!card) return;
+  drawWaveform(card.querySelector('canvas'), tracks[i].int16Data);
+  const info = card.querySelector('.size-info');
+  if (tracks[i].int16Data) {
+    info.textContent = `${tracks[i].filename}  ·  ${tracks[i].duration.toFixed(2)}s  ·  ${(tracks[i].int16Data.length*2/1024).toFixed(0)} KB`;
+    info.style.color = 'var(--accent)';
+  } else { info.textContent = '— sin sample —'; info.style.color = 'var(--dim)'; }
+}
+function renderTracks() {
+  const c = document.getElementById('tracks');
+  c.innerHTML = '';
+  for (let i = 0; i < NUM_TRACKS; i++) {
+    const card = document.createElement('div');
+    card.className = 'track-card'; card.id = `track-${i}`;
+    card.innerHTML = `
+      <div class="track-head">
+        <input class="name-in" data-trk="${i}" value="${tracks[i].name}" maxlength="8">
+        <span style="font-size:9px;color:var(--dim);">T${i} note=${tracks[i].note}</span>
+      </div>
+      <canvas></canvas>
+      <div class="size-info">— sin sample —</div>
+      <div class="controls">
+        <button class="btn load-btn" data-trk="${i}">📁 CARGAR</button>
+        <button class="btn audition" data-trk="${i}">▶</button>
+        <button class="btn del"      data-trk="${i}">✕</button>
+        <input type="file" accept="audio/*" data-trk="${i}">
+      </div>`;
+    c.appendChild(card);
+  }
+  c.querySelectorAll('input.name-in').forEach(inp => inp.addEventListener('input', e => {
+    tracks[+e.target.dataset.trk].name = e.target.value.toUpperCase(); renderGrid();
+  }));
+  c.querySelectorAll('.load-btn').forEach(b => b.addEventListener('click', e => {
+    document.querySelector(`#track-${e.target.dataset.trk} input[type=file]`).click();
+  }));
+  c.querySelectorAll('input[type=file]').forEach(inp => inp.addEventListener('change', e => {
+    if (e.target.files[0]) loadFile(+e.target.dataset.trk, e.target.files[0]);
+    e.target.value = '';
+  }));
+  c.querySelectorAll('.del').forEach(b => b.addEventListener('click', e => clearTrack(+e.target.dataset.trk)));
+  c.querySelectorAll('.audition').forEach(b => b.addEventListener('click', e => {
+    const i = +e.target.dataset.trk;
+    if (!audioBuffers[i]) return;
+    const ctx = getCtx(); const src = ctx.createBufferSource();
+    src.buffer = audioBuffers[i]; src.connect(ctx.destination); src.start();
+  }));
+  for (let i = 0; i < NUM_TRACKS; i++) renderTrackCard(i);
+}
+function updateTotalSize() {
+  let b = 0; for (const t of tracks) if (t.int16Data) b += t.int16Data.length*2;
+  document.getElementById('total-size').textContent = `Total: ${(b/1024).toFixed(1)} KB`;
+}
+
+// ============================================================
+// FIRMWARE GENERATION (embebe la versión actual del .ino)
+// ============================================================
+function int16ToC(arr, name) {
+  const PL = 16; const L = [];
+  L.push(`// ${name}: ${arr.length} samples (${(arr.length*2/1024).toFixed(1)} KB, ${(arr.length/SR).toFixed(4)} s)`);
+  L.push(`const int16_t ${name}[] PROGMEM = {`);
+  for (let i = 0; i < arr.length; i += PL) {
+    L.push('  ' + Array.from(arr.slice(i, i+PL)).join(', ') + (i+PL < arr.length ? ',' : ''));
+  }
+  L.push('};');
+  L.push(`const uint32_t ${name}_LEN = ${arr.length}UL;`);
+  return L.join('\n');
+}
+
+// Recupera el template del firmware en runtime — lo embebemos en una <script type="text/plain">
+function generateFirmware() {
+  const tpl = document.getElementById('firmware-tpl').textContent;
+  // Reemplaza el bloque SAMPLE DATA
+  const sampleBlock = tracks.map((t, i) => t.int16Data
+    ? `// "${t.name}" ← ${t.filename}\n` + int16ToC(t.int16Data, `TRK_${i}`)
+    : `// TRK_${i}: vacío\nconst int16_t TRK_${i}[] PROGMEM = {0, 0};\nconst uint32_t TRK_${i}_LEN = 0UL;`
+  ).join('\n\n');
+  // Reemplaza el bloque PATTERN
+  const patternBlock = pattern.map((row, t) =>
+    `  { ${row.map(v=>v?'1':'0').join(',')} }, // T${t} ${tracks[t].name}`
+  ).join('\n');
+  // Track notes
+  const notesBlock = `const uint8_t TRK_NOTES[NUM_TRACKS] = { ${tracks.map(t=>t.note).join(', ')} };`;
+
+  return tpl
+    .replace('// __SAMPLE_DATA__', sampleBlock)
+    .replace(/\/\/ __PATTERN_ROWS__[\s\S]*?\/\/ __END_PATTERN__/, patternBlock)
+    .replace(/const uint8_t TRK_NOTES\[NUM_TRACKS\] = \{[^}]+\};/, notesBlock);
+}
+function downloadFirmware() {
+  const code = generateFirmware();
+  const blob = new Blob([code], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'step_sequencer_midi.ino';
+  a.click(); URL.revokeObjectURL(a.href);
+  log(`✓ firmware generado (${(code.length/1024).toFixed(1)} KB)`);
+}
+
+// ============================================================
+// IMPORT/EXPORT
+// ============================================================
+function exportJson() {
+  const data = { bpm, swing, pitch, hpf, vol, lpf, crush, stutterOn, reverseOn,
+                 tracks: tracks.map(t => ({ name:t.name, note:t.note, mute:t.mute })),
+                 pattern };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'pattern.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importJson(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (typeof d.bpm === 'number')   { bpm = d.bpm; document.getElementById('bpm').value = bpm; updateFxLabel('bpm', bpm); }
+      if (typeof d.swing === 'number') { swing = d.swing; document.getElementById('swing').value = swing; updateFxLabel('swing', swing); }
+      ['pitch','hpf','vol','lpf','crush'].forEach(k => {
+        if (typeof d[k] === 'number') {
+          eval(k+' = d.'+k);
+          document.getElementById(k).value = d[k]; updateFxLabel(k, d[k]);
+        }
+      });
+      if (d.tracks) d.tracks.forEach((t,i) => {
+        if (i<NUM_TRACKS) { tracks[i].name=t.name||tracks[i].name; tracks[i].note=t.note??tracks[i].note; tracks[i].mute=!!t.mute; }
+      });
+      if (d.pattern) for (let t=0;t<NUM_TRACKS;t++) for (let s=0;s<NUM_STEPS;s++) pattern[t][s] = d.pattern[t]?.[s] ? 1 : 0;
+      renderTracks(); renderGrid();
+      if (isLive) pushFullPattern();
+      log('✓ patrón importado');
+    } catch (err) { log('✗ JSON inválido: ' + err.message); }
+  };
+  r.readAsText(file);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  renderTracks(); renderGrid(); updateTotalSize();
+
+  // Tabs
+  document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-body').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+  }));
+
+  // MIDI
+  document.getElementById('midi-init').addEventListener('click', initMidi);
+  document.getElementById('midi-connect').addEventListener('click', connectMidi);
+  document.getElementById('midi-sync-push').addEventListener('click', pushFullPattern);
+
+  // Transport
+  document.getElementById('play-btn').addEventListener('click', () => { playing ? sendStop() : sendPlay(); playing = !playing; updatePlayBtn(); });
+  document.getElementById('stop-btn').addEventListener('click', () => { sendStop(); playing = false; updatePlayBtn(); highlightStep(-1); });
+  document.getElementById('reset-btn').addEventListener('click', () => { sendReset(); highlightStep(0); });
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    for (let t=0; t<NUM_TRACKS; t++) for (let s=0; s<NUM_STEPS; s++) { pattern[t][s] = 0; sendCell(t, s, 0); }
+    renderGrid(); log('patrón limpio');
+  });
+  document.getElementById('example-btn').addEventListener('click', () => {
+    const ex = [
+      [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,1,0],
+      [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+      [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+      [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1],
+      [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+      [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+    ];
+    for (let t=0; t<NUM_TRACKS; t++) { pattern[t] = ex[t].slice(); for (let s=0; s<NUM_STEPS; s++) sendCell(t, s, pattern[t][s]); }
+    renderGrid(); log('patrón rock cargado');
+  });
+  document.getElementById('random-btn').addEventListener('click', () => {
+    const dens = [0.35, 0.20, 0.55, 0.10, 0.05, 0.05];
+    for (let t=0; t<NUM_TRACKS; t++)
+      for (let s=0; s<NUM_STEPS; s++) {
+        const v = Math.random() < dens[t] ? 1 : 0;
+        pattern[t][s] = v; sendCell(t, s, v);
+      }
+    renderGrid(); log('patrón random');
+  });
+
+  // FX sliders
+  const wire = (id, ccNum, getValueFn) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', e => {
+      const v = +e.target.value;
+      window[id === 'bpm' ? 'bpm' : id] = v;       // simple binding
+      updateFxLabel(id, v);
+      sendCC(ccNum, getValueFn ? getValueFn(v) : v);
+    });
+  };
+  wire('bpm',   CC.BPM,   v => Math.round((v - 40) / 160 * 127));
+  wire('swing', CC.SWING);
+  wire('pitch', CC.PITCH);
+  wire('hpf',   CC.HPF);
+  wire('lpf',   CC.LPF);
+  wire('vol',   CC.VOL);
+  wire('crush', CC.CRUSH);
+  updateFxLabel('bpm', bpm); updateFxLabel('swing', swing); updateFxLabel('pitch', pitch);
+  updateFxLabel('hpf', hpf); updateFxLabel('lpf', lpf); updateFxLabel('vol', vol); updateFxLabel('crush', crush);
+
+  document.getElementById('stutter').addEventListener('click', () => {
+    stutterOn = !stutterOn;
+    document.getElementById('stutter').classList.toggle('on', stutterOn);
+    document.getElementById('stutter').textContent = stutterOn ? 'ON' : 'OFF';
+    sendCC(CC.STUTTER, stutterOn ? 127 : 0);
+  });
+  document.getElementById('reverse').addEventListener('click', () => {
+    reverseOn = !reverseOn;
+    document.getElementById('reverse').classList.toggle('on', reverseOn);
+    document.getElementById('reverse').textContent = reverseOn ? 'ON' : 'OFF';
+    sendCC(CC.REVERSE, reverseOn ? 127 : 0);
+  });
+
+  document.getElementById('generate-btn').addEventListener('click', downloadFirmware);
+  document.getElementById('export-pattern').addEventListener('click', exportJson);
+  document.getElementById('import-pattern').addEventListener('click', () => document.getElementById('import-pattern-input').click());
+  document.getElementById('import-pattern-input').addEventListener('change', e => {
+    if (e.target.files[0]) importJson(e.target.files[0]); e.target.value = '';
+  });
+
+  log('Step Sequencer LIVE listo.');
+  log('1) Conectá PercuSynth por USB  2) HABILITAR WEB MIDI  3) CONECTAR  4) tocá pasos en vivo');
+});
+</script>
+
+<!-- Firmware template (embedded). __SAMPLE_DATA__ y __PATTERN_ROWS__ se reemplazan al generar. -->
+<script type="text/plain" id="firmware-tpl">// ================================================================
+// PercuSynth — Sample Sequencer + Realtime Remote
+// Generado por tools/step_sequencer_loader (live)
+// ================================================================
+#include <Arduino.h>
+#include "driver/i2s_std.h"
+#include "USB.h"
+#include "USBMIDI.h"
+#include <math.h>
+
+USBMIDI MIDI;
+
+// ================================================================
+// SAMPLE DATA
+// ================================================================
+// __SAMPLE_DATA__
+
+// ================================================================
+#define SAMPLE_RATE   44100
+#define BUF_SAMPLES   128
+#define NUM_TRACKS    6
+#define NUM_STEPS     16
+#define NUM_VOICES    8
+#define PPQ           24
+#define TICKS_PER_STEP 6
+#define PIN_I2S_LRCK  39
+#define PIN_I2S_DIN   40
+#define PIN_I2S_BCK   41
+const uint8_t BTN_PINS[5] = {44, 42, 0, 45, 47};
+const uint8_t POT_PINS[4] = {1, 2, 8, 10};
+const uint8_t TRK_NOTES[NUM_TRACKS] = { 36, 38, 42, 46, 49, 51 };
+const int16_t* const TRK_DATA[NUM_TRACKS] = {TRK_0, TRK_1, TRK_2, TRK_3, TRK_4, TRK_5};
+const uint32_t       TRK_LENS[NUM_TRACKS] = {TRK_0_LEN, TRK_1_LEN, TRK_2_LEN, TRK_3_LEN, TRK_4_LEN, TRK_5_LEN};
+
+uint8_t pattern[NUM_TRACKS][NUM_STEPS] = {
+// __PATTERN_ROWS__
+  { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 }, { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 },
+  { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 }, { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 },
+  { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 }, { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 },
+// __END_PATTERN__
+};
+bool trackMute[NUM_TRACKS] = { false, false, false, false, false, false };
+
+struct Voice { const int16_t* data; uint32_t length; float pos; float pitchRatio; float velocity; bool active; bool reverse; };
+Voice voices[NUM_VOICES];
+float g_pitchRatio = 1.0f;
+bool  g_reverseMode = false;
+
+void triggerTrack(uint8_t trk, float velocity) {
+  if (trk >= NUM_TRACKS) return;
+  if (trackMute[trk]) return;
+  if (TRK_LENS[trk] == 0) return;
+  int v = -1;
+  for (int i = 0; i < NUM_VOICES; i++) if (!voices[i].active) { v = i; break; }
+  if (v < 0) {
+    float mx = -1.0f;
+    for (int i = 0; i < NUM_VOICES; i++) {
+      float prog = voices[i].pos / (float)voices[i].length;
+      if (prog > mx) { mx = prog; v = i; }
+    }
+  }
+  voices[v].data       = TRK_DATA[trk];
+  voices[v].length     = TRK_LENS[trk];
+  voices[v].reverse    = g_reverseMode;
+  voices[v].pos        = g_reverseMode ? (float)(TRK_LENS[trk] - 1) : 0.0f;
+  voices[v].pitchRatio = g_pitchRatio;
+  voices[v].velocity   = velocity;
+  voices[v].active     = true;
+}
+
+static float hpf_x1=0,hpf_x2=0,hpf_y1=0,hpf_y2=0;
+static float hpf_b0=1,hpf_b1=0,hpf_b2=0,hpf_a1=0,hpf_a2=0;
+static float lpf_x1=0,lpf_x2=0,lpf_y1=0,lpf_y2=0;
+static float lpf_b0=1,lpf_b1=0,lpf_b2=0,lpf_a1=0,lpf_a2=0;
+float fx_hpfFreq=20.0f, fx_lpfFreq=12000.0f, fx_lpfQ=0.707f;
+float fx_bitcrush=0.0f, fx_masterVol=0.6f, fx_swing=0.0f;
+bool  fx_stutter=false;
+
+void computeHPF(float freq, float Q) {
+  if (freq < 20.0f) freq = 20.0f;
+  if (freq > SAMPLE_RATE * 0.45f) freq = SAMPLE_RATE * 0.45f;
+  float w = 2.0f*(float)M_PI*freq/SAMPLE_RATE;
+  float c = cosf(w), s = sinf(w);
+  float a = s/(2.0f*Q); float n = 1.0f/(1.0f+a);
+  hpf_b0 =  (1.0f+c)*0.5f*n; hpf_b1 = -(1.0f+c)*n; hpf_b2 = hpf_b0;
+  hpf_a1 = -2.0f*c*n;         hpf_a2 = (1.0f-a)*n;
+}
+inline float applyHPF(float x) {
+  float y = hpf_b0*x + hpf_b1*hpf_x1 + hpf_b2*hpf_x2 - hpf_a1*hpf_y1 - hpf_a2*hpf_y2;
+  hpf_x2=hpf_x1; hpf_x1=x; hpf_y2=hpf_y1; hpf_y1=y; return y;
+}
+void computeLPF(float freq, float Q) {
+  if (freq < 20.0f) freq = 20.0f;
+  if (freq > SAMPLE_RATE * 0.45f) freq = SAMPLE_RATE * 0.45f;
+  float w = 2.0f*(float)M_PI*freq/SAMPLE_RATE;
+  float c = cosf(w), s = sinf(w);
+  float a = s/(2.0f*Q); float n = 1.0f/(1.0f+a);
+  lpf_b0 = (1.0f-c)*0.5f*n; lpf_b1 = (1.0f-c)*n; lpf_b2 = lpf_b0;
+  lpf_a1 = -2.0f*c*n;        lpf_a2 = (1.0f-a)*n;
+}
+inline float applyLPF(float x) {
+  float y = lpf_b0*x + lpf_b1*lpf_x1 + lpf_b2*lpf_x2 - lpf_a1*lpf_y1 - lpf_a2*lpf_y2;
+  lpf_x2=lpf_x1; lpf_x1=x; lpf_y2=lpf_y1; lpf_y1=y; return y;
+}
+inline float applyBitcrush(float x, float amt) {
+  if (amt < 0.02f) return x;
+  int bits = 16 - (int)(amt * 12.0f); if (bits < 2) bits = 2;
+  float levels = (float)(1 << (bits - 1));
+  return roundf(x * levels) / levels;
+}
+inline float softLimit(float x) {
+  const float knee = 0.85f; float a = fabsf(x);
+  if (a <= knee) return x;
+  float s = (x < 0) ? -1.0f : 1.0f;
+  return s*(knee + (1.0f-knee)*tanhf((a-knee)/(1.0f-knee)));
+}
+
+i2s_chan_handle_t tx_handle;
+void initI2S() {
+  i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+  i2s_new_channel(&cc, &tx_handle, NULL);
+  i2s_std_config_t sc = {
+    .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+    .gpio_cfg = { .mclk=I2S_GPIO_UNUSED, .bclk=(gpio_num_t)PIN_I2S_BCK,
+                  .ws=(gpio_num_t)PIN_I2S_LRCK, .dout=(gpio_num_t)PIN_I2S_DIN, .din=I2S_GPIO_UNUSED }
+  };
+  i2s_channel_init_std_mode(tx_handle, &sc);
+  i2s_channel_enable(tx_handle);
+}
+int readPot(uint8_t pin) { int s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return s>>3; }
+
+inline void midiSendRT(uint8_t status) { uint8_t pkt[4]={0x0F, status, 0, 0}; tud_midi_n_packet_write(0, pkt); }
+inline void midiSendNoteOn(uint8_t chan, uint8_t note, uint8_t vel) {
+  uint8_t pkt[4]={0x09, (uint8_t)(0x90|(chan&0x0F)), note, vel};
+  tud_midi_n_packet_write(0, pkt);
+}
+inline void midiSendCC(uint8_t chan, uint8_t cc, uint8_t v) {
+  uint8_t pkt[4]={0x0B, (uint8_t)(0xB0|(chan&0x0F)), cc, v};
+  tud_midi_n_packet_write(0, pkt);
+}
+
+float    bpm = 120.0f;
+uint32_t clockIntervalUs = (uint32_t)(60000000.0f / (120.0f * (float)PPQ));
+uint32_t nextClockUs = 0;
+uint16_t tickCount = 0;
+uint8_t  currentStep = 0;
+bool     playing = false;
+
+void recomputeClock() {
+  if (bpm<30.0f) bpm=30.0f; if (bpm>240.0f) bpm=240.0f;
+  clockIntervalUs = (uint32_t)(60000000.0f / (bpm * (float)PPQ));
+}
+void fireStep(uint8_t step) {
+  for (int t=0; t<NUM_TRACKS; t++) if (pattern[t][step]) triggerTrack(t, 1.0f);
+}
+void advanceStep() {
+  currentStep = (currentStep+1) % NUM_STEPS;
+  fireStep(currentStep);
+  midiSendNoteOn(15, (uint8_t)(100+currentStep), 127);
+}
+void doStart() {
+  playing=true; tickCount=0; currentStep=0; nextClockUs=micros();
+  midiSendRT(0xFA); fireStep(0); midiSendNoteOn(15, 100, 127);
+}
+void doStop() { playing=false; midiSendRT(0xFC); }
+
+void handleCC(uint8_t cc, uint8_t v) {
+  float n = v / 127.0f;
+  switch (cc) {
+    case 20: bpm = 40.0f + n*160.0f; recomputeClock(); break;
+    case 21: fx_swing = n*0.4f; break;
+    case 22: g_pitchRatio = powf(2.0f, (n-0.5f)*2.0f); break;
+    case 23: fx_hpfFreq = 20.0f + n*n*3980.0f; computeHPF(fx_hpfFreq, 0.707f); break;
+    case 24: fx_masterVol = n; break;
+    case 25: fx_lpfFreq = 200.0f + n*19800.0f; computeLPF(fx_lpfFreq, fx_lpfQ); break;
+    case 26: fx_bitcrush = n; break;
+    case 27: fx_stutter = (v>=64); break;
+    case 28: g_reverseMode = (v>=64); break;
+  }
+}
+void handleMidiByte(uint8_t b1, uint8_t b2, uint8_t b3) {
+  uint8_t status = b1 & 0xF0, chan = b1 & 0x0F;
+  if (status == 0x90) {
+    if (chan == 15) {
+      if (b2 < 96) { pattern[b2/16][b2%16] = (b3>0)?1:0; return; }
+      if (b2 >= 96 && b2 < 96+NUM_TRACKS && b3>0) { trackMute[b2-96] = !trackMute[b2-96]; return; }
+      if (b2 == 120 && b3>0) { doStart(); return; }
+      if (b2 == 121 && b3>0) { doStop();  return; }
+      if (b2 == 122 && b3>0) { currentStep=0; tickCount=0; return; }
+      return;
+    }
+    if (chan == 9 && b3>0) {
+      for (int t=0; t<NUM_TRACKS; t++)
+        if (TRK_NOTES[t] == b2) { triggerTrack(t, b3/127.0f); return; }
+    }
+  }
+  if (status == 0xB0 && chan == 15) handleCC(b2, b3);
+}
+void pollMidi() {
+  uint8_t pkt[4];
+  while (tud_midi_n_packet_read(0, pkt)) handleMidiByte(pkt[1], pkt[2], pkt[3]);
+}
+
+bool btnPrev[5]={}; uint32_t btnLastMs[5]={};
+#define DEBOUNCE_MS 40
+
+void setup() {
+  Serial.begin(115200); delay(100);
+  Serial.println("PercuSynth — Sample Sequencer (MIDI master) boot...");
+  analogReadResolution(12);
+  for (int i=0; i<5; i++) pinMode(BTN_PINS[i], INPUT_PULLUP);
+  for (int i=0; i<NUM_VOICES; i++) voices[i].active = false;
+  initI2S(); computeHPF(fx_hpfFreq, 0.707f); computeLPF(fx_lpfFreq, fx_lpfQ); recomputeClock();
+  MIDI.begin(); USB.begin();
+  Serial.println("Listo. BTN0=play  POT0=BPM POT1=LPF POT2=crush POT3=vol");
+}
+
+void loop() {
+  uint32_t now = millis(), nowUs = micros();
+  pollMidi();
+  static int lp0=-9999, lp1=-9999, lp2=-9999, lp3=-9999;
+  int p0=readPot(POT_PINS[0]), p1=readPot(POT_PINS[1]), p2=readPot(POT_PINS[2]), p3=readPot(POT_PINS[3]);
+  if (abs(p0-lp0)>20) { lp0=p0; bpm=40.0f+(p0/4095.0f)*160.0f; recomputeClock(); midiSendCC(15,20,(uint8_t)((bpm-40.0f)/160.0f*127.0f)); }
+  if (abs(p1-lp1)>20) { lp1=p1; fx_lpfFreq=200.0f+(p1/4095.0f)*19800.0f; computeLPF(fx_lpfFreq, fx_lpfQ); midiSendCC(15,25,(uint8_t)((fx_lpfFreq-200.0f)/19800.0f*127.0f)); }
+  if (abs(p2-lp2)>20) { lp2=p2; fx_bitcrush=p2/4095.0f; midiSendCC(15,26,(uint8_t)(fx_bitcrush*127.0f)); }
+  if (abs(p3-lp3)>20) { lp3=p3; fx_masterVol=0.1f+(p3/4095.0f)*0.9f; midiSendCC(15,24,(uint8_t)(fx_masterVol*127.0f)); }
+  for (int i=0; i<5; i++) {
+    bool pressed = (digitalRead(BTN_PINS[i])==LOW);
+    if (pressed != btnPrev[i] && now-btnLastMs[i]>DEBOUNCE_MS) {
+      btnLastMs[i]=now; btnPrev[i]=pressed;
+      if (pressed) {
+        switch (i) {
+          case 0: playing ? doStop() : doStart(); break;
+          case 1: fx_stutter=true; midiSendCC(15,27,127); break;
+          case 2: g_reverseMode=!g_reverseMode; midiSendCC(15,28, g_reverseMode?127:0); break;
+          case 3: triggerTrack(0, 1.0f); break;
+          case 4: triggerTrack(1, 1.0f); break;
+        }
+      } else if (i==1) { fx_stutter=false; midiSendCC(15,27,0); }
+    }
+  }
+  if (playing) {
+    while ((int32_t)(nowUs-nextClockUs)>=0) {
+      midiSendRT(0xF8); tickCount++;
+      uint16_t stepEvery = fx_stutter ? (TICKS_PER_STEP/2) : TICKS_PER_STEP;
+      if (tickCount>=stepEvery) { tickCount=0; advanceStep(); }
+      nextClockUs += clockIntervalUs;
+      nowUs = micros();
+      if ((int32_t)(nowUs-nextClockUs)>100000) nextClockUs=nowUs;
+    }
+  }
+  static int16_t buf[BUF_SAMPLES*2];
+  for (int s=0; s<BUF_SAMPLES; s++) {
+    float mix=0.0f;
+    for (int i=0; i<NUM_VOICES; i++) {
+      if (!voices[i].active) continue;
+      int32_t pos = (int32_t)voices[i].pos;
+      if (voices[i].reverse) {
+        if (pos<0) { voices[i].active=false; continue; }
+        float frac = voices[i].pos - (float)pos;
+        float s0 = (float)voices[i].data[pos];
+        float s1 = (pos-1>=0) ? (float)voices[i].data[pos-1] : 0.0f;
+        mix += (s0 + frac*(s1-s0)) * voices[i].velocity;
+        voices[i].pos -= voices[i].pitchRatio;
+        if (voices[i].pos<0) voices[i].active=false;
+      } else {
+        float frac = voices[i].pos - (float)pos;
+        float s0 = (float)voices[i].data[pos];
+        float s1 = ((uint32_t)(pos+1)<voices[i].length) ? (float)voices[i].data[pos+1] : 0.0f;
+        mix += (s0 + frac*(s1-s0)) * voices[i].velocity;
+        voices[i].pos += voices[i].pitchRatio;
+        if ((uint32_t)voices[i].pos>=voices[i].length) voices[i].active=false;
+      }
+    }
+    mix = (mix * 0.18f) / 32768.0f; mix *= fx_masterVol;
+    mix = applyHPF(mix); mix = applyLPF(mix);
+    mix = applyBitcrush(mix, fx_bitcrush); mix = softLimit(mix);
+    int16_t out = (int16_t)(mix*32767.0f);
+    buf[s*2]=out; buf[s*2+1]=out;
+  }
+  size_t written;
+  i2s_channel_write(tx_handle, buf, sizeof(buf), &written, portMAX_DELAY);
+}
+</script>
+</body>
+</html>

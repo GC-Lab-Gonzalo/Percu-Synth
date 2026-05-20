@@ -1,0 +1,2098 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — BPM Mono 44100</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0d0d14;
+  --bg2:     #161621;
+  --bg3:     #1e1e2c;
+  --border:  #2e2e44;
+  --accent:  #ff9a3c;
+  --accent2: #ff6b35;
+  --text:    #d0d0e8;
+  --dim:     #5a5a80;
+  --warn:    #ffcc44;
+  --err:     #ff5555;
+  --ok:      #00e5a0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  padding: 16px;
+  font-size: 13px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: var(--bg2);
+}
+.logo { display: flex; align-items: baseline; gap: 6px; }
+.logo-mark { color: var(--accent); font-size: 22px; }
+.logo-title { font-size: 17px; font-weight: bold; letter-spacing: 5px; color: var(--accent); }
+.logo-sub   { font-size: 10px; color: var(--dim); letter-spacing: 3px; margin-left: 4px; }
+#total-size { font-size: 11px; color: var(--dim); }
+
+section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--dim);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* BPM */
+.bpm-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.bpm-display { font-size: 48px; font-weight: bold; color: var(--accent); letter-spacing: -2px; min-width: 100px; line-height: 1; }
+.bpm-sub { font-size: 10px; color: var(--dim); letter-spacing: 3px; }
+.bpm-slider-col { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 6px; }
+input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.bpm-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn-tap {
+  padding: 10px 20px;
+  background: var(--bg3);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.08s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn-tap:active { background: var(--accent); color: #000; }
+.tap-hint { font-size: 10px; color: var(--dim); }
+
+/* TRANSPORT */
+.transport-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.btn-master {
+  padding: 10px 28px;
+  background: linear-gradient(135deg, #1a0a00, #0d0500);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 3px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btn-master:hover { box-shadow: 0 0 18px rgba(255,154,60,0.3); }
+.btn-master.running { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #000; box-shadow: 0 0 24px rgba(255,154,60,0.5); }
+.beat-dots { display: flex; gap: 6px; align-items: center; }
+.beat-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); transition: background 0.05s; }
+.beat-dot.beat-1 { width: 14px; height: 14px; }
+.beat-dot.active { background: var(--accent); }
+.beat-dot.beat-1.active { background: var(--accent2); }
+.bar-info { font-size: 11px; color: var(--dim); }
+
+/* LOOP PADS */
+.loops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.loop-pad {
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.loop-pad.playing { animation: pulse-loop 1.6s ease-in-out infinite; }
+.loop-pad.pending { border-color: var(--warn) !important; box-shadow: 0 0 14px rgba(255,204,68,0.3); }
+@keyframes pulse-loop {
+  0%, 100% { box-shadow: 0 0 10px var(--pc, var(--accent)), 0 0 20px transparent; }
+  50%       { box-shadow: 0 0 22px var(--pc, var(--accent)), 0 0 38px var(--pc, var(--accent))44; }
+}
+.loop-header { display: flex; justify-content: space-between; align-items: center; }
+.loop-badge { font-size: 8px; letter-spacing: 3px; color: var(--pc, var(--accent)); border: 1px solid var(--pc, var(--accent)); border-radius: 3px; padding: 2px 6px; }
+.loop-key-hint { font-size: 9px; color: var(--dim); border: 1px solid var(--border); border-radius: 3px; padding: 2px 6px; }
+.loop-waveform { width: 100%; height: 64px; border-radius: 4px; display: block; }
+.loop-bottom { display: flex; align-items: center; gap: 10px; }
+.loop-trigger {
+  width: 72px; height: 72px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--pc, #888);
+  background: radial-gradient(circle at 38% 35%, rgba(255,255,255,0.08), #111116);
+  color: var(--pc, #888);
+  font-family: 'Courier New', monospace;
+  font-size: 10px; font-weight: bold;
+  cursor: pointer;
+  transition: all 0.1s;
+  user-select: none; -webkit-user-select: none;
+  position: relative; letter-spacing: 1px; line-height: 1.3; text-align: center;
+}
+.loop-trigger::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.06); }
+.loop-trigger:hover { box-shadow: 0 0 18px var(--pc, #888); }
+.loop-trigger.playing { background: radial-gradient(circle at 38% 35%, var(--pc, #888), #151520); box-shadow: 0 0 28px var(--pc, #888); color: #000; }
+.loop-trigger.pending { border-color: var(--warn) !important; color: var(--warn) !important; animation: blink-pending 0.5s step-end infinite; }
+@keyframes blink-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.loop-meta { flex: 1; min-width: 0; }
+.loop-name { font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
+.loop-dur  { font-size: 12px; color: var(--pc, var(--accent)); font-weight: bold; }
+.loop-bars-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.bars-label { font-size: 9px; color: var(--dim); letter-spacing: 2px; }
+.bars-select { background: var(--bg2); border: 1px solid var(--border); color: var(--accent); font-family: 'Courier New', monospace; font-size: 11px; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+.bars-select:focus { outline: none; border-color: var(--accent); }
+.bars-detected { font-size: 9px; color: var(--dim); }
+.loop-actions { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.loop-vol-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.loop-vol-row input[type=range] { flex: 1; accent-color: var(--pc, var(--accent)); }
+.loop-vol-label { font-size: 9px; color: var(--dim); letter-spacing: 1px; flex-shrink: 0; }
+.loop-vol-val   { font-size: 10px; color: var(--pc, var(--accent)); font-weight: bold; min-width: 36px; text-align: right; flex-shrink: 0; }
+.load-label { font-size: 10px; letter-spacing: 1px; color: var(--dim); border: 1px solid var(--border); border-radius: 4px; padding: 3px 10px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+.load-label:hover { border-color: var(--accent); color: var(--accent); }
+.clear-btn { font-size: 9px; color: var(--dim); background: none; border: none; cursor: pointer; padding: 2px 4px; font-family: inherit; }
+.clear-btn:hover { color: var(--err); }
+
+/* GENERATE */
+.generate-section { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#size-breakdown { font-size: 11px; color: var(--dim); text-align: center; }
+.generate-btn {
+  padding: 14px 52px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px; letter-spacing: 3px;
+  background: linear-gradient(135deg, #1a0800, #0a0400);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 6px; cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 16px rgba(255,154,60,0.15);
+}
+.generate-btn:hover { background: linear-gradient(135deg, #3a1800, #1a0800); box-shadow: 0 0 28px rgba(255,154,60,0.35); transform: translateY(-1px); }
+.generate-btn:active { transform: translateY(0); }
+.generate-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.log { width: 100%; max-height: 140px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 11px; line-height: 1.6; }
+.log-info { color: var(--dim); }
+.log-ok   { color: var(--ok); }
+.log-warn { color: var(--warn); }
+.log-err  { color: var(--err); }
+
+/* CONTROLS */
+.controls-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.ctrl-row { display: flex; flex-direction: column; gap: 5px; }
+.ctrl-header { display: flex; justify-content: space-between; align-items: baseline; }
+.ctrl-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
+.ctrl-label-sub { font-size: 8px; letter-spacing: 1px; color: var(--border); }
+.ctrl-value { font-size: 13px; color: var(--accent); font-weight: bold; min-width: 66px; text-align: right; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* EDITOR MODAL */
+#editor-modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center;
+}
+#editor-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  width: min(940px, 96vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#editor-canvas {
+  width: 100%;
+  border-radius: 6px;
+  cursor: crosshair;
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.ed-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ed-info { font-size: 11px; color: var(--text); }
+.ed-info b  { color: var(--accent); font-weight: bold; }
+.ed-info .ok  { color: var(--ok); font-weight: bold; }
+.ed-info .dim { color: var(--dim); }
+.ed-btn {
+  padding: 7px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  font-family: 'Courier New', monospace;
+  font-size: 10px; letter-spacing: 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+  user-select: none;
+}
+.ed-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ed-btn.ok-btn  { border-color: var(--ok);  color: var(--ok); }
+.ed-btn.ok-btn:hover  { background: rgba(0,229,160,0.12); }
+.ed-btn.err-btn { border-color: var(--err); color: var(--err); }
+.ed-btn.err-btn:hover { background: rgba(255,85,85,0.12); }
+.ed-btn.active  { background: var(--accent); color: #000; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-mark">◈</span>
+    <span class="logo-title">PERCUSYNTH</span>
+    <span class="logo-sub">BPM MONO 44100</span>
+  </div>
+  <span id="total-size">0.00 MB total</span>
+</header>
+
+<main>
+
+  <section>
+    <div class="section-title">BPM &amp; TRANSPORTE</div>
+    <div class="bpm-row">
+      <div>
+        <div class="bpm-display" id="bpm-display">120</div>
+        <div class="bpm-sub">BPM</div>
+      </div>
+      <div class="bpm-slider-col">
+        <input type="range" id="sl-bpm" min="40" max="240" value="120" step="1">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--dim)">
+          <span>40</span><span>120</span><span>240</span>
+        </div>
+      </div>
+      <div class="bpm-controls">
+        <button class="btn-tap" id="btn-tap">TAP</button>
+        <span class="tap-hint" id="tap-hint">toca 3+ veces</span>
+      </div>
+    </div>
+    <div class="transport-row">
+      <button class="btn-master" id="btn-master">▶ MASTER START</button>
+      <div class="beat-dots" id="beat-dots"></div>
+      <span class="bar-info" id="bar-info">—</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">LOOPS Q W E R T (mono switcher · solo uno activo) · SAMPLES Y A S D (PIEZO · polifónicos · paralelos al loop)</div>
+    <div class="loops-grid" id="loops-grid"></div>
+  </section>
+
+  <section>
+    <div class="section-title">CONTROLES EN VIVO — simulan pots &amp; IMU · afectan preview en tiempo real</div>
+    <div class="controls-grid">
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LOOP FADE <span class="ctrl-label-sub">crossfade wrap</span></span>
+          <span class="ctrl-value" id="cv-lfade">0 ms</span>
+        </div>
+        <input type="range" id="sl-lfade" min="0" max="50" value="0" step="1">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">PITCH / SPEED <span class="ctrl-label-sub">ADC 1</span></span>
+          <span class="ctrl-value" id="cv-pitch">1.00×</span>
+        </div>
+        <input type="range" id="sl-pitch" min="0" max="4095" value="2048">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">HPF CUTOFF <span class="ctrl-label-sub">ADC 2</span></span>
+          <span class="ctrl-value" id="cv-hpf">20 Hz</span>
+        </div>
+        <input type="range" id="sl-hpf" min="0" max="4095" value="0">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LPF FREQ <span class="ctrl-label-sub">IMU AccelX</span></span>
+          <span class="ctrl-value" id="cv-lpf-f">10.0 kHz</span>
+        </div>
+        <input type="range" id="sl-lpf-f" min="0" max="4095" value="2730">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LPF Q <span class="ctrl-label-sub">ADC 8 · resonancia</span></span>
+          <span class="ctrl-value" id="cv-lpf-q">0.71</span>
+        </div>
+        <input type="range" id="sl-lpf-q" min="0" max="4095" value="0">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">VOLUMEN <span class="ctrl-label-sub">ADC 10</span></span>
+          <span class="ctrl-value" id="cv-vol">100%</span>
+        </div>
+        <input type="range" id="sl-vol" min="0" max="4095" value="4095">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">PIEZO THRESHOLD <span class="ctrl-label-sub">firmware · anti-ruido</span></span>
+          <span class="ctrl-value" id="cv-piezo-thr">300</span>
+        </div>
+        <input type="range" id="sl-piezo-thr" min="50" max="1500" value="300" step="10">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">CROSSTALK LOCK <span class="ctrl-label-sub">firmware · lockout cruzado</span></span>
+          <span class="ctrl-value" id="cv-cross-deb">40 ms</span>
+        </div>
+        <input type="range" id="sl-cross-deb" min="5" max="200" value="40" step="5">
+      </div>
+    </div>
+  </section>
+
+  <section class="generate-section">
+    <div id="size-breakdown">Sin samples cargados</div>
+    <button class="generate-btn" id="generate-btn">⬇ GENERATE FIRMWARE (.ino)</button>
+    <div class="log" id="log"></div>
+  </section>
+
+</main>
+
+<!-- ============================================================ -->
+<!-- EDITOR DE SAMPLE MODAL                                     -->
+<!-- ============================================================ -->
+<div id="editor-modal" style="display:none">
+  <div id="editor-panel">
+    <div class="ed-row" style="justify-content:space-between">
+      <span style="font-size:9px;letter-spacing:4px;color:var(--dim)">EDITOR DE SAMPLE</span>
+      <span id="ed-filename" style="font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;max-width:65%">—</span>
+    </div>
+    <canvas id="editor-canvas" width="860" height="210"></canvas>
+    <div class="ed-row">
+      <span class="ed-info">Inicio: <b id="ed-start">0.000s</b></span>
+      <span style="color:var(--border)">|</span>
+      <span class="ed-info">Fin: <b id="ed-end">0.000s</b></span>
+      <span style="color:var(--border)">|</span>
+      <span class="ed-info">Selección: <span class="ok" id="ed-dur">0.000s</span></span>
+      <span style="flex:1"></span>
+      <span class="ed-info dim">Total: <span id="ed-total">0.000s</span></span>
+    </div>
+    <div class="ed-row">
+      <button class="ed-btn" id="ed-zoom-in">ZOOM +</button>
+      <button class="ed-btn" id="ed-zoom-out">ZOOM −</button>
+      <button class="ed-btn" id="ed-zoom-fit">FIT</button>
+      <button class="ed-btn" id="ed-zoom-sel">ZOOM SEL</button>
+      <button class="ed-btn" id="ed-sel-all">SEL TODO</button>
+      <div style="flex:1"></div>
+      <button class="ed-btn" id="ed-preview">▶ PREVIEW</button>
+      <button class="ed-btn err-btn" id="ed-cancel">✕ CANCELAR</button>
+      <button class="ed-btn ok-btn" id="ed-confirm">✓ USAR SELECCIÓN</button>
+    </div>
+    <div style="font-size:9px;color:var(--dim);line-height:1.8">
+      <b style="color:var(--accent)">S</b> marca inicio &nbsp;·&nbsp; <b style="color:#ff6b6b">E</b> marca fin &nbsp;·&nbsp;
+      Arrastrar marcadores para mover &nbsp;·&nbsp; Arrastrar área vacía: paneo &nbsp;·&nbsp;
+      Rueda del ratón: zoom &nbsp;·&nbsp; <b style="color:var(--dim)">ESC</b>: cancelar &nbsp;·&nbsp;
+      <b style="color:var(--dim)">ENTER</b>: confirmar &nbsp;·&nbsp; <b style="color:var(--dim)">ESPACIO</b>: preview
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// BLOQUE 1 — CONFIG (constantes inmutables)
+// ============================================================
+const SR           = 44100;
+const NUM_LOOPS    = 9;
+const NUM_BTN      = 5;
+const NUM_PIEZO    = 4;
+const isSample     = idx => idx >= NUM_BTN;   // idx 5..8 son piezo samples one-shot
+const BTN_PINS     = [44, 42, 0, 45, 47];
+const PIEZO_ADCS   = [4, 5, 6, 7];
+const LOOP_COLORS  = ['#ff6b6b','#ffd93d','#6bff6b','#6bb8ff','#d06bff',
+                      '#ff9f43','#c47aff','#00e5c8','#ff4fa3'];
+const LOOP_KEYS    = ['q','w','e','r','t','y','a','s','d'];
+const LOOP_LABELS  = ['A','B','C','D','E','F','G','H','I'];
+const BAR_SNAPS    = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
+const BEATS_PER_BAR = 4;
+const FADE_TIME    = 0.012;   // segundos de fade in/out
+const STOP_DELAY   = 0.020;   // segundos: cuándo para el source tras el fade-out
+
+// ============================================================
+// BLOQUE 2 — STATE (variables mutables centralizadas)
+// ============================================================
+let currentBpm     = 120;
+let masterPlaying  = false;
+let masterStartTime = 0;
+let currentBeat    = 0;
+let beatTimerID    = null;
+let tapTimes       = [];
+
+let audioCtx    = null;
+let hpfFilter   = null;
+let lpfFilter   = null;
+let masterGain  = null;
+let chainReady  = false;   // guard para registrar onstatechange una sola vez
+
+let monoSrc     = null;    // AudioBufferSourceNode activo
+let monoGain    = null;    // GainNode perSource activo
+let activeIdx   = -1;
+
+let g_pitch          = 1.0;
+let g_loopFade       = 0;    // samples de crossfade al wrap
+let g_piezoThreshold = 300;  // ADC 12-bit · umbral piezo (firmware)
+let g_crossDebounce  = 40;   // ms · lockout global cruzado anti-crosstalk (firmware)
+
+const loops = Array.from({length: NUM_LOOPS}, (_, i) => ({
+  idx: i,
+  name: null,
+  audioBuffer: null,
+  int16Data: null,
+  rawData: null,
+  rawInt16: null,
+  detectedBars: null,
+  assignedBars: isSample(i) ? null : 1,
+  playing: false,
+  pending: false,
+  loading: false,
+  gain: 1.0,
+}));
+
+// ============================================================
+// BLOQUE 3 — AUDIO CONTEXT & CHAIN
+// ============================================================
+
+function initChain() {
+  // Crear contexto si no existe
+  if (!audioCtx) {
+    audioCtx = new AudioContext({ sampleRate: SR });
+    if (audioCtx.sampleRate !== SR) {
+      log(`Aviso: browser usó sampleRate ${audioCtx.sampleRate} Hz en lugar de ${SR} Hz`, 'warn');
+    }
+  }
+
+  // Registrar onstatechange UNA SOLA VEZ para auto-resume
+  if (!chainReady) {
+    chainReady = true;
+    audioCtx.onstatechange = () => {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    };
+  }
+
+  // Crear cadena de nodos si no existen
+  if (!masterGain) {
+    hpfFilter = audioCtx.createBiquadFilter();
+    hpfFilter.type = 'highpass';
+    hpfFilter.frequency.value = 20;
+    hpfFilter.Q.value = 0.707;
+
+    lpfFilter = audioCtx.createBiquadFilter();
+    lpfFilter.type = 'lowpass';
+    lpfFilter.frequency.value = 10000;
+    lpfFilter.Q.value = 0.707;
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+
+    hpfFilter.connect(lpfFilter);
+    lpfFilter.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+  }
+}
+
+async function ensureRunning() {
+  initChain();
+  if (audioCtx.state !== 'running') {
+    try { await audioCtx.resume(); } catch (_) {}
+    if (audioCtx.state !== 'running') {
+      log('Aviso: AudioContext no pudo reanudar. Haz click en la página.', 'warn');
+    }
+  }
+}
+
+// Reanudar cuando la pestaña vuelve a primer plano
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && audioCtx && audioCtx.state !== 'running') {
+    audioCtx.resume().catch(() => {});
+  }
+});
+
+// ============================================================
+// BLOQUE 4 — SAMPLE PROCESSING
+// ============================================================
+
+function trimToZeroCrossings(data, maxSearchSec = 0.2) {
+  const MAX_SEARCH = Math.min(data.length >> 2, Math.round(SR * maxSearchSec));
+  let start = 0, end = data.length - 1;
+
+  // Saltar silencio inicial (MP3 encoder delay)
+  let firstNonSilent = 0;
+  for (let i = 0; i < MAX_SEARCH; i++) {
+    if (Math.abs(data[i]) > 0.001) { firstNonSilent = i; break; }
+  }
+
+  for (let i = Math.max(1, firstNonSilent); i < MAX_SEARCH; i++) {
+    if (data[i - 1] < 0 && data[i] >= 0) { start = i; break; }
+  }
+  for (let i = data.length - 2; i > data.length - 1 - MAX_SEARCH; i--) {
+    if (data[i] < 0 && data[i + 1] >= 0) { end = i + 1; break; }
+  }
+  return (end > start) ? data.slice(start, end) : data;
+}
+
+function applyCrossfade(data, fadeSamples) {
+  if (fadeSamples <= 0) return data;
+  const N = data.length;
+  const F = Math.min(fadeSamples, Math.floor(N / 8));
+  if (F <= 0) return data;
+  const out = new Float32Array(data);
+  for (let i = 0; i < F; i++) {
+    const t = i / F;
+    out[i] = data[i] * t + data[N - F + i] * (1 - t);
+  }
+  return out;
+}
+
+async function loadLoop(idx, file) {
+  const lp = loops[idx];
+  lp.loading = true;
+  updateLoopUI(idx);
+  log(`Decodificando ${isSample(idx) ? 'sample' : 'loop'} ${LOOP_LABELS[idx]}: ${file.name} ...`);
+
+  try {
+    const ab = await file.arrayBuffer();
+    initChain();
+    const raw = await audioCtx.decodeAudioData(ab);
+
+    let numSamples = raw.length;
+    if (numSamples > SR * 300) {
+      numSamples = SR * 300;
+      log(`${isSample(idx) ? 'Sample' : 'Loop'} ${LOOP_LABELS[idx]}: recortado a 5 min`, 'warn');
+    }
+
+    const off = new OfflineAudioContext(1, numSamples, SR);
+    const src = off.createBufferSource();
+    src.buffer = raw;
+    src.connect(off.destination);
+    src.start(0);
+    const rendered = await off.startRendering();
+    const rawFloat = new Float32Array(rendered.getChannelData(0));
+
+    lp.loading = false;
+    updateLoopUI(idx);
+    openEditor(idx, rawFloat, file.name);
+  } catch(e) {
+    log(`Error decodificando ${isSample(idx) ? 'sample' : 'loop'} ${LOOP_LABELS[idx]}: ${e.message}`, 'err');
+    lp.loading = false;
+    updateLoopUI(idx);
+  }
+}
+
+async function loadLoopFromFloat(idx, rawFloat, name) {
+  const lp = loops[idx];
+  lp.loading = true;
+  updateLoopUI(idx);
+  log(`Procesando ${isSample(idx) ? 'sample' : 'loop'} ${LOOP_LABELS[idx]}: ${name} ...`);
+
+  try {
+    // Normalizar
+    let peak = 0;
+    for (const v of rawFloat) if (Math.abs(v) > peak) peak = Math.abs(v);
+    const scale = peak > 0.001 ? 1.0 / peak : 1.0;
+    const normalized = new Float32Array(rawFloat.length);
+    for (let i = 0; i < rawFloat.length; i++) normalized[i] = rawFloat[i] * scale;
+
+    // Zero-crossing trim con ventana pequeña (el usuario ya recortó en el editor)
+    const trimmed  = trimToZeroCrossings(normalized, 0.010);
+    const trimDiff = normalized.length - trimmed.length;
+    if (trimDiff > 0) log(`Zero-cross trim: ${(trimDiff/SR*1000).toFixed(1)} ms`, 'info');
+
+    const isSamp = isSample(idx);
+    let processed;
+    if (isSamp) {
+      processed = trimmed;
+    } else {
+      const fadeSmp = g_loopFade > 0 ? g_loopFade : Math.round(SR * 0.010);
+      processed = applyCrossfade(trimmed, fadeSmp);
+    }
+    const N = processed.length;
+
+    const audioBuffer = new AudioBuffer({ numberOfChannels: 1, length: N, sampleRate: SR });
+    audioBuffer.getChannelData(0).set(processed);
+
+    const int16Data = new Int16Array(N);
+    const rawInt16  = new Int16Array(N);
+    for (let i = 0; i < N; i++) {
+      const v = Math.round(Math.max(-32768, Math.min(32767, processed[i] * 32767)));
+      int16Data[i] = v;
+      rawInt16[i]  = v;
+    }
+
+    const durSec   = N / SR;
+    const detected = isSamp ? null : detectBars(durSec, currentBpm);
+
+    lp.name         = name.replace(/\.[^.]+$/, '');
+    lp.rawData      = processed;
+    lp.rawInt16     = rawInt16;
+    lp.audioBuffer  = audioBuffer;
+    lp.int16Data    = int16Data;
+    lp.detectedBars = detected;
+    lp.assignedBars = detected;
+
+    renderLoop(idx);
+    updateSizeInfo();
+    if (isSamp) {
+      log(`OK sample ${LOOP_LABELS[idx]}: ${durSec.toFixed(3)}s · one-shot · ${(N*2/1024).toFixed(1)} KB`, 'ok');
+    } else {
+      log(`OK loop ${LOOP_LABELS[idx]}: ${durSec.toFixed(3)}s · ≈${detected} compás(es) @ ${currentBpm} BPM · ${(N*2/1024).toFixed(1)} KB`, 'ok');
+    }
+  } catch(e) {
+    log(`Error procesando ${isSample(idx) ? 'sample' : 'loop'} ${LOOP_LABELS[idx]}: ${e.message}`, 'err');
+  } finally {
+    lp.loading = false;
+    updateLoopUI(idx);
+  }
+}
+
+// ============================================================
+// BLOQUE 5 — PLAYBACK ENGINE
+// ============================================================
+
+async function triggerLoop(idx) {
+  if (isSample(idx)) return triggerSample(idx);
+
+  const lp = loops[idx];
+  if (!lp.audioBuffer || lp.loading) return;
+
+  // Primer trigger desde teclado en Safari: avisar si el contexto no existe
+  if (!audioCtx) {
+    const evt = window.event;
+    if (evt && evt.isTrusted === false) {
+      log('Haz click en la página primero para activar el audio.', 'warn');
+      return;
+    }
+  }
+
+  await ensureRunning();
+  const ctx = audioCtx;
+  const t   = ctx.currentTime;
+
+  // Parar source anterior con fade-out programado en la timeline de audio
+  if (monoSrc) {
+    const prevSrc  = monoSrc;
+    const prevGain = monoGain;
+    prevGain.gain.cancelScheduledValues(t);
+    prevGain.gain.setValueAtTime(prevGain.gain.value, t);
+    prevGain.gain.linearRampToValueAtTime(0, t + FADE_TIME);
+    prevSrc.stop(t + STOP_DELAY);  // programado en la timeline de audio, no depende del event loop
+    prevSrc.onended = () => {
+      try { prevSrc.disconnect(); } catch (_) {}
+      try { prevGain.disconnect(); } catch (_) {}
+    };
+    monoSrc  = null;
+    monoGain = null;
+  }
+
+  // Actualizar UI — solo entre slots de loops (los samples son polifónicos paralelos)
+  for (let i = 0; i < NUM_BTN; i++) {
+    loops[i].playing = (i === idx);
+    loops[i].pending = false;
+    updateLoopUI(i);
+  }
+  activeIdx = idx;
+
+  // Crear gain perSource con fade-in
+  const gn = ctx.createGain();
+  gn.gain.setValueAtTime(0, t);
+  gn.gain.linearRampToValueAtTime(lp.gain, t + FADE_TIME);
+  gn.connect(hpfFilter);   // entra a la cadena HPF→LPF→masterGain
+
+  // Crear source
+  const src = ctx.createBufferSource();
+  src.buffer = lp.audioBuffer;
+  src.loop   = true;
+  src.playbackRate.value = g_pitch;
+  src.connect(gn);
+  src.start(t);
+
+  monoSrc  = src;
+  monoGain = gn;
+}
+
+// Sample polifónico one-shot (piezos): paralelo al loop activo, no lo cancela
+async function triggerSample(idx) {
+  const lp = loops[idx];
+  if (!lp.audioBuffer || lp.loading) return;
+
+  if (!audioCtx) {
+    const evt = window.event;
+    if (evt && evt.isTrusted === false) {
+      log('Haz click en la página primero para activar el audio.', 'warn');
+      return;
+    }
+  }
+
+  await ensureRunning();
+  const ctx = audioCtx;
+  const t   = ctx.currentTime;
+
+  const gn = ctx.createGain();
+  gn.gain.setValueAtTime(0, t);
+  gn.gain.linearRampToValueAtTime(lp.gain, t + FADE_TIME);
+  gn.connect(hpfFilter);
+
+  const src = ctx.createBufferSource();
+  src.buffer = lp.audioBuffer;
+  src.loop   = false;
+  src.playbackRate.value = g_pitch;
+  src.connect(gn);
+  src.start(t);
+
+  lp.playing = true;
+  updateLoopUI(idx);
+
+  src.onended = () => {
+    try { src.disconnect(); } catch (_) {}
+    try { gn.disconnect();  } catch (_) {}
+    lp.playing = false;
+    updateLoopUI(idx);
+  };
+}
+
+function stopMono() {
+  if (!monoSrc || !audioCtx) return;
+  const t = audioCtx.currentTime;
+
+  const prevSrc  = monoSrc;
+  const prevGain = monoGain;
+  prevGain.gain.cancelScheduledValues(t);
+  prevGain.gain.setValueAtTime(prevGain.gain.value, t);
+  prevGain.gain.linearRampToValueAtTime(0, t + FADE_TIME);
+  prevSrc.stop(t + STOP_DELAY);
+  prevSrc.onended = () => {
+    try { prevSrc.disconnect(); } catch (_) {}
+    try { prevGain.disconnect(); } catch (_) {}
+  };
+  monoSrc  = null;
+  monoGain = null;
+
+  for (let i = 0; i < NUM_BTN; i++) {
+    loops[i].playing = false;
+    updateLoopUI(i);
+  }
+  activeIdx = -1;
+}
+
+// ============================================================
+// BLOQUE 6 — MASTER TRANSPORT & BEAT CLOCK
+// ============================================================
+
+function beatDuration()   { return 60 / currentBpm; }
+function barDuration()    { return beatDuration() * BEATS_PER_BAR; }
+
+function nextBarStartTime() {
+  if (!masterPlaying || !audioCtx) return audioCtx ? audioCtx.currentTime : 0;
+  const elapsed = audioCtx.currentTime - masterStartTime;
+  const barDur  = barDuration();
+  const barsElapsed = Math.floor(elapsed / barDur);
+  const nextBar = masterStartTime + (barsElapsed + 1) * barDur;
+  return (nextBar - audioCtx.currentTime < 0.005) ? nextBar + barDur : nextBar;
+}
+
+async function startMaster() {
+  await ensureRunning();
+  masterStartTime = audioCtx.currentTime;
+  masterPlaying   = true;
+  currentBeat     = 0;
+  scheduleBeat();
+  document.getElementById('btn-master').textContent = '■ MASTER STOP';
+  document.getElementById('btn-master').classList.add('running');
+  updateBarInfo();
+}
+
+function stopMaster() {
+  masterPlaying = false;
+  clearTimeout(beatTimerID);
+  currentBeat = 0;
+  clearBeatDots();
+  document.getElementById('btn-master').textContent = '▶ MASTER START';
+  document.getElementById('btn-master').classList.remove('running');
+  document.getElementById('bar-info').textContent = '—';
+}
+
+function scheduleBeat() {
+  if (!masterPlaying || !audioCtx) return;
+  const elapsed  = audioCtx.currentTime - masterStartTime;
+  const beatDur  = beatDuration();
+  const nextBeat = Math.round(elapsed / beatDur);
+  const nextTime = masterStartTime + nextBeat * beatDur;
+  const delay    = Math.max(0, (nextTime - audioCtx.currentTime) * 1000);
+
+  beatTimerID = setTimeout(() => {
+    if (!masterPlaying) return;
+    currentBeat = nextBeat % BEATS_PER_BAR;
+    flashBeatDot(currentBeat);
+    updateBarInfo();
+    scheduleBeat();
+  }, delay);
+}
+
+function flashBeatDot(beat) {
+  document.querySelectorAll('.beat-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === beat);
+  });
+}
+
+function clearBeatDots() {
+  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active'));
+}
+
+function updateBarInfo() {
+  if (!masterPlaying || !audioCtx) return;
+  const barNum = Math.floor((audioCtx.currentTime - masterStartTime) / barDuration()) + 1;
+  document.getElementById('bar-info').textContent = `compás ${barNum}`;
+}
+
+// ============================================================
+// BLOQUE 7 — TAP TEMPO
+// ============================================================
+
+function tapTempo() {
+  const now = performance.now();
+  tapTimes.push(now);
+  if (tapTimes.length > 8) tapTimes.shift();
+  if (tapTimes.length < 2) { document.getElementById('tap-hint').textContent = 'sigue...'; return; }
+
+  const diffs = [];
+  for (let i = 1; i < tapTimes.length; i++) diffs.push(tapTimes[i] - tapTimes[i-1]);
+  diffs.sort((a, b) => a - b);
+  const med   = diffs[Math.floor(diffs.length / 2)];
+  const valid = diffs.filter(d => d < med * 2);
+  if (!valid.length) return;
+
+  const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
+  const bpm = Math.round(60000 / avg);
+  setBpm(Math.max(40, Math.min(240, bpm)));
+  document.getElementById('tap-hint').textContent = `${bpm} BPM (${valid.length+1} taps)`;
+}
+
+function setBpm(bpm) {
+  currentBpm = bpm;
+  document.getElementById('sl-bpm').value   = bpm;
+  document.getElementById('bpm-display').textContent = bpm;
+
+  // Re-anclar el grid de beats al nuevo BPM sin saltar
+  if (masterPlaying && audioCtx) {
+    masterStartTime = audioCtx.currentTime - currentBeat * beatDuration();
+  }
+
+  // Re-detectar barras para todos los loops cargados (samples no usan bars)
+  for (let i = 0; i < NUM_LOOPS; i++) {
+    if (loops[i].rawData && !isSample(i)) {
+      const dur = loops[i].rawData.length / SR;
+      loops[i].detectedBars = detectBars(dur, bpm);
+      if (loops[i].assignedBars === null) loops[i].assignedBars = loops[i].detectedBars;
+      rerenderLoopMeta(i);
+    }
+  }
+}
+
+// ============================================================
+// BLOQUE 8 — WAVEFORM DRAWING
+// ============================================================
+
+function drawWaveform(canvas, int16Data, color, bars) {
+  const ctx2 = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx2.clearRect(0, 0, W, H);
+  ctx2.fillStyle = '#12121c';
+  ctx2.fillRect(0, 0, W, H);
+
+  if (!int16Data) {
+    ctx2.fillStyle = '#2a2a3c';
+    ctx2.font = '10px Courier New';
+    ctx2.textAlign = 'center';
+    ctx2.fillText('drag & drop WAV / MP3', W/2, H/2+4);
+    return;
+  }
+
+  const step = int16Data.length / W;
+  ctx2.fillStyle = color + '33';
+  for (let x = 0; x < W; x++) {
+    let mn = 0, mx = 0;
+    const i0 = Math.floor(x * step);
+    const i1 = Math.min(Math.floor((x+1)*step), int16Data.length);
+    for (let j = i0; j < i1; j++) {
+      const v = int16Data[j] / 32768;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const yT = (H/2) - mx*(H/2-2);
+    const yB = (H/2) - mn*(H/2-2);
+    ctx2.fillRect(x, yT, 1, Math.max(1, yB-yT));
+  }
+  ctx2.strokeStyle = color + 'cc';
+  ctx2.lineWidth = 1;
+  ctx2.beginPath();
+  for (let x = 0; x < W; x++) {
+    const i = Math.floor(x * step);
+    const y = (H/2) - (int16Data[i]/32768)*(H/2-2);
+    x === 0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+  }
+  ctx2.stroke();
+
+  if (bars && bars > 1) {
+    ctx2.strokeStyle = color + '55';
+    ctx2.lineWidth = 1;
+    ctx2.setLineDash([2, 3]);
+    for (let b = 1; b < bars; b++) {
+      const x = Math.round((b / bars) * W);
+      ctx2.beginPath(); ctx2.moveTo(x, 0); ctx2.lineTo(x, H); ctx2.stroke();
+    }
+    ctx2.setLineDash([]);
+  }
+
+  const dur = (int16Data.length / SR).toFixed(3);
+  const kb  = (int16Data.length*2/1024).toFixed(0);
+  ctx2.fillStyle = color + 'bb';
+  ctx2.font = '9px Courier New';
+  ctx2.textAlign = 'right';
+  ctx2.fillText(`${dur}s · ${kb}KB`, W-4, H-4);
+}
+
+// ============================================================
+// BLOQUE 9 — UI RENDER
+// ============================================================
+
+function detectBars(durationSec, bpm) {
+  const barDur    = (60 / bpm) * BEATS_PER_BAR;
+  const barsFloat = durationSec / barDur;
+  return BAR_SNAPS.reduce((a, b) =>
+    Math.abs(b - barsFloat) < Math.abs(a - barsFloat) ? b : a
+  );
+}
+
+function barCountOptions(detectedBars) {
+  const set = new Set([...BAR_SNAPS, detectedBars]);
+  return [...set].sort((a, b) => a - b);
+}
+
+function createBeatDots() {
+  const container = document.getElementById('beat-dots');
+  for (let i = 0; i < BEATS_PER_BAR; i++) {
+    const d = document.createElement('div');
+    d.className = `beat-dot${i === 0 ? ' beat-1' : ''}`;
+    container.appendChild(d);
+  }
+}
+
+function createLoops() {
+  const grid = document.getElementById('loops-grid');
+  for (let i = 0; i < NUM_LOOPS; i++) {
+    const col = LOOP_COLORS[i];
+    const el  = document.createElement('div');
+    el.className = 'loop-pad';
+    el.id = `lpad-${i}`;
+    el.style.setProperty('--pc', col);
+    el.style.borderColor = col + '44';
+
+    const barsOpts = BAR_SNAPS.map(v => {
+      const label = v < 1 ? `${v} compás` : v === 1 ? '1 compás' : `${v} compases`;
+      return `<option value="${v}">${label}</option>`;
+    }).join('');
+
+    const isSamp   = isSample(i);
+    const srcLabel = isSamp
+      ? `PIEZO ADC ${PIEZO_ADCS[i - NUM_BTN]}`
+      : `BTN GPIO ${BTN_PINS[i]}`;
+    const kindLabel  = isSamp ? 'SAMPLE' : 'LOOP';
+    const trigLabel  = isSamp ? '▶ HIT'  : '▶ LOOP';
+    const barsHtml   = isSamp ? '' : `
+          <div class="loop-bars-row" id="lbars-row-${i}" style="display:none">
+            <span class="bars-label">COMPASES</span>
+            <select class="bars-select" id="lbars-${i}">${barsOpts}</select>
+            <span class="bars-detected" id="lbars-det-${i}"></span>
+          </div>`;
+
+    el.innerHTML = `
+      <div class="loop-header">
+        <div class="loop-badge">${kindLabel} ${LOOP_LABELS[i]} · ${srcLabel}</div>
+        <div class="loop-key-hint">tecla ${LOOP_KEYS[i].toUpperCase()}</div>
+      </div>
+      <canvas class="loop-waveform" id="lwave-${i}" width="300" height="64"></canvas>
+      <div class="loop-bottom">
+        <button class="loop-trigger" id="ltrig-${i}"
+                style="--pc:${col}; border-color:${col}; color:${col}">
+          ${trigLabel}
+        </button>
+        <div class="loop-meta">
+          <div class="loop-name" id="lname-${i}">— vacío —</div>
+          <div class="loop-dur"  id="ldur-${i}"></div>${barsHtml}
+          <div class="loop-actions">
+            <label class="load-label" for="lfile-${i}">Cargar Sample</label>
+            <input type="file" id="lfile-${i}" accept="audio/*" hidden>
+            <button class="clear-btn" id="lclr-${i}" style="display:none">✕ quitar</button>
+          </div>
+          <div class="loop-vol-row">
+            <span class="loop-vol-label">VOL</span>
+            <input type="range" id="lvol-${i}" min="0" max="200" value="100" step="1">
+            <span class="loop-vol-val" id="lvol-val-${i}">100%</span>
+          </div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(el);
+
+    document.getElementById(`lfile-${i}`).addEventListener('change', async e => {
+      if (e.target.files[0]) await loadLoop(i, e.target.files[0]);
+      e.target.value = '';
+    });
+
+    document.getElementById(`lclr-${i}`).addEventListener('click', () => {
+      const lp = loops[i];
+      if (lp.playing && !isSample(i)) stopMono();
+      lp.name = null; lp.audioBuffer = null; lp.int16Data = null;
+      lp.rawData = null; lp.rawInt16 = null;
+      lp.detectedBars = null; lp.assignedBars = isSample(i) ? null : 1;
+      lp.playing = false;
+      renderLoop(i); updateSizeInfo();
+    });
+
+    document.getElementById(`ltrig-${i}`).addEventListener('click', () => triggerLoop(i));
+
+    document.getElementById(`lvol-${i}`).addEventListener('input', e => {
+      const pct = parseInt(e.target.value);
+      loops[i].gain = pct / 100;
+      document.getElementById(`lvol-val-${i}`).textContent = pct + '%';
+      // Actualizar gain en vivo si el loop está sonando ahora
+      if (i === activeIdx && monoGain) monoGain.gain.value = loops[i].gain;
+    });
+
+    if (!isSamp) {
+      document.getElementById(`lbars-${i}`).addEventListener('change', e => {
+        loops[i].assignedBars = parseFloat(e.target.value);
+        renderLoopWaveform(i);
+      });
+    }
+
+    el.addEventListener('dragover',  e => { e.preventDefault(); el.style.borderColor = col; });
+    el.addEventListener('dragleave', () => { el.style.borderColor = col + '44'; });
+    el.addEventListener('drop', async e => {
+      e.preventDefault(); el.style.borderColor = col + '44';
+      if (e.dataTransfer.files[0]) await loadLoop(i, e.dataTransfer.files[0]);
+    });
+
+    drawWaveform(document.getElementById(`lwave-${i}`), null, col, 0);
+  }
+}
+
+function renderLoopWaveform(idx) {
+  const lp   = loops[idx];
+  const bars = isSample(idx) ? 0 : (lp.assignedBars ?? 1);
+  drawWaveform(document.getElementById(`lwave-${idx}`), lp.rawInt16, LOOP_COLORS[idx], bars);
+}
+
+function rerenderLoopMeta(idx) {
+  const lp = loops[idx];
+  if (!lp.rawData) return;
+  const durSec = lp.rawData.length / SR;
+  document.getElementById(`ldur-${idx}`).textContent = `${durSec.toFixed(3)}s`;
+  if (!isSample(idx)) {
+    const barDur    = barDuration();
+    const exactBars = durSec / barDur;
+    document.getElementById(`lbars-det-${idx}`).textContent = `(${exactBars.toFixed(2)}≈${lp.detectedBars})`;
+    document.getElementById(`lbars-${idx}`).value = lp.assignedBars;
+  }
+  renderLoopWaveform(idx);
+}
+
+function renderLoop(idx) {
+  const lp      = loops[idx];
+  const hasData = !!lp.int16Data;
+  const samp    = isSample(idx);
+  document.getElementById(`lname-${idx}`).textContent  = lp.name ?? '— vacío —';
+  document.getElementById(`lclr-${idx}`).style.display = hasData ? '' : 'none';
+  if (!samp) {
+    document.getElementById(`lbars-row-${idx}`).style.display = hasData ? '' : 'none';
+  }
+
+  if (hasData) {
+    const durSec = lp.rawData.length / SR;
+    document.getElementById(`ldur-${idx}`).textContent = `${durSec.toFixed(3)}s`;
+    if (!samp) {
+      const barDur    = barDuration();
+      const exactBars = durSec / barDur;
+      document.getElementById(`lbars-${idx}`).value = lp.assignedBars;
+      document.getElementById(`lbars-det-${idx}`).textContent = `(${exactBars.toFixed(2)} ≈ ${lp.detectedBars})`;
+    }
+  } else {
+    document.getElementById(`ldur-${idx}`).textContent = '';
+  }
+
+  renderLoopWaveform(idx);
+}
+
+function updateLoopUI(idx) {
+  const lp  = loops[idx];
+  const btn = document.getElementById(`ltrig-${idx}`);
+  const pad = document.getElementById(`lpad-${idx}`);
+  if (!btn || !pad) return;
+
+  if (lp.loading) {
+    btn.textContent = '...';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+
+  btn.classList.toggle('playing', lp.playing);
+  btn.classList.toggle('pending', lp.pending);
+  pad.classList.toggle('playing', lp.playing);
+  pad.classList.toggle('pending', lp.pending);
+
+  const samp = isSample(idx);
+  if (samp) {
+    btn.textContent = lp.playing ? '♪ HIT' : '▶ HIT';
+  } else if (lp.playing) {
+    btn.textContent = '■ STOP';
+  } else if (lp.pending) {
+    btn.textContent = '⧖ NEXT\nBAR';
+  } else {
+    btn.textContent = '▶ LOOP';
+  }
+}
+
+// ============================================================
+// BLOQUE 10 — SIZE INFO & LOG
+// ============================================================
+
+function updateSizeInfo() {
+  let total = 0;
+  const parts = [];
+  for (const lp of loops) {
+    if (lp.int16Data) {
+      const b = lp.int16Data.length * 2;
+      total += b;
+      const kind = isSample(lp.idx) ? 'Samp' : 'Loop';
+      parts.push(`${kind}${LOOP_LABELS[lp.idx]}: ${(b/1024).toFixed(0)}KB`);
+    }
+  }
+  const mb = total / 1024 / 1024;
+  document.getElementById('total-size').textContent = `${mb.toFixed(2)} MB total`;
+  document.getElementById('size-breakdown').textContent =
+    parts.length ? parts.join('  ·  ') : 'Sin samples cargados';
+  if (mb > 2.8) log(`Aviso: ${mb.toFixed(2)} MB — cerca del límite Huge APP (3MB)`, 'warn');
+}
+
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const d  = document.createElement('div');
+  d.className = `log-${type}`;
+  d.textContent = `> ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// BLOQUE 11 — FIRMWARE GENERATION
+// ============================================================
+
+function int16ToC(arr, name, gain = 1.0) {
+  const PL = 16;
+  const lines = [];
+  const gainStr = gain !== 1.0 ? ` · gain ${(gain * 100).toFixed(0)}%` : '';
+  lines.push(`// ${name}: ${arr.length} samples · ${(arr.length/SR).toFixed(4)}s · ${(arr.length*2/1024).toFixed(1)} KB${gainStr}`);
+  lines.push(`const int16_t ${name}[] PROGMEM = {`);
+  for (let i = 0; i < arr.length; i += PL) {
+    const chunk = Array.from(arr.slice(i, i+PL)).map(v => {
+      return Math.round(Math.max(-32768, Math.min(32767, v * gain)));
+    }).join(', ');
+    lines.push('  ' + chunk + (i+PL < arr.length ? ',' : ''));
+  }
+  lines.push('};');
+  lines.push(`const uint32_t ${name}_LEN = ${arr.length}UL;`);
+  return lines.join('\n');
+}
+
+function generateFirmware() {
+  const L = [];
+  const loopSlots   = loops.slice(0, NUM_BTN);              // idx 0..4
+  const sampleSlots = loops.slice(NUM_BTN, NUM_LOOPS);      // idx 5..8
+  const loadedLoops   = loopSlots.filter(lp => lp.int16Data);
+  const loadedSamples = sampleSlots.filter(lp => lp.int16Data);
+  if (!loadedLoops.length && !loadedSamples.length) {
+    log('Carga al menos un loop o sample primero.', 'warn');
+    return;
+  }
+
+  const NL = loadedLoops.length;
+  const NS = loadedSamples.length;
+  const barDur = barDuration();
+
+  // ── BLOQUE 1: CABECERA ──────────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// PercuSynth — BPM Mono Player + Polyphonic Samples Firmware`);
+  L.push(`// Generado: ${new Date().toLocaleString()}`);
+  L.push(`//`);
+  L.push(`// BPM: ${currentBpm}  |  Bar: ${barDur.toFixed(4)}s`);
+  L.push(`//`);
+  L.push(`// BTN (mono switcher · solo un loop activo a la vez):`);
+  for (let i = 0; i < NUM_BTN; i++) {
+    const lp = loopSlots[i];
+    if (lp.int16Data) {
+      L.push(`//   LOOP_${i} BTN GPIO ${BTN_PINS[i]} (${LOOP_LABELS[i]}): "${lp.name}" · ${lp.assignedBars} compás(es) · ${(lp.int16Data.length/SR).toFixed(4)}s`);
+    } else {
+      L.push(`//   LOOP_${i} BTN GPIO ${BTN_PINS[i]} (${LOOP_LABELS[i]}): — vacío —`);
+    }
+  }
+  L.push(`// PIEZO (samples one-shot polifónicos · paralelos al loop activo):`);
+  for (let i = 0; i < NUM_PIEZO; i++) {
+    const lp = sampleSlots[i];
+    if (lp.int16Data) {
+      L.push(`//   SAMPLE_${i} PIEZO ADC ${PIEZO_ADCS[i]} (${LOOP_LABELS[NUM_BTN+i]}): "${lp.name}" · ${(lp.int16Data.length/SR).toFixed(4)}s`);
+    } else {
+      L.push(`//   SAMPLE_${i} PIEZO ADC ${PIEZO_ADCS[i]} (${LOOP_LABELS[NUM_BTN+i]}): — vacío —`);
+    }
+  }
+  L.push(`//`);
+  L.push(`// Board  : ESP32-S3`);
+  L.push(`// Audio  : PCM5102 I2S @ 44100 Hz 16-bit stereo`);
+  L.push(`// IMU    : MPU6050 I2C SDA=21 SCL=38 — AccelY → LPF freq`);
+  L.push(`// Pots   : ADC1=pitch  ADC2=HPF  ADC8=LPF_Q(resonancia)  ADC10=vol`);
+  L.push(`// Filtros: HPF one-pole + LPF biquad (Q=ADC8) — soft limiter post-filtro`);
+  L.push(`// ================================================================`);
+  L.push(``);
+
+  // ── BLOQUE 2: INCLUDES ──────────────────────────────────────────
+  L.push(`#include <Arduino.h>`);
+  L.push(`#include "driver/i2s_std.h"`);
+  L.push(`#include <Wire.h>`);
+  L.push(`#include <math.h>`);
+  L.push(``);
+
+  // ── BLOQUE 3: CONSTANTES ────────────────────────────────────────
+  L.push(`#define NUM_LOOPS         5    // BTN slots`);
+  L.push(`#define NUM_SAMPLES       4    // PIEZO slots (polifónicos)`);
+  L.push(`#define BPM               ${currentBpm}`);
+  L.push(`#define SAMPLE_RATE       44100`);
+  L.push(`#define BUF_SAMPLES       128`);
+  L.push(`#define POT_PITCH         1    // ADC 1 — pitch 0.5x-2.0x`);
+  L.push(`#define POT_HPF           2    // ADC 2 — HPF 20-4000 Hz`);
+  L.push(`#define POT_RES           8    // ADC 8 — LPF Q resonancia 0.5-6.0`);
+  L.push(`#define POT_VOL           10   // ADC 10 — volumen master`);
+  L.push(`#define MPU_ADDR          0x68`);
+  L.push(`#define PIEZO_THRESHOLD   ${g_piezoThreshold}   // ADC 12-bit · sube si hay falsos positivos`);
+  L.push(`#define PIEZO_DEBOUNCE_MS 50   // debounce individual por piezo`);
+  L.push(`#define CROSS_DEBOUNCE_MS ${g_crossDebounce}   // lockout global: bloquea todos los piezos tras un disparo`);
+  L.push(``);
+
+  // ── BLOQUE 4: SAMPLE DATA ───────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// SAMPLE DATA (PROGMEM) — slots con LEN=0 son placeholders no cargados`);
+  L.push(`// ================================================================`);
+  L.push(``);
+  // Loop slots (BTN 0..4)
+  for (let i = 0; i < NUM_BTN; i++) {
+    const lp = loopSlots[i];
+    if (lp.int16Data) {
+      L.push(int16ToC(lp.int16Data, `LOOP_${i}`, lp.gain));
+    } else {
+      L.push(`// LOOP_${i}: slot vacío (placeholder)`);
+      L.push(`const int16_t  LOOP_${i}[] PROGMEM = {0};`);
+      L.push(`const uint32_t LOOP_${i}_LEN = 0UL;`);
+    }
+    L.push(``);
+  }
+  // Sample slots (PIEZO 0..3)
+  for (let i = 0; i < NUM_PIEZO; i++) {
+    const lp = sampleSlots[i];
+    if (lp.int16Data) {
+      L.push(int16ToC(lp.int16Data, `SAMPLE_${i}`, lp.gain));
+    } else {
+      L.push(`// SAMPLE_${i}: slot vacío (placeholder)`);
+      L.push(`const int16_t  SAMPLE_${i}[] PROGMEM = {0};`);
+      L.push(`const uint32_t SAMPLE_${i}_LEN = 0UL;`);
+    }
+    L.push(``);
+  }
+
+  // ── BLOQUE 5: TABLAS DE PUNTEROS ────────────────────────────────
+  L.push(`const int16_t* const LOOP_DATA[NUM_LOOPS] = {`);
+  L.push('  ' + Array.from({length: NUM_BTN}, (_,i) => `LOOP_${i}`).join(', '));
+  L.push(`};`);
+  L.push(`const uint32_t LOOP_LEN[NUM_LOOPS] = {`);
+  L.push('  ' + Array.from({length: NUM_BTN}, (_,i) => `LOOP_${i}_LEN`).join(', '));
+  L.push(`};`);
+  L.push(`const int16_t* const SAMPLE_DATA[NUM_SAMPLES] = {`);
+  L.push('  ' + Array.from({length: NUM_PIEZO}, (_,i) => `SAMPLE_${i}`).join(', '));
+  L.push(`};`);
+  L.push(`const uint32_t SAMPLE_LEN[NUM_SAMPLES] = {`);
+  L.push('  ' + Array.from({length: NUM_PIEZO}, (_,i) => `SAMPLE_${i}_LEN`).join(', '));
+  L.push(`};`);
+  L.push(``);
+
+  // ── BLOQUE 6: HARDWARE CONFIG ───────────────────────────────────
+  L.push(`const int BTN_PINS[5]  = {44, 42, 0, 45, 47};`);
+  L.push(`const int PIEZO_ADC[4] = {4, 5, 6, 7};`);
+  L.push(`static bool     btnPrev[5]        = {false};`);
+  L.push(`static uint32_t piezoLastTrig[4]  = {0};`);
+  L.push(`static uint32_t lastAnyPiezoTrig  = 0;   // lockout cruzado anti-crosstalk`);
+  L.push(``);
+
+  // ── BLOQUE 7: ESTADO COMPARTIDO ─────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// ESTADO COMPARTIDO — volatile para dual-core (Core0=audio, Core1=controls)`);
+  L.push(`// activeLoop: -1 = ningún loop sonando · 0..NUM_LOOPS-1 = loop activo (mono)`);
+  L.push(`// sampleVoice[v]: una voz polifónica por piezo, paralela al loop activo`);
+  L.push(`// ================================================================`);
+  L.push(`volatile int   activeLoop = -1;`);
+  L.push(`volatile float loopPhase[NUM_LOOPS];`);
+  L.push(``);
+  L.push(`struct SampleVoice {`);
+  L.push(`  bool  active;`);
+  L.push(`  float phase;`);
+  L.push(`};`);
+  L.push(`volatile SampleVoice sampleVoice[NUM_SAMPLES];`);
+  L.push(``);
+  L.push(`volatile float pitchRatio = 1.0f;`);
+  L.push(`volatile float masterVol  = 1.0f;`);
+  L.push(`volatile float rawHPFnorm = 0.0f;   // 0=20Hz  1=4000Hz`);
+  L.push(`volatile float rawLPFnorm = 0.5f;   // 0=200Hz 1=20kHz — seteado por IMU`);
+  L.push(`volatile float rawResnorm = 0.0f;   // 0=Q0.5  1=Q6.0  — ADC 8`);
+  L.push(``);
+
+  // ── BLOQUE 8: I2S ───────────────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// I2S`);
+  L.push(`// ================================================================`);
+  L.push(`static i2s_chan_handle_t i2s_tx;`);
+  L.push(``);
+  L.push(`void i2s_init() {`);
+  L.push(`  i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);`);
+  L.push(`  i2s_new_channel(&cc, &i2s_tx, NULL);`);
+  L.push(`  i2s_std_config_t sc = {`);
+  L.push(`    .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),`);
+  L.push(`    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),`);
+  L.push(`    .gpio_cfg = {`);
+  L.push(`      .mclk = I2S_GPIO_UNUSED,`);
+  L.push(`      .bclk = (gpio_num_t)41,`);
+  L.push(`      .ws   = (gpio_num_t)39,`);
+  L.push(`      .dout = (gpio_num_t)40,`);
+  L.push(`      .din  = I2S_GPIO_UNUSED`);
+  L.push(`    }`);
+  L.push(`  };`);
+  L.push(`  i2s_channel_init_std_mode(i2s_tx, &sc);`);
+  L.push(`  i2s_channel_enable(i2s_tx);`);
+  L.push(`}`);
+  L.push(``);
+
+  // ── BLOQUE 9: DSP — filtros one-pole ────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// DSP — HPF one-pole + LPF biquad (RBJ cookbook)`);
+  L.push(`// HPF one-pole: y[n] = a*(y[n-1] + x[n] - x[n-1]),  a = RC/(RC+dt)`);
+  L.push(`// LPF biquad: Q de ADC8 — resonancia controlable 0.5-6.0`);
+  L.push(`// ================================================================`);
+  L.push(`float hpf_x1=0, hpf_y1=0, hpf_a=0.99f;`);
+  L.push(`float lpf_x1=0, lpf_x2=0, lpf_y1=0, lpf_y2=0;`);
+  L.push(`float lpf_b0=1, lpf_b1=0, lpf_b2=0, lpf_a1=0, lpf_a2=0;`);
+  L.push(``);
+  L.push(`void computeHPF(float fc) {`);
+  L.push(`  if (fc < 1.0f) fc = 1.0f;`);
+  L.push(`  float rc = 1.0f / (2.0f * (float)M_PI * fc);`);
+  L.push(`  float dt = 1.0f / (float)SAMPLE_RATE;`);
+  L.push(`  hpf_a = rc / (rc + dt);`);
+  L.push(`  if (hpf_a > 0.9999f) hpf_a = 0.9999f;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`float applyHPF(float x) {`);
+  L.push(`  float y = hpf_a * (hpf_y1 + x - hpf_x1);`);
+  L.push(`  hpf_x1 = x; hpf_y1 = y;`);
+  L.push(`  return y;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`void computeLPF(float fc, float Q) {`);
+  L.push(`  float maxFc = (float)SAMPLE_RATE * 0.45f;`);
+  L.push(`  if (fc < 1.0f)   fc = 1.0f;`);
+  L.push(`  if (fc > maxFc)  fc = maxFc;`);
+  L.push(`  if (Q  < 0.5f)   Q  = 0.5f;`);
+  L.push(`  float w = 2.0f * (float)M_PI * fc / (float)SAMPLE_RATE;`);
+  L.push(`  float c = cosf(w), s = sinf(w);`);
+  L.push(`  float a = s / (2.0f * Q);`);
+  L.push(`  float norm = 1.0f / (1.0f + a);`);
+  L.push(`  lpf_b0 = (1.0f - c) * 0.5f * norm;`);
+  L.push(`  lpf_b1 = (1.0f - c) * norm;`);
+  L.push(`  lpf_b2 = lpf_b0;`);
+  L.push(`  lpf_a1 = -2.0f * c * norm;`);
+  L.push(`  lpf_a2 = (1.0f - a) * norm;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`float applyLPF(float x) {`);
+  L.push(`  float y = lpf_b0*x + lpf_b1*lpf_x1 + lpf_b2*lpf_x2`);
+  L.push(`            - lpf_a1*lpf_y1 - lpf_a2*lpf_y2;`);
+  L.push(`  lpf_x2 = lpf_x1; lpf_x1 = x;`);
+  L.push(`  lpf_y2 = lpf_y1; lpf_y1 = y;`);
+  L.push(`  return y;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`int readPot(int pin) {`);
+  L.push(`  int s = 0;`);
+  L.push(`  for (int i = 0; i < 8; i++) s += analogRead(pin);`);
+  L.push(`  return s >> 3;`);
+  L.push(`}`);
+  L.push(``);
+
+  // ── BLOQUE 10: IMU ──────────────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// IMU — MPU6050 I2C SDA=21 SCL=38`);
+  L.push(`// AccelY: horizontal=~10kHz, inclinado=-Y=200Hz, +Y=20kHz`);
+  L.push(`// ================================================================`);
+  L.push(`void initIMU() {`);
+  L.push(`  Wire.begin(21, 38);`);
+  L.push(`  Wire.beginTransmission(MPU_ADDR);`);
+  L.push(`  Wire.write(0x6B);`);
+  L.push(`  Wire.write(0);`);
+  L.push(`  Wire.endTransmission(true);`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`bool readIMU(int16_t &ax, int16_t &ay) {`);
+  L.push(`  Wire.beginTransmission(MPU_ADDR);`);
+  L.push(`  Wire.write(0x3B);`);
+  L.push(`  if (Wire.endTransmission(false) != 0) return false;`);
+  L.push(`  Wire.requestFrom((uint8_t)MPU_ADDR, (uint8_t)4, (uint8_t)true);`);
+  L.push(`  if (Wire.available() < 4) return false;`);
+  L.push(`  ax = (int16_t)((Wire.read() << 8) | Wire.read());`);
+  L.push(`  ay = (int16_t)((Wire.read() << 8) | Wire.read());`);
+  L.push(`  return true;`);
+  L.push(`}`);
+  L.push(``);
+
+  // ── BLOQUE 11: AUDIO TASK ───────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// AUDIO TASK — Core 0 — sin I2C ni ADC`);
+  L.push(`// Mezcla: loop activo (looping) + voces polifónicas one-shot de piezos`);
+  L.push(`// ================================================================`);
+  L.push(`void audioTask(void*) {`);
+  L.push(`  int16_t buf[BUF_SAMPLES * 2];`);
+  L.push(`  for (;;) {`);
+  L.push(`    computeHPF(20.0f * powf(200.0f, rawHPFnorm));`);
+  L.push(`    float lpfQ = 0.5f + rawResnorm * 5.5f;  // 0.5 – 6.0`);
+  L.push(`    computeLPF(200.0f * powf(100.0f, rawLPFnorm), lpfQ);`);
+  L.push(`    for (int s = 0; s < BUF_SAMPLES; s++) {`);
+  L.push(`      float mix = 0.0f;`);
+  L.push(``);
+  L.push(`      // Loop activo (mono switcher) — looping con interpolación lineal`);
+  L.push(`      int al = activeLoop;`);
+  L.push(`      if (al >= 0 && al < NUM_LOOPS && LOOP_LEN[al] > 0) {`);
+  L.push(`        float phase = loopPhase[al];`);
+  L.push(`        uint32_t len = LOOP_LEN[al];`);
+  L.push(`        uint32_t pos = (uint32_t)phase;`);
+  L.push(`        if (pos >= len) pos = 0;`);
+  L.push(`        float frac = phase - (float)pos;`);
+  L.push(`        uint32_t p1 = (pos + 1 < len) ? pos + 1 : 0;`);
+  L.push(`        float s0 = (float)LOOP_DATA[al][pos];`);
+  L.push(`        float s1 = (float)LOOP_DATA[al][p1];`);
+  L.push(`        mix += s0 + frac * (s1 - s0);`);
+  L.push(`        phase += pitchRatio;`);
+  L.push(`        if ((uint32_t)phase >= len) phase -= (float)len;`);
+  L.push(`        loopPhase[al] = phase;`);
+  L.push(`      }`);
+  L.push(``);
+  L.push(`      // Voces polifónicas — un slot por piezo, one-shot (no loop)`);
+  L.push(`      for (int v = 0; v < NUM_SAMPLES; v++) {`);
+  L.push(`        if (!sampleVoice[v].active || SAMPLE_LEN[v] == 0) continue;`);
+  L.push(`        float phase = sampleVoice[v].phase;`);
+  L.push(`        uint32_t len = SAMPLE_LEN[v];`);
+  L.push(`        uint32_t pos = (uint32_t)phase;`);
+  L.push(`        if (pos + 1 >= len) {`);
+  L.push(`          // Fin de muestra — desactivar voz`);
+  L.push(`          sampleVoice[v].active = false;`);
+  L.push(`          sampleVoice[v].phase  = 0.0f;`);
+  L.push(`          continue;`);
+  L.push(`        }`);
+  L.push(`        float frac = phase - (float)pos;`);
+  L.push(`        float s0 = (float)SAMPLE_DATA[v][pos];`);
+  L.push(`        float s1 = (float)SAMPLE_DATA[v][pos + 1];`);
+  L.push(`        mix += s0 + frac * (s1 - s0);`);
+  L.push(`        sampleVoice[v].phase = phase + pitchRatio;`);
+  L.push(`      }`);
+  L.push(``);
+  L.push(`      mix /= 32768.0f;`);
+  L.push(`      mix  = applyHPF(mix);`);
+  L.push(`      mix  = applyLPF(mix);`);
+  L.push(`      mix *= masterVol;`);
+  L.push(`      // Soft limiter: protege contra picos de resonancia y suma polifónica`);
+  L.push(`      if      (mix >  1.0f) mix =  1.0f;`);
+  L.push(`      else if (mix < -1.0f) mix = -1.0f;`);
+  L.push(`      int32_t out = (int32_t)(mix * 32767.0f);`);
+  L.push(`      if (out >  32767) out =  32767;`);
+  L.push(`      if (out < -32768) out = -32768;`);
+  L.push(`      buf[s*2]   = (int16_t)out;`);
+  L.push(`      buf[s*2+1] = (int16_t)out;`);
+  L.push(`    }`);
+  L.push(`    size_t written;`);
+  L.push(`    i2s_channel_write(i2s_tx, buf, sizeof(buf), &written, portMAX_DELAY);`);
+  L.push(`  }`);
+  L.push(`}`);
+  L.push(``);
+
+  // ── BLOQUE 12: SETUP ────────────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// SETUP`);
+  L.push(`// ================================================================`);
+  L.push(`void setup() {`);
+  L.push(`  // Serial deshabilitado`);
+  L.push(`  analogReadResolution(12);`);
+  L.push(`  for (int i = 0; i < 5; i++) pinMode(BTN_PINS[i], INPUT_PULLUP);`);
+  L.push(`  memset((void*)loopPhase, 0, sizeof(loopPhase));`);
+  L.push(`  for (int v = 0; v < NUM_SAMPLES; v++) {`);
+  L.push(`    sampleVoice[v].active = false;`);
+  L.push(`    sampleVoice[v].phase  = 0.0f;`);
+  L.push(`  }`);
+  L.push(`  i2s_init();`);
+  L.push(`  initIMU();`);
+  L.push(`  // Pre-leer pots para evitar silencio en los primeros frames`);
+  L.push(`  pitchRatio = 0.5f * powf(4.0f, readPot(POT_PITCH) / 4095.0f);`);
+  L.push(`  masterVol  = 0.1f + 0.9f * (readPot(POT_VOL) / 4095.0f);`);
+  L.push(`  rawHPFnorm = readPot(POT_HPF) / 4095.0f;`);
+  L.push(`  rawResnorm = readPot(POT_RES) / 4095.0f;`);
+  L.push(`  rawLPFnorm = 0.5f;`);
+  L.push(`  activeLoop = -1;   // arranca en silencio hasta que se presione un BTN`);
+  L.push(`  xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 24, NULL, 0);`);
+  L.push(`}`);
+  L.push(``);
+
+  // ── BLOQUE 13: LOOP ─────────────────────────────────────────────
+  L.push(`// ================================================================`);
+  L.push(`// LOOP — Core 1 — controles cada 20 ms`);
+  L.push(`// ================================================================`);
+  L.push(`void loop() {`);
+  L.push(`  static uint32_t lastCtrl = 0;`);
+  L.push(`  uint32_t now = millis();`);
+  L.push(``);
+  L.push(`  if (now - lastCtrl >= 20) {`);
+  L.push(`    lastCtrl = now;`);
+  L.push(`    pitchRatio = 0.5f * powf(4.0f, readPot(POT_PITCH) / 4095.0f);`);
+  L.push(`    masterVol  = 0.1f + 0.9f * (readPot(POT_VOL) / 4095.0f);`);
+  L.push(`    rawHPFnorm = readPot(POT_HPF) / 4095.0f;`);
+  L.push(`    rawResnorm = readPot(POT_RES) / 4095.0f;`);
+  L.push(`    // IMU AccelX → LPF freq (plano=10kHz, inclinar→bajar o subir)`);
+  L.push(`    int16_t imuX = 0, imuY = 0;`);
+  L.push(`    if (readIMU(imuX, imuY)) {`);
+  L.push(`      float yn = imuY / 16384.0f;`);
+  L.push(`      if (yn < -1.0f) yn = -1.0f;`);
+  L.push(`      if (yn >  1.0f) yn =  1.0f;`);
+  L.push(`      rawLPFnorm = (yn + 1.0f) * 0.5f;`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // BTN: mono switcher entre loops (solo uno activo a la vez)`);
+  L.push(`  for (int i = 0; i < NUM_LOOPS; i++) {`);
+  L.push(`    bool cur = !digitalRead(BTN_PINS[i]);`);
+  L.push(`    if (cur && !btnPrev[i] && LOOP_LEN[i] > 0) {`);
+  L.push(`      loopPhase[i] = 0.0f;`);
+  L.push(`      activeLoop   = i;`);
+  L.push(`    }`);
+  L.push(`    btnPrev[i] = cur;`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // PIEZO: dispara voz polifónica one-shot · paralela al loop activo`);
+  L.push(`  for (int p = 0; p < NUM_SAMPLES; p++) {`);
+  L.push(`    int val = analogRead(PIEZO_ADC[p]);`);
+  L.push(`    if (val > PIEZO_THRESHOLD`);
+  L.push(`        && (now - piezoLastTrig[p])   > PIEZO_DEBOUNCE_MS`);
+  L.push(`        && (now - lastAnyPiezoTrig)   > CROSS_DEBOUNCE_MS`);
+  L.push(`        && SAMPLE_LEN[p] > 0) {`);
+  L.push(`      sampleVoice[p].phase  = 0.0f;`);
+  L.push(`      sampleVoice[p].active = true;`);
+  L.push(`      piezoLastTrig[p]      = now;`);
+  L.push(`      lastAnyPiezoTrig      = now;   // bloquea los demás piezos por CROSS_DEBOUNCE_MS`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  delay(1);`);
+  L.push(`}`);
+
+  const code = L.join('\n');
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `percusynth_bpm_mono_${currentBpm}bpm.ino`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  const fwBytes = [...loadedLoops, ...loadedSamples]
+    .reduce((s, lp) => s + lp.int16Data.length * 2, 0);
+  log(`Firmware generado: ${NL} loops + ${NS} samples · ${currentBpm} BPM · ${(fwBytes/1024/1024).toFixed(2)} MB @ 44100 Hz`, 'ok');
+  if (fwBytes > 3*1024*1024)        log('Supera 3MB — reduce loops o acorta samples', 'err');
+  else if (fwBytes > 1.3*1024*1024) log('Requiere Huge APP (3MB): Arduino IDE → Tools → Partition Scheme → Huge APP', 'warn');
+  else                               log('Cabe en partición default (1.3MB) ✓', 'ok');
+  log('Flash Mode: DIO (no OPI) — Arduino IDE → Tools → Flash Mode', 'warn');
+}
+
+// ============================================================
+// BLOQUE 14 — SAMPLE EDITOR
+// ============================================================
+
+const editor = {
+  idx: -1,
+  name: '',
+  rawFloat: null,
+  totalSamples: 0,
+  startSample: 0,
+  endSample: 0,
+  viewStart: 0,
+  viewEnd: 0,
+  dragging: null,     // 'start' | 'end' | 'pan'
+  panAnchorX: 0,
+  panAnchorViewStart: 0,
+  previewSrc: null,
+  previewGain: null,
+};
+
+function openEditor(idx, rawFloat, name) {
+  const N = rawFloat.length;
+  editor.idx          = idx;
+  editor.name         = name;
+  editor.rawFloat     = rawFloat;
+  editor.totalSamples = N;
+  editor.startSample  = 0;
+  editor.endSample    = N;
+  editor.viewStart    = 0;
+  editor.viewEnd      = N;
+  editor.dragging     = null;
+
+  document.getElementById('ed-filename').textContent = name;
+  document.getElementById('ed-total').textContent    = (N / SR).toFixed(3) + 's';
+  document.getElementById('editor-modal').style.display = 'flex';
+
+  updateEditorInfo();
+  drawEditorCanvas();
+}
+
+function closeEditor() {
+  stopEditorPreview();
+  document.getElementById('editor-modal').style.display = 'none';
+  editor.rawFloat = null;
+  editor.idx = -1;
+}
+
+function updateEditorInfo() {
+  const ss = editor.startSample / SR;
+  const es = editor.endSample   / SR;
+  document.getElementById('ed-start').textContent = ss.toFixed(3) + 's';
+  document.getElementById('ed-end').textContent   = es.toFixed(3) + 's';
+  document.getElementById('ed-dur').textContent   = Math.max(0, es - ss).toFixed(3) + 's';
+}
+
+function drawEditorCanvas() {
+  const canvas = document.getElementById('editor-canvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const data = editor.rawFloat;
+  if (!data) return;
+
+  const N   = editor.totalSamples;
+  const vs  = editor.viewStart;
+  const ve  = editor.viewEnd;
+  const ss  = editor.startSample;
+  const se  = editor.endSample;
+  const viewLen = Math.max(1, ve - vs);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, W, H);
+
+  // Selection background
+  const selX1 = Math.round(Math.max(0,  (ss - vs) / viewLen * W));
+  const selX2 = Math.round(Math.min(W,  (se - vs) / viewLen * W));
+  if (selX2 > selX1) {
+    ctx.fillStyle = 'rgba(255,154,60,0.07)';
+    ctx.fillRect(selX1, 0, selX2 - selX1, H);
+  }
+
+  // Waveform
+  const samplesPerPx = viewLen / W;
+  for (let x = 0; x < W; x++) {
+    const i0 = Math.max(0, Math.floor(vs + x * samplesPerPx));
+    const i1 = Math.min(N, Math.floor(vs + (x + 1) * samplesPerPx) + 1);
+    let mn = 0, mx = 0;
+    for (let j = i0; j < i1; j++) {
+      const v = data[j];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const inSel = x >= selX1 && x < selX2;
+    ctx.fillStyle = inSel ? 'rgba(255,154,60,0.72)' : 'rgba(80,80,120,0.55)';
+    const yT = (H / 2) - mx * (H / 2 - 2);
+    const yB = (H / 2) - mn * (H / 2 - 2);
+    ctx.fillRect(x, yT, 1, Math.max(1, yB - yT));
+  }
+
+  // Center line
+  ctx.strokeStyle = 'rgba(40,40,60,0.9)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+
+  // --- Start marker (green) ---
+  const startX = Math.round((ss - vs) / viewLen * W);
+  if (startX >= -2 && startX <= W + 2) {
+    ctx.strokeStyle = '#00e5a0';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(startX, 0); ctx.lineTo(startX, H); ctx.stroke();
+    ctx.fillStyle = '#00e5a0';
+    ctx.fillRect(startX, 0, 14, 18);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText('S', startX + 3, 13);
+  }
+
+  // --- End marker (red) ---
+  const endX = Math.round((se - vs) / viewLen * W);
+  if (endX >= -2 && endX <= W + 2) {
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(endX, 0); ctx.lineTo(endX, H); ctx.stroke();
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(endX - 14, 0, 14, 18);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = 'right';
+    ctx.fillText('E', endX - 3, 13);
+  }
+
+  // Time labels
+  ctx.fillStyle = 'rgba(80,80,120,0.9)';
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'left';
+  ctx.fillText((vs / SR).toFixed(3) + 's', 4, H - 5);
+  ctx.textAlign = 'right';
+  ctx.fillText((ve / SR).toFixed(3) + 's', W - 4, H - 5);
+}
+
+function edSampleFromX(canvasX) {
+  const canvas = document.getElementById('editor-canvas');
+  const viewLen = Math.max(1, editor.viewEnd - editor.viewStart);
+  return Math.round(editor.viewStart + (canvasX / canvas.width) * viewLen);
+}
+
+function edXFromSample(sample) {
+  const canvas = document.getElementById('editor-canvas');
+  const viewLen = Math.max(1, editor.viewEnd - editor.viewStart);
+  return (sample - editor.viewStart) / viewLen * canvas.width;
+}
+
+function edCanvasClientToLocal(e) {
+  const rect   = e.target.getBoundingClientRect();
+  const scaleX = e.target.width / rect.width;
+  return (e.clientX - rect.left) * scaleX;
+}
+
+function editorMouseDown(e) {
+  const x      = edCanvasClientToLocal(e);
+  const startX = edXFromSample(editor.startSample);
+  const endX   = edXFromSample(editor.endSample);
+  const HIT    = 14;
+
+  if (Math.abs(x - startX) <= HIT) {
+    editor.dragging = 'start';
+  } else if (Math.abs(x - endX) <= HIT) {
+    editor.dragging = 'end';
+  } else {
+    editor.dragging          = 'pan';
+    editor.panAnchorX        = x;
+    editor.panAnchorViewStart = editor.viewStart;
+  }
+}
+
+function editorMouseMove(e) {
+  if (!editor.dragging) return;
+  const x   = edCanvasClientToLocal(e);
+  const N   = editor.totalSamples;
+
+  if (editor.dragging === 'start') {
+    let s = edSampleFromX(x);
+    s = Math.max(0, Math.min(editor.endSample - 1, s));
+    editor.startSample = s;
+    updateEditorInfo();
+    drawEditorCanvas();
+
+  } else if (editor.dragging === 'end') {
+    let s = edSampleFromX(x);
+    s = Math.max(editor.startSample + 1, Math.min(N, s));
+    editor.endSample = s;
+    updateEditorInfo();
+    drawEditorCanvas();
+
+  } else if (editor.dragging === 'pan') {
+    const canvas  = document.getElementById('editor-canvas');
+    const viewLen = editor.viewEnd - editor.viewStart;
+    const dx      = x - editor.panAnchorX;
+    const dSamp   = -Math.round((dx / canvas.width) * viewLen);
+    let newVs = Math.max(0, Math.min(N - viewLen, editor.panAnchorViewStart + dSamp));
+    editor.viewStart = newVs;
+    editor.viewEnd   = newVs + viewLen;
+    drawEditorCanvas();
+  }
+}
+
+function editorMouseUp() {
+  const wasMarker = editor.dragging === 'start' || editor.dragging === 'end';
+  editor.dragging = null;
+  if (wasMarker && editor.previewSrc) editorPreview();
+}
+
+function editorWheel(e) {
+  e.preventDefault();
+  const x         = edCanvasClientToLocal(e);
+  const pivotSamp = edSampleFromX(x);
+  const viewLen   = Math.max(1, editor.viewEnd - editor.viewStart);
+  const factor    = e.deltaY > 0 ? 1.5 : (1 / 1.5);
+  const newLen    = Math.max(Math.round(SR * 0.04), Math.min(editor.totalSamples, Math.round(viewLen * factor)));
+  const pivotFrac = (pivotSamp - editor.viewStart) / viewLen;
+  let newVs       = Math.round(pivotSamp - pivotFrac * newLen);
+  newVs           = Math.max(0, Math.min(editor.totalSamples - newLen, newVs));
+  editor.viewStart = newVs;
+  editor.viewEnd   = Math.min(editor.totalSamples, newVs + newLen);
+  drawEditorCanvas();
+}
+
+function editorZoomIn() {
+  const center  = (editor.viewStart + editor.viewEnd) / 2;
+  const newHalf = Math.max(Math.round(SR * 0.02), Math.round((editor.viewEnd - editor.viewStart) / 4));
+  editor.viewStart = Math.max(0, Math.round(center - newHalf));
+  editor.viewEnd   = Math.min(editor.totalSamples, Math.round(center + newHalf));
+  drawEditorCanvas();
+}
+
+function editorZoomOut() {
+  const center  = (editor.viewStart + editor.viewEnd) / 2;
+  const newHalf = Math.min(Math.round(editor.totalSamples / 2), Math.round((editor.viewEnd - editor.viewStart)));
+  editor.viewStart = Math.max(0, Math.round(center - newHalf));
+  editor.viewEnd   = Math.min(editor.totalSamples, Math.round(center + newHalf));
+  if (editor.viewEnd <= editor.viewStart) editor.viewEnd = Math.min(editor.totalSamples, editor.viewStart + 1);
+  drawEditorCanvas();
+}
+
+function editorZoomFit() {
+  editor.viewStart = 0;
+  editor.viewEnd   = editor.totalSamples;
+  drawEditorCanvas();
+}
+
+function editorZoomSel() {
+  if (editor.endSample <= editor.startSample) return;
+  const pad = Math.round((editor.endSample - editor.startSample) * 0.1);
+  editor.viewStart = Math.max(0, editor.startSample - pad);
+  editor.viewEnd   = Math.min(editor.totalSamples, editor.endSample + pad);
+  drawEditorCanvas();
+}
+
+function editorSelAll() {
+  editor.startSample = 0;
+  editor.endSample   = editor.totalSamples;
+  updateEditorInfo();
+  drawEditorCanvas();
+}
+
+function stopEditorPreview() {
+  if (editor.previewSrc) {
+    try { editor.previewSrc.stop(); } catch(_) {}
+    try { editor.previewSrc.disconnect(); } catch(_) {}
+    editor.previewSrc = null;
+  }
+  if (editor.previewGain) {
+    try { editor.previewGain.disconnect(); } catch(_) {}
+    editor.previewGain = null;
+  }
+  document.getElementById('ed-preview').classList.remove('active');
+}
+
+async function editorPreview() {
+  stopEditorPreview();
+  await ensureRunning();
+  const raw = editor.rawFloat.slice(editor.startSample, editor.endSample);
+  if (raw.length < 2) return;
+
+  // Mismo pipeline que loadLoopFromFloat para que suene idéntico
+  let peak = 0;
+  for (const v of raw) if (Math.abs(v) > peak) peak = Math.abs(v);
+  const scale = peak > 0.001 ? 1 / peak : 1;
+  const normalized = new Float32Array(raw.length);
+  for (let i = 0; i < raw.length; i++) normalized[i] = raw[i] * scale;
+
+  const trimmed = trimToZeroCrossings(normalized, 0.010);
+  const isSamp  = isSample(editor.idx);
+  const processed = isSamp
+    ? trimmed
+    : applyCrossfade(trimmed, g_loopFade > 0 ? g_loopFade : Math.round(SR * 0.010));
+
+  const buf = new AudioBuffer({ numberOfChannels: 1, length: processed.length, sampleRate: SR });
+  buf.getChannelData(0).set(processed);
+
+  const gn = audioCtx.createGain();
+  gn.gain.value = masterGain ? masterGain.gain.value : 1.0;
+  gn.connect(audioCtx.destination);
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.loop   = true;
+  src.connect(gn);
+  src.start();
+  editor.previewSrc  = src;
+  editor.previewGain = gn;
+  document.getElementById('ed-preview').classList.add('active');
+}
+
+async function editorConfirm() {
+  const idx      = editor.idx;
+  const name     = editor.name;
+  const selected = editor.rawFloat.slice(editor.startSample, editor.endSample);
+  closeEditor();
+  await loadLoopFromFloat(idx, selected, name);
+}
+
+function initEditorListeners() {
+  const canvas = document.getElementById('editor-canvas');
+  canvas.addEventListener('mousedown',  editorMouseDown);
+  canvas.addEventListener('mousemove',  editorMouseMove);
+  canvas.addEventListener('mouseup',    editorMouseUp);
+  canvas.addEventListener('mouseleave', editorMouseUp);
+  canvas.addEventListener('wheel',      editorWheel, { passive: false });
+
+  document.getElementById('ed-zoom-in').addEventListener('click',  editorZoomIn);
+  document.getElementById('ed-zoom-out').addEventListener('click', editorZoomOut);
+  document.getElementById('ed-zoom-fit').addEventListener('click', editorZoomFit);
+  document.getElementById('ed-zoom-sel').addEventListener('click', editorZoomSel);
+  document.getElementById('ed-sel-all').addEventListener('click',  editorSelAll);
+  document.getElementById('ed-preview').addEventListener('click',  () => {
+    editor.previewSrc ? stopEditorPreview() : editorPreview();
+  });
+  document.getElementById('ed-cancel').addEventListener('click',  closeEditor);
+  document.getElementById('ed-confirm').addEventListener('click', editorConfirm);
+}
+
+// ============================================================
+// BLOQUE 12 — EVENT LISTENERS
+// ============================================================
+
+// BPM slider
+document.getElementById('sl-bpm').addEventListener('input', e => {
+  setBpm(parseInt(e.target.value));
+  tapTimes = [];
+  document.getElementById('tap-hint').textContent = 'toca 3+ veces';
+});
+
+// Tap tempo
+document.getElementById('btn-tap').addEventListener('click', tapTempo);
+
+// Master transport
+document.getElementById('btn-master').addEventListener('click', () => {
+  masterPlaying ? stopMaster() : startMaster();
+});
+
+// Generate
+document.getElementById('generate-btn').addEventListener('click', generateFirmware);
+
+// Loop fade (solo afecta al firmware; al recargar el sample se aplica)
+document.getElementById('sl-lfade').addEventListener('input', e => {
+  const ms = parseInt(e.target.value);
+  g_loopFade = Math.round(ms * SR / 1000);
+  document.getElementById('cv-lfade').textContent = `${ms} ms`;
+});
+
+// Pitch
+document.getElementById('sl-pitch').addEventListener('input', e => {
+  const raw = parseInt(e.target.value);
+  g_pitch = 0.5 * Math.pow(4, raw / 4095);   // 0.5× – 2.0×
+  document.getElementById('cv-pitch').textContent = g_pitch.toFixed(2) + '×';
+  if (monoSrc) monoSrc.playbackRate.value = g_pitch;
+});
+
+// HPF (pot ADC2)
+document.getElementById('sl-hpf').addEventListener('input', e => {
+  const raw  = parseInt(e.target.value);
+  const freq = 20 * Math.pow(200, raw / 4095);   // 20 – 4000 Hz
+  document.getElementById('cv-hpf').textContent =
+    freq >= 1000 ? (freq/1000).toFixed(1) + ' kHz' : Math.round(freq) + ' Hz';
+  if (hpfFilter) hpfFilter.frequency.value = freq;
+});
+
+// LPF freq (simula IMU AccelX)
+document.getElementById('sl-lpf-f').addEventListener('input', e => {
+  const raw  = parseInt(e.target.value);
+  const freq = 200 * Math.pow(100, raw / 4095);   // 200 – 20000 Hz log
+  document.getElementById('cv-lpf-f').textContent = (freq/1000).toFixed(1) + ' kHz';
+  if (lpfFilter) lpfFilter.frequency.value = freq;
+});
+
+// LPF Q (solo preview — el firmware usa one-pole sin Q)
+document.getElementById('sl-lpf-q').addEventListener('input', e => {
+  const raw  = parseInt(e.target.value);
+  const q    = 0.5 + (raw / 4095) * 5.5;   // 0.5 – 6.0
+  document.getElementById('cv-lpf-q').textContent = q.toFixed(2);
+  if (lpfFilter) lpfFilter.Q.value = q;
+});
+
+// Piezo threshold (firmware)
+document.getElementById('sl-piezo-thr').addEventListener('input', e => {
+  g_piezoThreshold = parseInt(e.target.value);
+  document.getElementById('cv-piezo-thr').textContent = g_piezoThreshold;
+});
+
+// Crosstalk lock (firmware)
+document.getElementById('sl-cross-deb').addEventListener('input', e => {
+  g_crossDebounce = parseInt(e.target.value);
+  document.getElementById('cv-cross-deb').textContent = g_crossDebounce + ' ms';
+});
+
+// Volumen
+document.getElementById('sl-vol').addEventListener('input', e => {
+  const raw = parseInt(e.target.value);
+  const vol = raw / 4095;
+  document.getElementById('cv-vol').textContent = Math.round(vol * 100) + '%';
+  if (masterGain) masterGain.gain.value = vol;
+});
+
+// Teclado
+document.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+  // Editor modal: intercepta todas las teclas
+  if (document.getElementById('editor-modal').style.display !== 'none') {
+    if (e.key === 'Escape') { e.preventDefault(); closeEditor();    return; }
+    if (e.key === 'Enter')  { e.preventDefault(); editorConfirm();  return; }
+    if (e.key === ' ')      { e.preventDefault(); editor.previewSrc ? stopEditorPreview() : editorPreview(); return; }
+    return;
+  }
+
+  const idx = LOOP_KEYS.indexOf(e.key.toLowerCase());
+  if (idx !== -1) triggerLoop(idx);
+  if (e.key === ' ') { e.preventDefault(); masterPlaying ? stopMaster() : startMaster(); }
+});
+
+// ============================================================
+// BLOQUE 13 — INIT
+// ============================================================
+createBeatDots();
+createLoops();
+initEditorListeners();
+
+log('BPM Mono listo. Solo un loop suena a la vez · samples polifónicos en paralelo.', 'ok');
+log('Teclas: Q W E R T (BTN loops) · Y A S D (PIEZO samples one-shot) · ESPACIO = master start/stop', 'info');
+log('LPF freq: slider simula IMU AccelY · Q controlable por ADC8 (firmware usa biquad)', 'info');
+</script>
+</body>
+</html>

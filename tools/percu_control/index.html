@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PercuSynth Control · GC Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{
+  --wood-1:#5a3520;--wood-2:#3d2114;--wood-3:#2a160c;
+  --silk:#e8e2cf;--silk-d:#8a8470;--silk-f:#5a5440;
+  --cyan:#5dd7ff;--violet:#b58aff;--amber:#ffaa44;--mint:#5fffc4;
+  --red:#ff5a4a;--blue:#5aa0ff;--pink:#ff6aa8;--led:#4dd0a0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;
+  font-family:'Space Mono',monospace;color:var(--silk);background:#0a0805;}
+
+/* ════════ WOODEN ENCLOSURE ════════ */
+.case{
+  position:fixed;inset:0;
+  padding:clamp(8px,1.2vmin,18px);
+  display:flex;flex-direction:column;
+  background:
+    repeating-linear-gradient(92deg,
+      rgba(0,0,0,0) 0px,rgba(0,0,0,.07) 1px,rgba(0,0,0,0) 3px,rgba(255,180,120,.03) 5px,rgba(0,0,0,0) 9px),
+    repeating-linear-gradient(88deg,
+      rgba(0,0,0,0) 0px,rgba(0,0,0,.18) .5px,rgba(0,0,0,0) 7px),
+    linear-gradient(180deg,var(--wood-1) 0%,var(--wood-2) 50%,var(--wood-3) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,200,140,.18),
+    inset 0 0 22px rgba(0,0,0,.6),
+    inset 0 -3px 18px rgba(0,0,0,.7);
+}
+
+/* ════════ PCB ════════ */
+.pcb{
+  flex:1;min-height:0;
+  position:relative;border-radius:6px;
+  padding:clamp(10px,1.5vmin,18px);
+  display:grid;grid-template-rows:auto 1fr;
+  gap:clamp(8px,1.2vmin,14px);
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(255,255,255,.012) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(90deg,
+      rgba(255,255,255,.012) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(45deg,
+      rgba(40,80,55,.10) 0px,rgba(40,80,55,.10) 1px,
+      rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    repeating-linear-gradient(-45deg,
+      rgba(40,80,55,.08) 0px,rgba(40,80,55,.08) 1px,
+      rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    radial-gradient(ellipse at 30% 0%,rgba(40,90,60,.10),transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(60,40,30,.18),transparent 60%),
+    linear-gradient(180deg,#101108 0%,#070806 50%,#0a0b07 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.04),
+    inset 0 0 0 2px rgba(0,0,0,.6),
+    0 4px 24px rgba(0,0,0,.55);
+}
+.pcb::before{
+  content:'';position:absolute;inset:8px;pointer-events:none;
+  border:1px dashed rgba(232,226,207,.07);border-radius:4px;
+}
+.pcb::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 16px 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at 16px calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px);
+}
+
+/* ════════ HEADER ════════ */
+.hdr{
+  display:grid;grid-template-columns:auto 1fr auto;
+  align-items:center;gap:18px;
+  padding:8px 18px;min-height:78px;
+  background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.15));
+  border:1px solid rgba(232,226,207,.1);border-radius:4px;
+  position:relative;
+}
+.brand{display:flex;align-items:center;gap:18px}
+.brand-logo{
+  width:clamp(56px,7vmin,84px);
+  height:clamp(56px,7vmin,84px);
+  background:url('assets/gclab-logo.png') center/contain no-repeat;
+  filter:brightness(1.25) drop-shadow(0 0 8px rgba(232,226,207,.28));
+  flex-shrink:0;
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.05}
+.brand-name{
+  font-family:'Orbitron',sans-serif;font-weight:900;
+  font-size:clamp(20px,2.6vmin,30px);
+  letter-spacing:4px;color:var(--silk);
+  text-shadow:0 0 12px rgba(232,226,207,.18);
+}
+.brand-sub{
+  font-family:'Space Mono',monospace;
+  font-size:clamp(9px,1vmin,11px);
+  letter-spacing:5px;color:var(--silk-d);margin-top:6px;
+}
+.hdr-status{
+  display:flex;align-items:center;gap:14px;justify-self:end;
+  font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1.5px;
+}
+.smd-led{
+  width:7px;height:7px;border-radius:50%;
+  background:#1a1a1a;box-shadow:inset 0 0 0 1px rgba(0,0,0,.8),0 0 0 1px rgba(232,226,207,.1);
+}
+.smd-led.on{background:var(--led);box-shadow:0 0 7px var(--led),0 0 14px rgba(77,208,160,.4)}
+.smd-led.tx{background:#5dd7ff;box-shadow:0 0 8px #5dd7ff;animation:blink .4s ease-out}
+@keyframes blink{0%{box-shadow:0 0 12px #5dd7ff,0 0 22px #5dd7ff}100%{box-shadow:0 0 4px #5dd7ff}}
+.hdr-lbl{color:var(--silk-d);text-transform:uppercase;font-size:10px}
+.hdr-lbl.on{color:var(--led)}
+.hdr-fw{font-size:9px;color:var(--silk-f);letter-spacing:1px}
+.hdr-fw.ok{color:var(--mint)}
+
+select,.btn{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;
+  background:linear-gradient(180deg,#181a14,#0a0c08);color:var(--silk);
+  border:1px solid rgba(232,226,207,.18);border-radius:3px;
+  padding:7px 14px;cursor:pointer;text-transform:uppercase;outline:none;
+  transition:all .15s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.6);
+}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 10px rgba(93,215,255,.25)}
+.btn.pri{background:linear-gradient(180deg,#0f3a4a,#082230);
+  border-color:rgba(93,215,255,.5);color:var(--cyan);font-weight:700}
+.btn.pri:hover{background:linear-gradient(180deg,#11546b,#0a2f40)}
+.btn.sec{border-color:rgba(255,170,68,.5);color:var(--amber)}
+.btn:disabled{opacity:.3;pointer-events:none}
+
+/* ════════ BODY — 3 columns ════════ */
+.body{
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) minmax(0,1.7fr) minmax(260px,1fr);
+  gap:clamp(6px,1vmin,12px);
+  min-height:0;overflow:hidden;
+}
+.col{
+  display:flex;flex-direction:column;
+  gap:clamp(6px,.9vmin,11px);
+  overflow:auto;padding-right:2px;min-height:0;
+}
+.col::-webkit-scrollbar{width:4px}
+.col::-webkit-scrollbar-thumb{background:rgba(232,226,207,.1);border-radius:2px}
+.center{display:grid;grid-template-rows:auto 1fr auto;gap:clamp(8px,1.2vmin,14px);min-height:0}
+
+/* ════════ MODULE ════════ */
+.mod{
+  position:relative;
+  padding:18px 10px 10px;
+  border:1px solid rgba(232,226,207,.13);border-radius:4px;
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.03),transparent 70%),
+    linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.08));
+  display:flex;flex-direction:column;gap:7px;min-width:0;
+}
+.mod-lbl{
+  position:absolute;top:-8px;left:14px;padding:0 10px;
+  font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:11px;letter-spacing:4px;color:var(--silk);
+  background:#0c0e09;
+  display:flex;align-items:center;gap:8px;
+}
+.mod-led{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--c,#5dd7ff);
+  box-shadow:0 0 6px var(--c,#5dd7ff),0 0 12px rgba(var(--cr,93,215,255),.4);
+  animation:pulse 2.6s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.mod-sent{
+  margin-left:auto;font-size:10px;color:var(--c,#5dd7ff);
+  opacity:0;transition:.25s;
+}
+.mod-sent.flash{opacity:1}
+
+/* ════════ chips ════════ */
+.row{display:flex;gap:4px;flex-wrap:wrap}
+.chip{
+  flex:1;min-width:0;
+  background:linear-gradient(180deg,#15170f,#0a0b07);
+  border:1px solid rgba(232,226,207,.14);color:var(--silk-d);
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+  padding:7px 4px;line-height:1;border-radius:2px;cursor:pointer;
+  text-align:center;transition:all .12s;letter-spacing:.5px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 1px 1px rgba(0,0,0,.5);
+  white-space:nowrap;
+}
+.chip:hover{color:var(--silk)}
+.chip.active{
+  background:linear-gradient(180deg,rgba(var(--cr,93,215,255),.2),rgba(var(--cr,93,215,255),.06));
+  border-color:var(--c,#5dd7ff);color:var(--c,#5dd7ff);
+  text-shadow:0 0 6px var(--c,#5dd7ff);
+  box-shadow:inset 0 0 10px rgba(var(--cr,93,215,255),.25);
+}
+.chip.wave{font-size:16px}
+
+/* ════════ KNOBS — variable sizes ════════ */
+.kr{display:flex;gap:8px;align-items:flex-end;justify-content:center;flex-wrap:wrap;margin-top:2px}
+.kw{display:flex;flex-direction:column;align-items:center;gap:4px;user-select:none}
+canvas.kc{cursor:ns-resize;touch-action:none;display:block}
+.kname{
+  font-family:'Space Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--silk-d);letter-spacing:2px;text-transform:uppercase;
+}
+
+/* ════════ Hardware monitor (read-only) ════════ */
+.hwrow{
+  display:flex;gap:14px;align-items:center;justify-content:space-around;
+  padding:10px 14px;
+  border:1px solid rgba(232,226,207,.1);border-radius:4px;
+  background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.08));
+}
+.mw{display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
+canvas.mc{display:block}
+.mname{font-family:'Space Mono',monospace;font-size:9px;color:rgba(255,170,68,.55);
+  letter-spacing:1.5px;text-transform:uppercase;font-weight:700}
+.mbg{position:absolute;top:-3px;right:-6px;font-size:7px;color:rgba(255,170,68,.4);font-family:'Space Mono',monospace}
+
+/* IMU widget */
+.imu{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:0 6px;border-left:1px solid rgba(232,226,207,.08);
+}
+.imu-h{
+  font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;
+  color:var(--amber);font-weight:700;
+}
+canvas.imu-cv{display:block}
+.imu-r{display:flex;gap:14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700}
+.imu-r .v{color:var(--amber);text-shadow:0 0 4px rgba(255,170,68,.4)}
+.imu-r .l{color:var(--silk-f);font-size:8px;letter-spacing:1px}
+
+/* ════════ SCREEN ════════ */
+.screen-wrap{
+  position:relative;min-height:0;
+  border:1px solid rgba(232,226,207,.2);border-radius:6px;
+  background:linear-gradient(180deg,#0a0b06,#020301);
+  padding:10px;display:flex;flex-direction:column;
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.6),
+    inset 0 0 26px rgba(0,0,0,.85),
+    0 2px 8px rgba(0,0,0,.5);
+}
+.screen-head{
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;
+  color:var(--silk);padding:0 6px 8px;
+}
+.screen-head .lbl{display:flex;align-items:center;gap:7px}
+.screen-head .lbl::before{
+  content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--mint);box-shadow:0 0 6px var(--mint);
+}
+.screen-head select{font-size:10px;padding:4px 8px}
+.scope{
+  flex:1;position:relative;
+  background:radial-gradient(ellipse at 50% 50%,rgba(0,40,30,.5) 0%,#000 80%);
+  border:1px solid rgba(60,90,70,.3);border-radius:3px;
+  overflow:hidden;min-height:160px;
+  box-shadow:inset 0 0 28px rgba(0,0,0,.95);
+}
+.scope canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.scope .grid{position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(120,255,200,.07) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(120,255,200,.07) 1px,transparent 1px);
+  background-size:10% 25%;
+}
+.scope .crosshair{position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(rgba(120,255,200,.18) 50%,transparent 50%) center/100% 1px no-repeat,
+    linear-gradient(90deg,rgba(120,255,200,.18) 50%,transparent 50%) center/1px 100% no-repeat;
+}
+.scope .vig{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.78) 100%)}
+.scope .scan{position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,
+    rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,
+    rgba(0,0,0,.18) 2px,rgba(0,0,0,.18) 3px);
+}
+.scope-info{
+  position:absolute;left:10px;bottom:8px;
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;
+  color:rgba(120,255,200,.6);display:flex;gap:14px;pointer-events:none;
+}
+.scope-info span{display:flex;gap:4px;align-items:center}
+.scope-info b{color:rgba(120,255,200,.9);font-weight:700}
+
+/* ════════ FILTER STRIP (above scope) ════════ */
+.fstrip{
+  display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+  padding:10px 14px;
+  border:1px solid rgba(232,226,207,.13);border-radius:4px;
+  background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.08));
+  position:relative;
+}
+.fstrip::before{
+  content:'';position:absolute;top:-1px;left:-1px;
+  width:14px;height:14px;border-top:1px solid rgba(232,226,207,.4);border-left:1px solid rgba(232,226,207,.4);
+}
+.fstrip-l{
+  font-family:'Orbitron',sans-serif;font-size:13px;font-weight:800;
+  letter-spacing:4px;color:var(--amber);
+  display:flex;align-items:center;gap:8px;
+}
+.fstrip-l::before{
+  content:'';width:7px;height:7px;border-radius:50%;
+  background:var(--amber);box-shadow:0 0 7px var(--amber);
+  animation:pulse 2.6s ease-in-out infinite;
+}
+.fstrip .row{flex:1;max-width:340px;justify-self:center}
+.fstrip-r{display:flex;gap:14px;font-family:'Space Mono',monospace;font-size:11px}
+.fstrip-r .it{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.fstrip-r .l{font-size:8px;letter-spacing:1.5px;color:var(--silk-f)}
+.fstrip-r .v{font-weight:700;color:var(--amber);text-shadow:0 0 5px rgba(255,170,68,.4)}
+
+/* ════════ FLASH MODAL ════════ */
+.modal-bg{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;
+  padding:20px;
+}
+.modal-bg.open{display:flex}
+.modal{
+  width:min(560px,94vw);max-height:90vh;overflow-y:auto;
+  background:linear-gradient(180deg,#141509 0%,#080906 100%);
+  border:1px solid rgba(232,226,207,.22);border-radius:6px;
+  padding:24px 26px;
+  box-shadow:0 25px 70px rgba(0,0,0,.85),inset 0 0 0 1px rgba(0,0,0,.5);
+  position:relative;
+}
+.modal::before{
+  content:'';position:absolute;inset:8px;pointer-events:none;
+  border:1px dashed rgba(232,226,207,.08);border-radius:4px;
+}
+.modal-h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.modal-h h3{
+  font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:15px;letter-spacing:4px;color:var(--silk);
+  display:flex;align-items:center;gap:10px;
+}
+.modal-h h3::before{
+  content:'';width:7px;height:7px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 8px var(--cyan);
+}
+.modal-close{
+  cursor:pointer;background:none;border:none;color:var(--silk-f);
+  font-size:18px;line-height:1;padding:4px 8px;
+}
+.modal-close:hover{color:var(--silk)}
+.modal p{font-family:'Space Mono',monospace;font-size:11px;
+  color:var(--silk-d);line-height:1.7;margin-bottom:10px}
+.modal ol{padding-left:20px;font-family:'Space Mono',monospace;
+  font-size:11px;color:var(--silk-d);line-height:1.9;margin:8px 0 12px}
+.modal ol li{margin-bottom:4px}
+.modal code{background:rgba(0,0,0,.55);color:var(--cyan);
+  padding:1px 5px;border-radius:2px;font-size:10px;
+  border:1px solid rgba(93,215,255,.18);}
+.modal .warn{
+  border-left:2px solid var(--amber);padding:8px 12px;
+  background:rgba(255,170,68,.05);font-size:10px;color:var(--amber);
+  margin:10px 0 16px;border-radius:0 2px 2px 0;
+}
+.modal .install-row{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:18px;padding-top:14px;
+  border-top:1px solid rgba(232,226,207,.1);
+  gap:12px;
+}
+.modal .install-note{font-size:9px;color:var(--silk-f);letter-spacing:1px;text-transform:uppercase}
+esp-web-install-button{
+  --mdc-theme-primary:var(--cyan);
+}
+
+/* ════════ responsive ════════ */
+@media (max-width:1100px){
+  .body{grid-template-columns:1fr 1.4fr 1fr}
+}
+@media (max-width:880px){
+  .body{grid-template-columns:1fr;grid-template-rows:auto auto auto}
+  .scope{min-height:240px}
+}
+@media (max-width:520px){
+  .brand-sub{display:none}
+  .hdr{padding:6px 10px;gap:10px}
+}
+</style>
+</head>
+<body>
+
+<div class="case">
+<div class="pcb">
+
+<!-- ═════════════ HEADER ═════════════ -->
+<div class="hdr">
+  <div class="brand">
+    <div class="brand-logo"></div>
+    <div class="brand-text">
+      <div class="brand-name">PERCU-SYNTH V1</div>
+      <div class="brand-sub">GC LAB CHILE · ESP32-S3 · CONTROL PANEL</div>
+    </div>
+  </div>
+  <div></div>
+  <div class="hdr-status">
+    <span class="smd-led" id="led-tx"></span>
+    <span class="smd-led" id="led-conn"></span>
+    <span class="hdr-lbl" id="hlbl">OFFLINE</span>
+    <span class="hdr-fw" id="hfw"></span>
+    <select id="baud"><option>115200</option><option>230400</option></select>
+    <button class="btn pri" id="btn-conn" onclick="toggleConnect()">CONECTAR</button>
+    <button class="btn sec" id="btn-sync" onclick="syncAll()" disabled>↺ SYNC</button>
+    <button class="btn" onclick="openFlash()" title="Cargar firmware al ESP32 desde el navegador">⚡ FLASH FW</button>
+  </div>
+</div>
+
+<!-- ═════════════ FLASH FIRMWARE MODAL ═════════════ -->
+<div class="modal-bg" id="modal-flash" onclick="if(event.target===this)closeFlash()">
+  <div class="modal">
+    <div class="modal-h">
+      <h3>FLASH FIRMWARE</h3>
+      <button class="modal-close" onclick="closeFlash()">✕</button>
+    </div>
+    <p>Carga el firmware del PercuSynth directo al ESP32-S3 sin Arduino IDE, igual que WLED. Usa Web Serial + esptool.js.</p>
+    <p style="margin-top:14px;color:var(--mint)">✓ <code>firmware.bin</code> listo en <code>firmware/</code></p>
+    <p><b style="color:var(--silk)">Para actualizar el firmware</b> (cuando cambies el sketch):</p>
+    <ol>
+      <li>Abrí el sketch en Arduino IDE</li>
+      <li>Board: <code>ESP32S3 Dev Module</code> · Flash Mode: <code>DIO</code> · USB CDC On Boot: <code>Enabled</code></li>
+      <li><code>Sketch → Export Compiled Binary</code> (Ctrl+Alt+S)</li>
+      <li>Copiá <code>build/.../*.merged.bin</code> a <code>firmware/firmware.bin</code> (sobrescribí)</li>
+    </ol>
+    <div class="warn">⚠ ESP Web Tools <b>no funciona con file://</b>. Servir esta carpeta con un servidor local antes de instalar:<br><code style="display:inline-block;margin-top:6px">cd tools/percu_control &amp;&amp; python -m http.server 8000</code><br>luego abrir <code>http://localhost:8000</code></div>
+    <p style="font-size:10px">Detalles en <code>firmware/README.md</code>.</p>
+    <div class="install-row">
+      <span class="install-note">Conectá el ESP32 por USB →</span>
+      <esp-web-install-button manifest="firmware/manifest.json">
+        <button slot="activate" class="btn pri">⚡ INSTALAR</button>
+        <span slot="unsupported" style="color:var(--red);font-size:11px">Navegador no soportado</span>
+        <span slot="not-allowed" style="color:var(--amber);font-size:11px">Requiere HTTPS o localhost</span>
+      </esp-web-install-button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ BODY ═════════════ -->
+<div class="body">
+
+  <!-- ──────── LEFT COLUMN ──────── -->
+  <div class="col">
+
+    <!-- VCO 1 -->
+    <div class="mod" style="--c:var(--cyan);--cr:93,215,255">
+      <div class="mod-lbl"><span class="mod-led"></span>VCO 1<span class="mod-sent" id="sent-osc1">●</span></div>
+      <div class="row" id="o1-wave">
+        <button class="chip wave active" data-v="0">∿</button>
+        <button class="chip wave" data-v="1">⊓</button>
+        <button class="chip wave" data-v="2">⟋</button>
+        <button class="chip wave" data-v="3">△</button>
+        <button class="chip wave" data-v="4">⎍</button>
+      </div>
+      <div class="row" id="o1-oct-tg">
+        <button class="chip" onclick="setOct(this,'o1-oct-tg','O1_OCT',-2)">-2</button>
+        <button class="chip" onclick="setOct(this,'o1-oct-tg','O1_OCT',-1)">-1</button>
+        <button class="chip active" onclick="setOct(this,'o1-oct-tg','O1_OCT',0)">0</button>
+        <button class="chip" onclick="setOct(this,'o1-oct-tg','O1_OCT',1)">+1</button>
+        <button class="chip" onclick="setOct(this,'o1-oct-tg','O1_OCT',2)">+2</button>
+      </div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-o1-lvl" class="kc" width="118" height="118"></canvas><div class="kname">LEVEL</div></div>
+        <div class="kw"><canvas id="k-o1-dtn" class="kc" width="64" height="64"></canvas><div class="kname">DETUNE</div></div>
+        <div class="kw"><canvas id="k-o1-pw"  class="kc" width="64" height="64"></canvas><div class="kname">PULSE W</div></div>
+      </div>
+    </div>
+
+    <!-- NOISE -->
+    <div class="mod" style="--c:var(--pink);--cr:255,106,168">
+      <div class="mod-lbl"><span class="mod-led"></span>NOISE<span class="mod-sent" id="sent-noise">●</span></div>
+      <div class="row">
+        <button class="chip active" onclick="setTg(this,null,'NS_TYPE','0')">WHITE</button>
+        <button class="chip" onclick="setTg(this,null,'NS_TYPE','1')">PINK</button>
+      </div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-ns-lvl"   class="kc" width="95" height="95"></canvas><div class="kname">LEVEL</div></div>
+        <div class="kw"><canvas id="k-ns-pitch" class="kc" width="74" height="74"></canvas><div class="kname">COLOR</div></div>
+      </div>
+    </div>
+
+    <!-- DRIVE -->
+    <div class="mod" style="--c:var(--red);--cr:255,90,74">
+      <div class="mod-lbl"><span class="mod-led"></span>DRIVE<span class="mod-sent" id="sent-drive">●</span></div>
+      <div class="row">
+        <button class="chip active" onclick="setTg(this,null,'DRV_MODE','0')">OFF</button>
+        <button class="chip" onclick="setTg(this,null,'DRV_MODE','1')">SOFT</button>
+        <button class="chip" onclick="setTg(this,null,'DRV_MODE','2')">FOLD</button>
+        <button class="chip" onclick="setTg(this,null,'DRV_MODE','3')">BIT</button>
+      </div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-drv-a" class="kc" width="110" height="110"></canvas><div class="kname">AMOUNT</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ──────── CENTER (filter + scope + hw row) ──────── -->
+  <div class="center">
+
+    <!-- FILTER strip (controlled by hardware pots, type selectable here) -->
+    <div class="fstrip" style="--c:var(--amber);--cr:255,170,68">
+      <div class="fstrip-l">VCF</div>
+      <div class="row">
+        <button class="chip active" onclick="setTg(this,null,'FTYPE','0')">LPF</button>
+        <button class="chip" onclick="setTg(this,null,'FTYPE','1')">HPF</button>
+        <button class="chip" onclick="setTg(this,null,'FTYPE','2')">BPF</button>
+        <button class="chip" onclick="setTg(this,null,'FTYPE','3')">NOTCH</button>
+      </div>
+      <div class="fstrip-r">
+        <div class="it"><span class="l">CUTOFF · POT1</span><span class="v" id="fv-cut">— Hz</span></div>
+        <div class="it"><span class="l">Q · POT3</span><span class="v" id="fv-q">—</span></div>
+      </div>
+    </div>
+
+    <!-- SCOPE -->
+    <div class="screen-wrap">
+      <div class="screen-head">
+        <span class="lbl" id="scope-mode">SCOPE · WAVE</span>
+        <select id="scope-sel">
+          <option value="wave">WAVE</option>
+          <option value="spec">SPECTRUM</option>
+          <option value="liss">LISSAJOUS</option>
+        </select>
+      </div>
+      <div class="scope">
+        <canvas id="viz"></canvas>
+        <div class="grid"></div>
+        <div class="crosshair"></div>
+        <div class="scan"></div>
+        <div class="vig"></div>
+        <div class="scope-info">
+          <span><b id="scope-hz">— Hz</b></span>
+          <span><b id="scope-note">—</b></span>
+          <span>IMU <b id="scope-imu">0°</b></span>
+          <span>SIM PREVIEW</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HW MON + IMU strip -->
+    <div class="hwrow">
+      <div class="mw"><canvas id="mon-cut"   class="mc" width="64" height="64"></canvas><div class="mname">CUTOFF</div><div class="mbg">P1</div></div>
+      <div class="mw"><canvas id="mon-res"   class="mc" width="64" height="64"></canvas><div class="mname">RES</div><div class="mbg">P3</div></div>
+      <div class="mw"><canvas id="mon-lrate" class="mc" width="58" height="58"></canvas><div class="mname">LFO RT</div><div class="mbg">P4</div></div>
+      <div class="mw"><canvas id="mon-vol"   class="mc" width="58" height="58"></canvas><div class="mname">VOL</div><div class="mbg">P2</div></div>
+      <div class="imu">
+        <div class="imu-h">IMU PITCH</div>
+        <canvas id="imu-cv" class="imu-cv" width="120" height="70"></canvas>
+        <div class="imu-r">
+          <div><div class="l">TILT</div><div class="v" id="imu-deg">0°</div></div>
+          <div><div class="l">SHIFT</div><div class="v" id="imu-shift">+0 st</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ──────── RIGHT COLUMN ──────── -->
+  <div class="col">
+
+    <!-- VCO 2 -->
+    <div class="mod" style="--c:var(--violet);--cr:181,138,255">
+      <div class="mod-lbl"><span class="mod-led"></span>VCO 2<span class="mod-sent" id="sent-osc2">●</span></div>
+      <div class="row" id="o2-wave">
+        <button class="chip wave" data-v="0">∿</button>
+        <button class="chip wave active" data-v="1">⊓</button>
+        <button class="chip wave" data-v="2">⟋</button>
+        <button class="chip wave" data-v="3">△</button>
+        <button class="chip wave" data-v="4">⎍</button>
+      </div>
+      <div class="row" id="o2-mode-tg">
+        <button class="chip active" onclick="setTg(this,'o2-mode-tg','O2_MODE','0')">MIX</button>
+        <button class="chip" onclick="setTg(this,'o2-mode-tg','O2_MODE','1')">FM</button>
+        <button class="chip" onclick="setTg(this,'o2-mode-tg','O2_MODE','2')">RING</button>
+      </div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-o2-semi" class="kc" width="118" height="118"></canvas><div class="kname">SEMI</div></div>
+        <div class="kw"><canvas id="k-o2-lvl"  class="kc" width="60" height="60"></canvas><div class="kname">LEVEL</div></div>
+        <div class="kw"><canvas id="k-o2-dtn"  class="kc" width="60" height="60"></canvas><div class="kname">DETUNE</div></div>
+        <div class="kw"><canvas id="k-o2-fm"   class="kc" width="60" height="60"></canvas><div class="kname">FM</div></div>
+      </div>
+    </div>
+
+    <!-- LFO -->
+    <div class="mod" style="--c:var(--mint);--cr:95,255,196">
+      <div class="mod-lbl"><span class="mod-led"></span>LFO<span class="mod-sent" id="sent-lfo">●</span></div>
+      <div class="row">
+        <button class="chip active" onclick="setTg(this,null,'LFO_TGT','0')">FILT</button>
+        <button class="chip" onclick="setTg(this,null,'LFO_TGT','1')">PITCH</button>
+      </div>
+      <div class="row" id="lfo-wave-tg">
+        <button class="chip wave active" onclick="setTg(this,'lfo-wave-tg','LFO_WAVE','0')">∿</button>
+        <button class="chip wave" onclick="setTg(this,'lfo-wave-tg','LFO_WAVE','1')">⊓</button>
+        <button class="chip wave" onclick="setTg(this,'lfo-wave-tg','LFO_WAVE','2')">⟋</button>
+        <button class="chip wave" onclick="setTg(this,'lfo-wave-tg','LFO_WAVE','3')">△</button>
+      </div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-lfo-d" class="kc" width="110" height="110"></canvas><div class="kname">DEPTH</div></div>
+      </div>
+    </div>
+
+    <!-- DELAY -->
+    <div class="mod" style="--c:var(--blue);--cr:90,160,255">
+      <div class="mod-lbl"><span class="mod-led"></span>DELAY<span class="mod-sent" id="sent-delay">●</span></div>
+      <div class="kr">
+        <div class="kw"><canvas id="k-dly-t" class="kc" width="100" height="100"></canvas><div class="kname">TIME</div></div>
+        <div class="kw"><canvas id="k-dly-f" class="kc" width="64" height="64"></canvas><div class="kname">FDBK</div></div>
+        <div class="kw"><canvas id="k-dly-m" class="kc" width="64" height="64"></canvas><div class="kname">MIX</div></div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /.body -->
+
+</div><!-- /.pcb -->
+</div><!-- /.case -->
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════════════ */
+const ST={o1Wave:0,o1Oct:0,o2Wave:1,o2Mode:0,nsType:0,fType:0,lfoTgt:0,lfoWave:0,drvMode:0};
+/* HW defaults: mid-position values so offline preview is meaningful.
+   These get overwritten by real MON telemetry once connected. */
+const HW={p1:.27,p2:.7,p3:.25,p4:.4,imu:50};
+const BASE_HZ=261.6;
+let port=null,writer=null,reader=null,connected=false;
+
+/* ════════════════════════════════════════════════════════════════════
+   WEB SERIAL
+═══════════════════════════════════════════════════════════════════════ */
+async function toggleConnect(){
+  if(port){await disc();return;}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:parseInt(document.getElementById('baud').value)});
+    writer=port.writable.getWriter();connected=true;connUI(true);readLoop();
+    setTimeout(()=>syncAll(),2500);
+  }catch(e){if(e.name!=='NotFoundError')console.warn(e.message);port=null;}
+}
+async function disc(){
+  connected=false;connUI(false);
+  try{reader&&reader.cancel()}catch(e){}
+  try{writer&&writer.releaseLock()}catch(e){}
+  try{port&&await port.close()}catch(e){}
+  writer=null;reader=null;port=null;
+}
+async function readLoop(){
+  const dec=new TextDecoder();let buf='';
+  while(port&&port.readable){
+    reader=port.readable.getReader();
+    try{
+      while(true){
+        const{value,done}=await reader.read();if(done)break;
+        buf+=dec.decode(value,{stream:true});
+        let nl;
+        while((nl=buf.indexOf('\n'))!==-1){
+          const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);
+          if(!line)continue;
+          if(line.startsWith('MON ')){parseMon(line);continue;}
+          if(line==='PONG'||line.startsWith('Percu')){
+            const e=document.getElementById('hfw');e.textContent='✓ FW';e.className='hdr-fw ok';
+          }
+        }
+      }
+    }catch(e){}
+    finally{reader.releaseLock();reader=null;}
+  }
+  await disc();
+}
+async function send(k,v){
+  const cmd=v===null?k:`${k} ${v}`;flashTx();
+  if(!writer||!connected)return;
+  try{await writer.write(new TextEncoder().encode(cmd+'\n'));}catch(e){}
+}
+async function syncAll(){
+  if(!writer||!connected)return;
+  const cmds=[
+    ['O1_WAVE',ST.o1Wave],['O1_OCT',ST.o1Oct],
+    ['O1_DTN',Math.round(K['o1-dtn'].val)],['O1_LVL',Math.round(K['o1-lvl'].val)],['O1_PW',Math.round(K['o1-pw'].val)],
+    ['O2_WAVE',ST.o2Wave],['O2_MODE',ST.o2Mode],
+    ['O2_SEMI',Math.round(K['o2-semi'].val)],['O2_DTN',Math.round(K['o2-dtn'].val)],
+    ['O2_LVL',Math.round(K['o2-lvl'].val)],['O2_FM',Math.round(K['o2-fm'].val)],
+    ['NS_TYPE',ST.nsType],['NS_LVL',Math.round(K['ns-lvl'].val)],['NS_PITCH',Math.round(K['ns-pitch'].val)],
+    ['FTYPE',ST.fType],['LFO_TGT',ST.lfoTgt],['LFO_WAVE',ST.lfoWave],['LFO_D',Math.round(K['lfo-d'].val)],
+    ['DRV_MODE',ST.drvMode],['DRV_AMT',Math.round(K['drv-a'].val)],
+    ['DLY_T',Math.round(lm(K['dly-t'].val/100,5,1000))],
+    ['DLY_F',Math.round(K['dly-f'].val)],['DLY_M',Math.round(K['dly-m'].val)],
+  ];
+  let b='';for(const[k,v]of cmds)b+=`${k} ${v}\n`;
+  try{await writer.write(new TextEncoder().encode(b));}catch(e){}
+}
+
+function parseMon(line){
+  const p=line.split(' ');if(p.length<6)return;
+  const[,p1,p2,p3,p4,imu]=p.map(Number);
+  HW.p1=p1/4095;HW.p2=p2/4095;HW.p3=p3/4095;HW.p4=p4/4095;HW.imu=imu;
+  const hz=Math.round(80*Math.pow(250,HW.p1));
+  drawMon('mon-cut',HW.p1,hz>999?(hz/1000).toFixed(1)+'k':hz);
+  drawMon('mon-res',HW.p3,'Q'+(0.5+HW.p3*11.5).toFixed(1));
+  drawMon('mon-lrate',HW.p4*HW.p4,(HW.p4*HW.p4*10).toFixed(1));
+  drawMon('mon-vol',HW.p2*HW.p2,Math.round(HW.p2*HW.p2*100)+'%');
+  /* update filter live readout */
+  document.getElementById('fv-cut').textContent=hz>999?(hz/1000).toFixed(2)+' kHz':hz+' Hz';
+  document.getElementById('fv-q').textContent=(0.5+HW.p3*11.5).toFixed(1);
+  drawImu();
+}
+
+function connUI(on){
+  document.getElementById('led-conn').className='smd-led'+(on?' on':'');
+  document.getElementById('hlbl').textContent=on?'ONLINE':'OFFLINE';
+  document.getElementById('hlbl').className='hdr-lbl'+(on?' on':'');
+  document.getElementById('btn-conn').textContent=on?'DESCONECTAR':'CONECTAR';
+  document.getElementById('btn-conn').className=on?'btn sec':'btn pri';
+  document.getElementById('btn-sync').disabled=!on;
+  if(!on){const e=document.getElementById('hfw');e.textContent='';e.className='hdr-fw';}
+}
+function flashTx(){
+  const e=document.getElementById('led-tx');
+  e.className='smd-led tx';setTimeout(()=>e.className='smd-led',400);
+}
+
+/* ── FLASH FIRMWARE modal ── */
+function openFlash(){
+  /* free up the serial port if we're holding it — esptool needs exclusive access */
+  if(connected)disc();
+  document.getElementById('modal-flash').classList.add('open');
+}
+function closeFlash(){document.getElementById('modal-flash').classList.remove('open');}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeFlash();
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   KNOBS — realistic metallic potentiometer
+═══════════════════════════════════════════════════════════════════════ */
+const K={};
+function reg(id,min,max,init,fmt,cb,col){K[id]={min,max,val:init,fmt,cb,def:init,col};}
+
+function drawKnob(id){
+  const cv=document.getElementById('k-'+id);if(!cv)return;
+  const d=K[id],ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  const R=W/2-3;
+  const PI=Math.PI,S=135*PI/180,SW=270*PI/180;
+  const pct=(d.val-d.min)/(d.max-d.min),ang=S+pct*SW,col=d.col;
+  ctx.clearRect(0,0,W,H);
+
+  /* outer track */
+  ctx.beginPath();ctx.arc(cx,cy,R-1,S,S+SW,false);
+  ctx.strokeStyle='rgba(232,226,207,.09)';ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
+  /* tick marks */
+  for(let i=0;i<=10;i++){
+    const t=i/10,a=S+t*SW,maj=(i===0||i===5||i===10);
+    ctx.beginPath();
+    ctx.moveTo(cx+(R-(maj?3:4))*Math.cos(a),cy+(R-(maj?3:4))*Math.sin(a));
+    ctx.lineTo(cx+(R+1)*Math.cos(a),cy+(R+1)*Math.sin(a));
+    ctx.strokeStyle=maj?'rgba(232,226,207,.45)':'rgba(232,226,207,.18)';
+    ctx.lineWidth=maj?1.2:.6;ctx.stroke();
+  }
+  /* value glow arc */
+  if(pct>.005){
+    ctx.save();ctx.shadowColor=col;ctx.shadowBlur=18;
+    ctx.beginPath();ctx.arc(cx,cy,R-1,S,ang,false);
+    ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.lineCap='round';ctx.stroke();
+    ctx.restore();
+  }
+
+  /* knob drop shadow */
+  const kR=R-8;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=12;ctx.shadowOffsetY=4;
+  ctx.beginPath();ctx.arc(cx,cy+1,kR,0,2*PI);ctx.fillStyle='#000';ctx.fill();
+  ctx.restore();
+
+  /* knob skirt — brushed metal */
+  const skirt=ctx.createRadialGradient(cx-kR*.4,cy-kR*.4,kR*.1,cx,cy,kR);
+  skirt.addColorStop(0,'#c8c8d0');
+  skirt.addColorStop(.4,'#7a7a85');
+  skirt.addColorStop(.75,'#3a3a42');
+  skirt.addColorStop(1,'#1a1a20');
+  ctx.beginPath();ctx.arc(cx,cy,kR,0,2*PI);ctx.fillStyle=skirt;ctx.fill();
+
+  /* knurling */
+  ctx.save();ctx.translate(cx,cy);
+  const nKnurl=Math.round(kR*.7);
+  for(let i=0;i<nKnurl;i++){
+    const a=(i/nKnurl)*2*PI;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*(kR-1.5),Math.sin(a)*(kR-1.5));
+    ctx.lineTo(Math.cos(a)*(kR*.72),Math.sin(a)*(kR*.72));
+    ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.6;ctx.stroke();
+  }
+  ctx.restore();
+
+  /* inner cap */
+  const capR=kR*.74;
+  const cap=ctx.createRadialGradient(cx-capR*.45,cy-capR*.5,capR*.05,cx,cy,capR);
+  cap.addColorStop(0,'#3a3a42');
+  cap.addColorStop(.55,'#1a1a22');
+  cap.addColorStop(1,'#08080c');
+  ctx.beginPath();ctx.arc(cx,cy,capR,0,2*PI);ctx.fillStyle=cap;ctx.fill();
+
+  /* glossy top half */
+  ctx.save();
+  const gloss=ctx.createLinearGradient(cx,cy-capR,cx,cy);
+  gloss.addColorStop(0,'rgba(255,255,255,.22)');
+  gloss.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.beginPath();ctx.arc(cx,cy,capR,PI,2*PI);ctx.closePath();
+  ctx.fillStyle=gloss;ctx.fill();
+  ctx.restore();
+  /* cap rim */
+  ctx.beginPath();ctx.arc(cx,cy,capR,0,2*PI);
+  ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=.6;ctx.stroke();
+
+  /* pointer line */
+  ctx.save();
+  ctx.translate(cx,cy);ctx.rotate(ang+PI/2);
+  ctx.shadowColor=col;ctx.shadowBlur=pct>.005?10:0;
+  ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.55)';
+  ctx.fillRect(-1.2,-capR*.92,2.4,capR*.45);
+  ctx.restore();
+
+  /* tip dot */
+  ctx.save();
+  if(pct>.005){ctx.shadowColor=col;ctx.shadowBlur=10;}
+  ctx.beginPath();ctx.arc(cx+(R+1)*Math.cos(ang),cy+(R+1)*Math.sin(ang),2.2,0,2*PI);
+  ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.22)';ctx.fill();
+  ctx.restore();
+
+  /* value text */
+  if(capR>18){
+    const fs=Math.max(9,capR*.3);
+    ctx.save();
+    ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.45)';
+    if(pct>.005){ctx.shadowColor=col;ctx.shadowBlur=6;}
+    ctx.font=`700 ${fs}px 'Space Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(d.fmt(d.val),cx,cy+capR*.48);
+    ctx.restore();
+  }
+}
+
+function drawMon(id,pct,label){
+  const cv=document.getElementById(id);if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  const R=W/2-2;
+  const PI=Math.PI,S=135*PI/180,SW=270*PI/180;
+  const col='#ffaa44',ang=S+Math.max(0,Math.min(1,pct))*SW;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.setLineDash([1.5,3]);
+  ctx.beginPath();ctx.arc(cx,cy,R-1,S,S+SW,false);
+  ctx.strokeStyle='rgba(232,226,207,.13)';ctx.lineWidth=1;ctx.stroke();
+  ctx.setLineDash([]);
+  if(pct>.01){
+    ctx.save();ctx.shadowColor=col;ctx.shadowBlur=11;
+    ctx.beginPath();ctx.arc(cx,cy,R-1,S,ang,false);
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
+    ctx.restore();
+  }
+  const kR=R-6;
+  ctx.beginPath();ctx.arc(cx,cy,kR,0,2*PI);
+  const bg=ctx.createRadialGradient(cx,cy,1,cx,cy,kR);
+  bg.addColorStop(0,'#1a1208');bg.addColorStop(1,'#05030a');
+  ctx.fillStyle=bg;ctx.fill();
+  ctx.strokeStyle='rgba(255,170,68,.14)';ctx.lineWidth=.5;ctx.stroke();
+  if(label){
+    const fs=Math.max(8,kR*.42);
+    ctx.save();
+    if(pct>.01){ctx.shadowColor=col;ctx.shadowBlur=5;}
+    ctx.fillStyle=pct>.01?col:'rgba(255,170,68,.4)';
+    ctx.font=`700 ${fs}px 'Space Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,cx,cy);ctx.restore();
+  }
+}
+
+function setK(id,raw,silent=false){
+  const d=K[id];d.val=Math.max(d.min,Math.min(d.max,raw));
+  drawKnob(id);if(!silent)d.cb(d.val);
+}
+function initK(id){
+  const cv=document.getElementById('k-'+id);if(!cv)return;
+  let sy,sv;
+  const mv=e=>{const y=e.touches?e.touches[0].clientY:e.clientY;
+    setK(id,sv+(sy-y)/170*(K[id].max-K[id].min));};
+  const up=()=>{window.removeEventListener('mousemove',mv);window.removeEventListener('mouseup',up);
+    window.removeEventListener('touchmove',mv);window.removeEventListener('touchend',up);};
+  cv.addEventListener('mousedown',e=>{sy=e.clientY;sv=K[id].val;
+    window.addEventListener('mousemove',mv);window.addEventListener('mouseup',up);e.preventDefault();});
+  cv.addEventListener('touchstart',e=>{sy=e.touches[0].clientY;sv=K[id].val;
+    window.addEventListener('touchmove',mv,{passive:false});window.addEventListener('touchend',up);e.preventDefault();},{passive:false});
+  cv.addEventListener('dblclick',()=>setK(id,K[id].def));
+  drawKnob(id);
+}
+
+const c2s={FTYPE:'fType',LFO_TGT:'lfoTgt',LFO_WAVE:'lfoWave',DRV_MODE:'drvMode',NS_TYPE:'nsType',O2_MODE:'o2Mode'};
+const c2sec={FTYPE:'filt',LFO_TGT:'lfo',LFO_WAVE:'lfo',DRV_MODE:'drive',NS_TYPE:'noise',O2_MODE:'osc2'};
+function setTg(btn,gid,cmd,val){
+  const p=gid?document.getElementById(gid):btn.parentElement;
+  p.querySelectorAll('.chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');if(c2s[cmd])ST[c2s[cmd]]=parseInt(val);
+  send(cmd,val);if(c2sec[cmd])flash(c2sec[cmd]);
+}
+function setOct(btn,gid,cmd,val){
+  document.getElementById(gid).querySelectorAll('.chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');ST.o1Oct=parseInt(val);send(cmd,val);flash('osc1');
+}
+function flash(id){
+  const el=document.getElementById('sent-'+id);if(!el)return;
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+  setTimeout(()=>el.classList.remove('flash'),500);
+}
+function setupWave(gid,cmd,sec,sk){
+  document.getElementById(gid).querySelectorAll('.chip').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.getElementById(gid).querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');if(sk)ST[sk]=parseInt(b.dataset.v);
+      send(cmd,b.dataset.v);flash(sec);
+    });
+  });
+}
+
+const lm=(t,lo,hi)=>lo*Math.pow(hi/lo,t);
+function initKnobs(){
+  reg('o1-lvl',0,100,80,v=>v.toFixed(0)+'%',v=>{send('O1_LVL',Math.round(v));flash('osc1');},'#5dd7ff');
+  reg('o1-dtn',-100,100,0,v=>(v>0?'+':'')+v.toFixed(0),v=>{send('O1_DTN',Math.round(v));flash('osc1');},'#5dd7ff');
+  reg('o1-pw',0,100,50,v=>v.toFixed(0)+'%',v=>{send('O1_PW',Math.round(v));flash('osc1');},'#5dd7ff');
+  reg('o2-semi',-24,24,7,v=>(v>0?'+':'')+v.toFixed(0),v=>{send('O2_SEMI',Math.round(v));flash('osc2');},'#b58aff');
+  reg('o2-dtn',-100,100,5,v=>(v>0?'+':'')+v.toFixed(0),v=>{send('O2_DTN',Math.round(v));flash('osc2');},'#b58aff');
+  reg('o2-lvl',0,100,50,v=>v.toFixed(0)+'%',v=>{send('O2_LVL',Math.round(v));flash('osc2');},'#b58aff');
+  reg('o2-fm',0,100,30,v=>v.toFixed(0)+'%',v=>{send('O2_FM',Math.round(v));flash('osc2');},'#b58aff');
+  reg('ns-lvl',0,100,0,v=>v.toFixed(0)+'%',v=>{send('NS_LVL',Math.round(v));flash('noise');},'#ff6aa8');
+  reg('ns-pitch',80,4000,800,v=>v>=1000?(v/1000).toFixed(1)+'k':Math.round(v)+'',v=>{send('NS_PITCH',Math.round(v));flash('noise');},'#ff6aa8');
+  reg('lfo-d',0,100,0,v=>v.toFixed(0)+'%',v=>{send('LFO_D',Math.round(v));flash('lfo');},'#5fffc4');
+  reg('drv-a',0,100,0,v=>v.toFixed(0)+'%',v=>{send('DRV_AMT',Math.round(v));flash('drive');},'#ff5a4a');
+  reg('dly-t',0,100,25,v=>Math.round(lm(v/100,5,1000))+'ms',v=>{send('DLY_T',Math.round(lm(v/100,5,1000)));flash('delay');},'#5aa0ff');
+  reg('dly-f',0,95,30,v=>Math.round(v)+'%',v=>{send('DLY_F',Math.round(v));flash('delay');},'#5aa0ff');
+  reg('dly-m',0,100,0,v=>Math.round(v)+'%',v=>{send('DLY_M',Math.round(v));flash('delay');},'#5aa0ff');
+  Object.keys(K).forEach(id=>{initK(id);setK(id,K[id].def,true);});
+  setupWave('o1-wave','O1_WAVE','osc1','o1Wave');
+  setupWave('o2-wave','O2_WAVE','osc2','o2Wave');
+  ['mon-cut','mon-res','mon-lrate','mon-vol'].forEach(id=>drawMon(id,0,''));
+  drawImu();
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   IMU widget
+═══════════════════════════════════════════════════════════════════════ */
+function drawImu(){
+  const cv=document.getElementById('imu-cv');if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H-8;
+  ctx.clearRect(0,0,W,H);
+  const r=Math.min(W*.46,H*.85);
+  /* arc */
+  ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*1.15,Math.PI*1.85);
+  ctx.strokeStyle='rgba(232,226,207,.2)';ctx.lineWidth=1.2;ctx.stroke();
+  /* ticks at -45,0,+45 */
+  for(let i=-2;i<=2;i++){
+    const a=Math.PI*1.5+i*Math.PI*.09;
+    const maj=(i===0);
+    ctx.beginPath();
+    ctx.moveTo(cx+(r-3)*Math.cos(a),cy+(r-3)*Math.sin(a));
+    ctx.lineTo(cx+(r+(maj?4:2))*Math.cos(a),cy+(r+(maj?4:2))*Math.sin(a));
+    ctx.strokeStyle=maj?'rgba(255,170,68,.7)':'rgba(232,226,207,.4)';
+    ctx.lineWidth=maj?1.5:1;ctx.stroke();
+  }
+  /* needle */
+  const tilt=(HW.imu-50)/50;
+  const ang=Math.PI*1.5+tilt*Math.PI*.18;
+  ctx.save();ctx.shadowColor='#ffaa44';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+r*.92*Math.cos(ang),cy+r*.92*Math.sin(ang));
+  ctx.strokeStyle='#ffaa44';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();ctx.arc(cx,cy,3,0,2*Math.PI);ctx.fillStyle='#ffaa44';ctx.fill();
+  /* data text */
+  const deg=Math.round((HW.imu-50)/50*45);
+  const semis=Math.round((HW.imu/100)*36);
+  document.getElementById('imu-deg').textContent=(deg>0?'+':'')+deg+'°';
+  document.getElementById('imu-shift').textContent=(semis>0?'+':'')+semis+' st';
+  document.getElementById('scope-imu').textContent=(deg>0?'+':'')+deg+'°';
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SCOPE — continuous DSP simulation at firmware sample rate
+   Mirrors the ESP32 firmware exactly: osc1 + osc2 (mix/FM/ring) → noise BP
+   → drive → biquad filter (HW pots + LFO mod) → delay line.
+═══════════════════════════════════════════════════════════════════════ */
+const VIZ={
+  /* ── display ── */
+  cv:null,ctx:null,mode:'wave',
+  N:512,
+  display:new Float32Array(512),
+  lastT:0,
+
+  /* ── sim state ── */
+  Fs:44100,                     /* matches firmware exactly */
+  ph1:0,ph2:0,lfoPh:0,
+  /* filter biquad */
+  b0:1,b1:0,b2:0,a1:0,a2:0,
+  bx1:0,bx2:0,by1:0,by2:0,
+  /* noise bandpass biquad */
+  nb0:1,nb1:0,nb2:0,na1:0,na2:0,
+  nx1:0,nx2:0,ny1:0,ny2:0,
+  /* pink noise running state */
+  pk:new Float32Array(7),
+  /* delay line (~1.1s at 44.1k) */
+  dlyBuf:new Float32Array(48000),
+  dlyW:0,
+  /* circular sim buffer for display */
+  simBuf:new Float32Array(4096),
+  simW:0,
+
+  init(){
+    this.cv=document.getElementById('viz');
+    this.ctx=this.cv.getContext('2d');
+    const ro=new ResizeObserver(()=>this.resize());
+    ro.observe(this.cv.parentElement);
+    this.resize();
+    document.getElementById('scope-sel').addEventListener('change',e=>{
+      this.mode=e.target.value;
+      document.getElementById('scope-mode').textContent={
+        wave:'SCOPE · WAVE',spec:'SCOPE · SPECTRUM',liss:'SCOPE · LISSAJOUS'
+      }[this.mode];
+    });
+    this.lastT=performance.now();
+    requestAnimationFrame(t=>this.loop(t));
+  },
+  resize(){
+    const dpr=window.devicePixelRatio||1;
+    const p=this.cv.parentElement.getBoundingClientRect();
+    this.cv.width=p.width*dpr;this.cv.height=p.height*dpr;
+    this.cv.style.width=p.width+'px';this.cv.style.height=p.height+'px';
+    this.ctx.setTransform(dpr,0,0,dpr,0,0);
+  },
+  wv(t,p,pw){
+    switch(t){case 1:return p<.5?1:-1;case 2:return 1-2*p;
+      case 3:return p<.5?4*p-1:3-4*p;case 4:return p<pw?1:-1;
+      default:return Math.sin(p*Math.PI*2);}
+  },
+
+  /* ── biquad: RBJ cookbook, identical to firmware ── */
+  setFilter(type,fc,Q){
+    fc=Math.max(20,Math.min(this.Fs*.45,fc));
+    Q=Math.max(.3,Q);
+    const w=2*Math.PI*fc/this.Fs,c=Math.cos(w),s=Math.sin(w),a=s/(2*Q),a0=1+a;
+    switch(type){
+      case 1:this.b0=(1+c)*.5/a0;this.b1=-(1+c)/a0;this.b2=this.b0;break;
+      case 2:this.b0=a/a0;this.b1=0;this.b2=-a/a0;break;
+      case 3:this.b0=1/a0;this.b1=-2*c/a0;this.b2=this.b0;break;
+      default:this.b0=(1-c)*.5/a0;this.b1=(1-c)/a0;this.b2=this.b0;
+    }
+    this.a1=-2*c/a0;this.a2=(1-a)/a0;
+  },
+  biquad(x){
+    const y=this.b0*x+this.b1*this.bx1+this.b2*this.bx2-this.a1*this.by1-this.a2*this.by2;
+    this.bx2=this.bx1;this.bx1=x;this.by2=this.by1;this.by1=y;return y;
+  },
+
+  /* ── noise bandpass ── */
+  setNoiseBP(fc){
+    fc=Math.max(40,Math.min(this.Fs*.45,fc));
+    const w=2*Math.PI*fc/this.Fs,c=Math.cos(w),s=Math.sin(w),a=s/1.4,a0=1+a;
+    this.nb0=a/a0;this.nb1=0;this.nb2=-a/a0;
+    this.na1=-2*c/a0;this.na2=(1-a)/a0;
+  },
+  noiseBP(x){
+    const y=this.nb0*x+this.nb1*this.nx1+this.nb2*this.nx2-this.na1*this.ny1-this.na2*this.ny2;
+    this.nx2=this.nx1;this.nx1=x;this.ny2=this.ny1;this.ny1=y;return y;
+  },
+  noiseTick(pink){
+    const w=Math.random()*2-1;
+    if(!pink)return w;
+    const b=this.pk;
+    b[0]=.99886*b[0]+w*.0555179;b[1]=.99332*b[1]+w*.0750759;b[2]=.96900*b[2]+w*.1538520;
+    b[3]=.86650*b[3]+w*.3104856;b[4]=.55000*b[4]+w*.5329522;b[5]=-.7616*b[5]-w*.0168980;
+    const p=(b[0]+b[1]+b[2]+b[3]+b[4]+b[5]+b[6]+w*.5362)*.11;
+    b[6]=w*.115926;return p;
+  },
+
+  /* ── drive: identical to firmware ── */
+  driveApply(x,mode,amt){
+    if(mode===0||amt<.001)return x;
+    if(mode===1){const d=1+amt*50,td=Math.tanh(d);return Math.tanh(x*d)/(td>1e-6?td:1);}
+    if(mode===2){const f=1+amt*4;let fx=(x*f)%4;
+      if(fx<-2)fx+=4;if(fx>2)fx-=4;if(fx>1)fx=2-fx;if(fx<-1)fx=-2-fx;return fx;}
+    if(mode===3){const b=Math.max(2,12-amt*10),lv=Math.pow(2,b);return Math.round(x*lv)/lv;}
+    return x;
+  },
+
+  /* ── one simulation sample ── */
+  step(baseHz){
+    const dt=1/this.Fs;
+
+    /* LFO */
+    const lfoRate=Math.max(.05,HW.p4*HW.p4*10);
+    this.lfoPh=(this.lfoPh+lfoRate*dt)%1;
+    const lfoV=this.wv(ST.lfoWave,this.lfoPh,.5)*(K['lfo-d'].val/100);
+
+    /* oscillator frequencies */
+    let f1=baseHz*Math.pow(2,(K['o1-dtn'].val/100)/12);
+    let f2=baseHz*Math.pow(2,(K['o2-semi'].val+K['o2-dtn'].val/100)/12);
+    if(ST.lfoTgt===1){const m=Math.pow(2,lfoV/12);f1*=m;f2*=m;}
+
+    this.ph1=(this.ph1+f1*dt)%1;this.ph2=(this.ph2+f2*dt)%1;
+
+    const pw=K['o1-pw'].val/100;
+    const lv1=K['o1-lvl'].val/100,lv2=K['o2-lvl'].val/100;
+    const fm=K['o2-fm'].val/100;
+
+    let s;
+    if(ST.o2Mode===1){               /* FM */
+      const mod=this.wv(ST.o2Wave,this.ph2,.5)*fm*.5;
+      s=this.wv(ST.o1Wave,((this.ph1+mod)%1+1)%1,pw)*lv1;
+    }else if(ST.o2Mode===2){         /* RING */
+      s=this.wv(ST.o1Wave,this.ph1,pw)*lv1*this.wv(ST.o2Wave,this.ph2,.5);
+    }else{                            /* MIX */
+      s=(this.wv(ST.o1Wave,this.ph1,pw)*lv1+this.wv(ST.o2Wave,this.ph2,.5)*lv2)*.5;
+    }
+
+    /* noise */
+    const nsLvl=K['ns-lvl'].val/100;
+    if(nsLvl>.001){
+      const n=this.noiseTick(ST.nsType===1);
+      s+=this.noiseBP(n)*nsLvl*.6;
+    }
+
+    /* drive */
+    s=this.driveApply(s,ST.drvMode,K['drv-a'].val/100);
+
+    /* filter — cutoff/Q from hardware pots, modulated by LFO if LFO_TGT=FILT */
+    let fc=80+HW.p1*HW.p1*19920;
+    if(ST.lfoTgt===0)fc*=(1+lfoV*.8);
+    const Q=.5+HW.p3*12;
+    this.setFilter(ST.fType,fc,Q);
+    s=this.biquad(s);
+
+    /* soft saturation */
+    s=Math.tanh(s);
+
+    /* delay */
+    const dlyMs=lm(K['dly-t'].val/100,5,1000);
+    const dlySamp=Math.max(1,Math.min(this.dlyBuf.length-1,Math.round(dlyMs*.001*this.Fs)));
+    const dlyMix=K['dly-m'].val/100;
+    const dlyFb=K['dly-f'].val/100;
+    const dlyMax=this.dlyBuf.length;
+    const rd=(this.dlyW-dlySamp+dlyMax)%dlyMax;
+    const wet=this.dlyBuf[rd];
+    let fb=s+wet*dlyFb;
+    if(fb>1)fb=1;else if(fb<-1)fb=-1;
+    this.dlyBuf[this.dlyW]=fb;
+    this.dlyW=(this.dlyW+1)%dlyMax;
+    if(dlyMix>.001)s=s*(1-dlyMix*.5)+wet*dlyMix;
+
+    return s>1?1:s<-1?-1:s;
+  },
+
+  /* ── one screen worth of pixels DFT for spectrum mode ── */
+  spectrum(buf,N,bins){
+    const re=new Float32Array(bins),im=new Float32Array(bins);
+    for(let k=0;k<bins;k++){
+      let r=0,im2=0;
+      for(let n=0;n<N;n++){
+        const a=2*Math.PI*k*n/N;
+        r+=buf[n]*Math.cos(a);im2-=buf[n]*Math.sin(a);
+      }
+      re[k]=r/N;im[k]=im2/N;
+    }
+    const mag=new Float32Array(bins);let max=1e-6;
+    for(let k=0;k<bins;k++){mag[k]=Math.sqrt(re[k]*re[k]+im[k]*im[k]);if(mag[k]>max)max=mag[k];}
+    for(let k=0;k<bins;k++)mag[k]/=max;
+    return mag;
+  },
+  loop(now){
+    const dt=Math.min(.05,(now-this.lastT)/1000);
+    this.lastT=now;
+    const ctx=this.ctx,cv=this.cv;
+    const W=cv.clientWidth||300,H=cv.clientHeight||140;
+
+    /* ── firmware pitch formula: sm = IMU/100 * 3 * 12 + o1Oct*12 ── */
+    const semiImu=(HW.imu/100)*36;
+    const semiOct=ST.o1Oct*12;
+    const baseHz=BASE_HZ*Math.pow(2,(semiOct+semiImu)/12);
+    document.getElementById('scope-hz').textContent=
+      baseHz<10000?baseHz.toFixed(0)+' Hz':(baseHz/1000).toFixed(2)+' kHz';
+    const noteIdx=Math.round(12*Math.log2(baseHz/27.5))+9;
+    const names=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    if(noteIdx>=0&&noteIdx<120)document.getElementById('scope-note').textContent=names[noteIdx%12]+Math.floor(noteIdx/12);
+
+    /* update noise bandpass coeffs once per frame */
+    this.setNoiseBP(K['ns-pitch'].val);
+
+    /* run sim — number of samples = realtime equivalent for this frame */
+    const samples=Math.min(2000,Math.max(64,Math.round(this.Fs*dt)));
+    const buf=this.simBuf,L=buf.length;
+    let w=this.simW;
+    for(let i=0;i<samples;i++){
+      buf[w]=this.step(baseHz);
+      w=w+1;if(w>=L)w=0;
+    }
+    this.simW=w;
+
+    /* timebase: scale visible window with frequency so wave fills the screen */
+    const cycles=Math.max(.6,Math.min(28,baseHz*.011));
+    const windowSamples=Math.min(L-1,Math.max(this.N,Math.round(cycles/baseHz*this.Fs)));
+    const stride=windowSamples/this.N;
+    let start=this.simW-windowSamples;if(start<0)start+=L;
+    for(let i=0;i<this.N;i++){
+      const idx=(start+i*stride)|0;
+      this.display[i]=buf[idx%L];
+    }
+
+    /* color from current wave (visual coherence with VCO 1 LED) */
+    const wHues=[180,275,30,150,200];
+    const hue=wHues[ST.o1Wave]||180;
+    const col=`hsl(${hue},85%,68%)`;
+    const colG=`hsla(${hue},85%,68%,.45)`;
+
+    /* trail fade */
+    ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(0,0,W,H);
+
+    if(this.mode==='wave'){
+      const N=this.N,slice=W/N;
+      /* underlay */
+      ctx.beginPath();
+      for(let i=0;i<N;i++){
+        const x=i*slice,y=H/2-this.display[i]*H*.42;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle=colG;ctx.lineWidth=.7;ctx.stroke();
+      /* main glowing trace */
+      ctx.save();ctx.shadowColor=col;ctx.shadowBlur=14;
+      ctx.beginPath();
+      for(let i=0;i<N;i++){
+        const x=i*slice,y=H/2-this.display[i]*H*.42;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle=col;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+      ctx.restore();
+    }
+    else if(this.mode==='spec'){
+      const bins=48,mag=this.spectrum(this.display,this.N,bins);
+      const bw=W/bins;
+      for(let i=0;i<bins;i++){
+        const h=mag[i]*H*.85;
+        ctx.save();ctx.shadowColor=col;ctx.shadowBlur=5;
+        const g=ctx.createLinearGradient(0,H,0,H-h);
+        g.addColorStop(0,colG);g.addColorStop(1,col);
+        ctx.fillStyle=g;
+        ctx.fillRect(i*bw+.5,H-h,bw-1,h);
+        ctx.restore();
+      }
+    }
+    else{
+      /* Lissajous: display sample vs display sample delayed by quarter window */
+      ctx.save();ctx.shadowColor=col;ctx.shadowBlur=10;
+      ctx.beginPath();
+      const cx=W/2,cy=H/2,sc=Math.min(W,H)*.42;
+      const N=this.N,off=Math.floor(N/4);
+      for(let i=0;i<N-off;i++){
+        const x=this.display[i],y=this.display[i+off];
+        const px=cx+x*sc,py=cy+y*sc;
+        if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+      }
+      ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.stroke();
+      ctx.restore();
+    }
+
+    requestAnimationFrame(t=>this.loop(t));
+  }
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════════════════ */
+if(!('serial' in navigator)){
+  document.getElementById('btn-conn').disabled=true;
+  const h=document.getElementById('hlbl');h.textContent='WEB SERIAL N/A';
+}
+initKnobs();
+VIZ.init();
+setInterval(drawImu,80);
+</script>
+</body>
+</html>
