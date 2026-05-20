@@ -1,3 +1,64 @@
+// ==============================================================================================================================================
+// PERCU-SYNTH — Sintetizador Polifónico Básico — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3
+// - DAC PCM5102 vía I2S — estéreo 44.1 kHz · 16-bit |LCK -> 39, DIN -> 40, BCK -> 41|
+// - 5 Botones con pull-up |BTN1 -> 44 (Do), BTN2 -> 42 (Re), BTN3 -> 0 (Mi), BTN4 -> 45 (Fa), BTN5 -> 47 (Sol)|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1 (Vol), POT2 -> ADC2 (Mix), POT3 -> ADC8 (Filtro), POT4 -> ADC10 (LFO)|
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - Flash Mode         : DIO          (¡OPI rompe I2S!)
+// - PSRAM              : OPI PSRAM
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Sintetizador polifónico de 5 voces (una por botón) afinado a la escala de
+// Do mayor (C4, D4, E4, F4, G4). Cada voz tiene su propio oscilador con
+// MORPHING continuo de forma de onda — un solo potenciómetro mueve el timbre
+// desde sinusoidal pura, pasando por cuadrada, hasta diente de sierra
+// brillante. Envolvente Attack/Release suave (sin clicks al soltar), LFO de
+// vibrato global y un filtro paso-bajos one-pole controlable en vivo.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// CONTROLES:
+// - BTN1 (44) → Do  (C4 — 261.63 Hz)
+// - BTN2 (42) → Re  (D4 — 293.66 Hz)
+// - BTN3 (0)  → Mi  (E4 — 329.63 Hz)
+// - BTN4 (45) → Fa  (F4 — 349.23 Hz)
+// - BTN5 (47) → Sol (G4 — 392.00 Hz)
+//
+// - POT1 (ADC1)  → Volumen master
+// - POT2 (ADC2)  → Mezcla de forma de onda (0=seno → 0.5=cuadrada → 1=sierra)
+// - POT3 (ADC8)  → Cutoff del filtro paso-bajo (0=cerrado, 1=abierto)
+// - POT4 (ADC10) → Velocidad del LFO de vibrato (0.2 – 8.2 Hz, profundidad ±1.2 %)
+//
+// MODO DE USO:
+// 1. Apretá uno o varios botones simultáneamente → suena un acorde.
+// 2. Movés POT2 lento → el timbre transiciona de "flauta" a "cuadrada de
+//    8 bits" a "sierra agresiva" sin cortes.
+// 3. Cerrá POT3 (filtro) y abrílo de a poco → efecto "filter sweep".
+// 4. POT4 para agregar vibrato — bajo = tipo violín, alto = trémolo nervioso.
+// ==============================================================================================================================================
+
 #include <Arduino.h>
 #include <driver/i2s_std.h>
 #include <math.h>

@@ -1,25 +1,68 @@
-// ============================================================
-//  PercuSynth — test_leds.ino
-//  GC Lab Chile
+// ==============================================================================================================================================
+// PERCU-SYNTH — Test LEDs WS2812 — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
 //
-//  Prueba de tira LED WS2812 conectada al pin 46.
-//  LEDs 0-6 (SMD internos) siempre apagados.
-//  LEDs 7-150 activos con 6 modos de animación.
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3
+// - Tira de LEDs WS2812 |DATA -> 46| (los primeros 6 LEDs son SMD internos del PCB → siempre apagados)
+// - 5 Botones con pull-up |BTN1 -> 42, BTN2 -> 44, BTN3 -> 45, BTN4 -> 47, BTN5 -> 0|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - Flash Mode         : DIO
+// - PSRAM              : OPI PSRAM
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - FastLED (instalar desde el gestor de librerías Arduino)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Firmware de prueba y demo para la tira WS2812 del PercuSynth. Incluye
+// 6 modos de animación para verificar que todos los LEDs funcionan y para
+// usar como base de cualquier firmware que vaya a incorporar luces reactivas.
 //
-//  Librería requerida: FastLED (instalar desde el gestor de librerías)
+// Modos: SÓLIDO · CHASE · RAINBOW · TWINKLE · PULSO (breathing) · METEOR.
+// El parámetro POT4 cambia su significado según el modo activo, así que
+// experimentar con cada modo se vuelve la mitad de la diversión.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// CONTROLES:
+// - BTN1 (42) → Modo siguiente
+// - BTN2 (44) → Modo anterior
+// - BTN3 (45) → Invertir dirección de la animación
+// - BTN4 (47) → Flash blanco (80 ms)
+// - BTN5 (0)  → Toggle apagar / reanudar
 //
-//  CONTROLES:
-//    POT1 (ADC 1)  → Brillo
-//    POT2 (ADC 2)  → Color (tono/hue)
-//    POT3 (ADC 8)  → Velocidad de animación
-//    POT4 (ADC 10) → Parámetro extra (varía según modo)
+// - POT1 (ADC1)  → Brillo global (5 – 60 / 255)
+// - POT2 (ADC2)  → Color base (hue 0 – 255)
+// - POT3 (ADC8)  → Velocidad de animación (5 – 150 ms/frame)
+// - POT4 (ADC10) → Parámetro extra (depende del modo activo):
+//                    · SÓLIDO/PULSO → saturación
+//                    · CHASE        → largo de la cola
+//                    · RAINBOW      → densidad de colores
+//                    · TWINKLE      → cantidad de destellos
+//                    · METEOR       → largo de la estela
 //
-//    BTN1 (pin 42) → Modo siguiente
-//    BTN2 (pin 44) → Modo anterior
-//    BTN3 (pin 45) → Invertir dirección
-//    BTN4 (pin 47) → Flash blanco
-//    BTN5 (pin  0) → Apagar todo
-// ============================================================
+// MODO DE USO:
+// 1. Al encender arranca en SÓLIDO con color rojo.
+// 2. BTN1/BTN2 navegan entre los 6 modos. El nombre del modo se imprime en Serial.
+// 3. POT1 sirve para ajustar el brillo a tu gusto antes de tocar otros pots.
+// 4. BTN5 funciona como "pánico" — apaga toda la tira sin reiniciar.
+// ==============================================================================================================================================
 
 #include <FastLED.h>
 

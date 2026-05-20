@@ -1,26 +1,80 @@
-// ============================================================
-//  PercuSynth — drum_midi_leds.ino  v2
-//  GC Lab Chile
+// ==============================================================================================================================================
+// PERCU-SYNTH — Drum MIDI + LEDs (controlador MIDI + show de luces) — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
 //
-//  Secuenciador 16 pasos + USB MIDI + LEDs WS2812
-//  con efectos full-strip cinematográficos.
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3 (USB nativo)
+// - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// - Tira de LEDs WS2812 |DATA -> 46| (los primeros 6 LEDs son SMD internos → apagados; 144 LEDs activos)
+// - Salida MIDI USB nativa (canal 10 GM Drums)
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - USB Mode           : USB-OTG (TinyUSB)
+// - Flash Mode         : DIO
+// - PSRAM              : OPI PSRAM
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - FastLED (gestor de librerías Arduino)
+// - ESP32 Arduino core ≥ 3.x (USB.h, USBMIDI.h)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Drum machine MIDI con secuenciador de 16 pasos × 4 instrumentos y un show
+// de luces cinematográfico sincronizado a cada golpe. El PercuSynth se
+// comporta como un controlador MIDI USB (envía NoteOn/NoteOff a tu DAW
+// favorito) y al mismo tiempo dispara animaciones full-strip cada vez que
+// suena un drum:
 //
-//  Librerías requeridas:
-//    - FastLED  (gestor de librerías Arduino)
-//    - USB.h / USBMIDI.h  (ESP32 Arduino core)
+//   - BOMBO  → onda de choque amarilla desde el centro de la tira
+//   - CAJA   → flash eléctrico blanco + lluvia de chispas amarillo-cálidas
+//   - HI-HAT → rayo cian que cruza la tira (alterna dirección a cada golpe)
+//   - CRASH  → supernova blanca que se abre a arcoíris y decae 2 segundos
 //
-//  Controles:
-//    BTN1 (pin 44) → Bombo  — trigger + grabar
-//    BTN2 (pin 42) → Caja   — trigger + grabar
-//    BTN3 (pin  0) → HiHat  — trigger + grabar
-//    BTN4 (pin 45) → Crash  — trigger + grabar
-//    BTN5 (pin 47) → Toggle GRAB / PLAYBACK
+// Sobre los efectos corre un fondo ambiental ondulante con pulsos cálidos
+// en los tiempos fuertes del compás. Los efectos se mezclan aditivamente y
+// el pool soporta hasta 8 eventos simultáneos.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// CONTROLES:
+// - BTN1 (44) → Bombo  (NoteOn 36) — dispara + graba si está en GRAB
+// - BTN2 (42) → Caja   (NoteOn 38) — dispara + graba si está en GRAB
+// - BTN3 (0)  → Hi-Hat (NoteOn 42) — dispara + graba si está en GRAB
+// - BTN4 (45) → Crash  (NoteOn 49) — dispara + graba si está en GRAB
+// - BTN5 (47) → Toggle GRAB / PLAYBACK (al entrar en GRAB borra el patrón
+//                                       y la tira hace un flash blanco)
 //
-//    POT1 (ADC  1) → Brillo
-//    POT2 (ADC  2) → Tempo (60–240 BPM)
-//    POT3 (ADC  8) → Color base del fondo
-//    POT4 (ADC 10) → Velocidad MIDI (60–127)
-// ============================================================
+// - POT1 (ADC1)  → Brillo de la tira (15 – 80 / 255)
+// - POT2 (ADC2)  → Tempo del secuenciador (60 – 240 BPM)
+// - POT3 (ADC8)  → Color base del fondo (hue 0 – 255)
+// - POT4 (ADC10) → Velocidad MIDI (60 – 127)
+//
+// MIDI:
+// - Salida USB nativa "ESP32-S3 MIDI" en canal 10 (GM Drums).
+// - Notas: 36=Kick, 38=Snare, 42=Closed HiHat, 49=Crash.
+// - NoteOff diferido 30 ms después del NoteOn (cola interna de 8 slots).
+//
+// MODO DE USO:
+// 1. Conectá el PercuSynth al PC/Mac → aparece como dispositivo MIDI.
+// 2. Abrí tu DAW, seleccioná el PercuSynth como entrada MIDI canal 10.
+// 3. Apretá BTN5 → entrás en GRAB. Tocá BTN1-4 al ritmo y arma un patrón.
+// 4. Apretá BTN5 de nuevo → PLAYBACK. El patrón suena en loop + luces.
+// 5. Encima del loop podés seguir disparando drums en vivo (también se ven).
+// ==============================================================================================================================================
 
 #include <Arduino.h>
 #include <FastLED.h>

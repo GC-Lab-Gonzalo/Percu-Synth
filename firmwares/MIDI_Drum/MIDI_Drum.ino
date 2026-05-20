@@ -1,3 +1,76 @@
+// ==============================================================================================================================================
+// PERCU-SYNTH — MIDI Drum (controlador MIDI USB) — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3 (USB nativo)
+// - 5 Botones con pull-up |BTN1 -> 42, BTN2 -> 44, BTN3 -> 45, BTN4 -> 47, BTN5 -> 0|
+// - 4 Sensores piezoeléctricos |P1 -> ADC4, P2 -> ADC5, P3 -> ADC6, P4 -> ADC7|
+// - Sensor de movimiento IMU MPU6050 (I2C) |VCC -> 3.3V, GND -> GND, SDA -> 21, SCL -> 38|
+// - Salida MIDI USB nativa (canal 10 / "9" en notación 0-indexed = GM Drums)
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - USB Mode           : USB-OTG (TinyUSB)
+// - USB DFU On Boot    : Disabled
+// - Flash Mode         : DIO
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32 Arduino core ≥ 3.x (USB.h, USBMIDI.h)
+// - Wire.h (I2C — incluido con el core)
+// - MPU6050 — Electronic Cats / Jeff Rowberg (gestor de librerías Arduino)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Controlador MIDI de percusión. No genera audio: traduce golpes físicos y
+// gestos en mensajes MIDI USB que se envían a un DAW (Ableton, GarageBand,
+// FL Studio, Logic, etc.) o a un sintetizador externo por USB-MIDI.
+//
+// El truco "groove": cada vez que se aprieta un botón, el firmware abre una
+// ventana de 20 ms y muestrea el acelerómetro. La intensidad del movimiento
+// del PercuSynth en el aire determina la VELOCIDAD MIDI (40–127). Así los
+// botones suenan distinto según con cuánta fuerza muevas el dispositivo.
+// Los piezos en cambio derivan la velocidad de la amplitud real del golpe.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// CONTROLES → SALIDA MIDI (todos en canal 10 = GM Drums)
+// - BTN1 (42) → nota 36 (KICK)        — velocidad por IMU
+// - BTN2 (44) → nota 38 (SNARE)       — velocidad por IMU
+// - BTN3 (45) → nota 46 (HI-HAT abierto) — velocidad por IMU
+// - BTN4 (47) → nota 51 (RIDE)        — velocidad por IMU
+// - BTN5 (0)  → nota 42 (HI-HAT cerrado) — velocidad por IMU
+//
+// - PIEZO1 (ADC4) → nota 49 "CRASH"        — velocidad por amplitud del golpe
+// - PIEZO2 (ADC5) → nota 45 "TOM 1"        — velocidad por amplitud del golpe
+// - PIEZO3 (ADC6) → nota 47 "TOM 2"        — velocidad por amplitud del golpe
+// - PIEZO4 (ADC7) → nota 43 "FLOOR TOM"    — velocidad por amplitud del golpe
+//
+// PARÁMETROS DE TIEMPO:
+// - Ventana piezo:        15 ms (peak detection)
+// - Ventana IMU botón:    20 ms (acceleration peak)
+// - Anti-retrigger piezo: 50 ms
+// - NoteOff piezo:        30 ms después del NoteOn
+//
+// MODO DE USO:
+// 1. Conectar el PercuSynth al PC/Mac por USB-C → aparece como "ESP32-S3 MIDI".
+// 2. Abrir el DAW y seleccionar el dispositivo como entrada MIDI (canal 10).
+// 3. Tocar los botones (mover el aparato → más fuerza = más velocity) o golpear
+//    los piezos para disparar las pads de percusión del DAW.
+// ==============================================================================================================================================
+
 #include "USB.h"
 #include "USBMIDI.h"
 #include <Wire.h>
@@ -12,7 +85,7 @@ MPU6050 mpu;
 // ---- BOTONES ----
 #define NUM_BUTTONS 5
 const int buttonPins[NUM_BUTTONS]      = {42, 44, 45, 47, 0};
-const uint8_t buttonNotes[NUM_BUTTONS] = {36, 38, 42, 46, 49};
+const uint8_t buttonNotes[NUM_BUTTONS] = {36, 38, 46, 51, 42};
 bool lastState[NUM_BUTTONS];
 
 // ---- COLA DE BOTONES ----
@@ -36,7 +109,7 @@ void encolarBoton(int idx) {
 // ---- PIEZOS ----
 #define NUM_PIEZOS 4
 const int piezoPins[NUM_PIEZOS]        = {4, 5, 6, 7};
-const uint8_t piezoNotes[NUM_PIEZOS]   = {51, 45, 47, 43};
+const uint8_t piezoNotes[NUM_PIEZOS]   = {49, 45, 47, 43};
 const char* piezoNames[NUM_PIEZOS]     = {"CRASH","TOM1","TOM2","FLOOR TOM"};
 
 const int UMBRAL_PIEZO = 300;

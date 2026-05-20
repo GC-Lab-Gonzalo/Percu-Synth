@@ -1,3 +1,65 @@
+// ==============================================================================================================================================
+// PERCU-SYNTH — Drum Machine Basic — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3 (USB nativo)
+// - DAC PCM5102 vía I2S — estéreo 44.1 kHz · 16-bit |LCK -> 39, DIN -> 40, BCK -> 41|
+// - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - Flash Mode         : DIO          (¡OPI rompe I2S!)
+// - PSRAM              : OPI PSRAM
+// - Partition Scheme   : Default 4MB with spiffs
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Drum machine con síntesis 100% en tiempo real (sin samples). 5 sonidos
+// percusivos modelados con osciladores + ruido LCG + filtros biquad bandpass:
+// BOMBO, CAJA 808, HI-HAT, CRASH y CLICK metrónomo.
+//
+// Incluye un secuenciador de 16 pasos × 4 pistas con grabación en vivo —
+// los golpes que toques durante el modo GRAB quedan registrados y se
+// reproducen en loop al volver a PLAYBACK.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// CONTROLES:
+// - BTN1 (44) → Bombo   (trigger + graba si está en GRAB)
+// - BTN2 (42) → Caja    (trigger + graba si está en GRAB)
+// - BTN3 (0)  → Hi-Hat  (trigger + graba si está en GRAB)
+// - BTN4 (45) → Crash   (trigger + graba si está en GRAB)
+// - BTN5 (47) → Toggle GRAB / PLAYBACK (al entrar a GRAB borra el patrón
+//                                       y suena un click metrónomo)
+// - POT1 (ADC1)  → Volumen master
+// - POT2 (ADC2)  → Tempo (60 – 240 BPM)
+// - POT3 (ADC8)  → Tono del bombo (80 – 200 Hz)
+// - POT4 (ADC10) → Tono de la caja (180 – 260 Hz)
+//
+// MODO DE USO:
+// 1. Apretá BTN5 → entrás en modo GRAB (el metrónomo te marca el pulso).
+// 2. Tocá BTN1-4 al ritmo del click → los golpes se guardan en los 16 pasos.
+// 3. Apretá BTN5 de nuevo → vuelve a PLAYBACK y el loop suena solo.
+// 4. Encima del loop podés seguir disparando los drums en vivo.
+// ==============================================================================================================================================
+
 #include <Arduino.h>
 #include <driver/i2s_std.h>
 #include <math.h>

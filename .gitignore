@@ -1,0 +1,12 @@
+# Claude Code state (worktrees, logs, etc. — local only)
+.claude/
+
+# Editor settings (personal, not project-wide)
+.vscode/
+
+# Arduino IDE build artifacts — el .bin que importa ya está en firmware/
+tools/percu_control/build/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
