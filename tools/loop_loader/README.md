@@ -9,14 +9,14 @@ Versión más rica que `sample_loader`: agrega looping preciso sin click al wrap
 Doble-click sobre `index.html` (no necesita Web Serial). Recomendado **Chrome o Edge**.
 
 ```bash
-# Si querés servirla por HTTP:
+# Si quieres servirla por HTTP:
 cd tools/loop_loader
 python -m http.server 8000
 ```
 
 ## Cómo se comunica con la placa
 
-**No se comunica** — flujo offline: genera `.ino`, vos lo flasheas con Arduino IDE.
+**No se comunica** — flujo offline: genera `.ino` y lo flasheas con Arduino IDE.
 
 ## Mapa del firmware generado
 

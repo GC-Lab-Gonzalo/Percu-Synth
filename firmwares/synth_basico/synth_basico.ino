@@ -52,10 +52,10 @@
 // - POT4 (ADC10) → Velocidad del LFO de vibrato (0.2 – 8.2 Hz, profundidad ±1.2 %)
 //
 // MODO DE USO:
-// 1. Apretá uno o varios botones simultáneamente → suena un acorde.
-// 2. Movés POT2 lento → el timbre transiciona de "flauta" a "cuadrada de
+// 1. Aprieta uno o varios botones simultáneamente → suena un acorde.
+// 2. Mueves POT2 lento → el timbre transiciona de "flauta" a "cuadrada de
 //    8 bits" a "sierra agresiva" sin cortes.
-// 3. Cerrá POT3 (filtro) y abrílo de a poco → efecto "filter sweep".
+// 3. Cierra POT3 (filtro) y ábrelo de a poco → efecto "filter sweep".
 // 4. POT4 para agregar vibrato — bajo = tipo violín, alto = trémolo nervioso.
 // ==============================================================================================================================================
 

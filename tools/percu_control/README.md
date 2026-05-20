@@ -13,7 +13,7 @@ cd tools/percu_control
 python -m http.server 8000
 ```
 
-Luego abrí <http://localhost:8000> en **Chrome o Edge** (la Web Serial API no existe en Firefox/Safari).
+Luego abre <http://localhost:8000> en **Chrome o Edge** (la Web Serial API no existe en Firefox/Safari).
 
 ## Cómo se comunica con la placa
 
@@ -38,7 +38,7 @@ percu_control/
 └── build/                 # carpeta de export de Arduino (se sobrescribe)
 ```
 
-Si tocás el `.ino` del firmware base, hay que regenerar `firmware/firmware.bin` — ver [firmware/README.md](firmware/README.md) para el paso a paso.
+Si tocas el `.ino` del firmware base, hay que regenerar `firmware/firmware.bin` — ver [firmware/README.md](firmware/README.md) para el paso a paso.
 
 ## Flujo típico de uso
 

@@ -15,8 +15,8 @@ Esta carpeta contiene el firmware compilado que el botón **FLASH FW** del panel
 
 Cuando cambies algo en el `.ino`:
 
-1. Abrí el sketch en Arduino IDE (`percusynth_theredddmin.ino`).
-2. Configurá la placa:
+1. Abre el sketch en Arduino IDE (`percusynth_theredddmin.ino`).
+2. Configura la placa:
    - **Tools → Board → ESP32 Arduino → ESP32S3 Dev Module** (o la variante exacta que uses)
    - **USB CDC On Boot:** Enabled
    - **Flash Mode:** DIO ← (crítico: si lo pones en OPI el audio I2S se rompe)
@@ -24,9 +24,9 @@ Cuando cambies algo en el `.ino`:
 3. **Sketch → Export Compiled Binary** (Ctrl+Alt+S).
 4. Arduino te deja varios `.bin` en `tools/percu_control/build/esp32.esp32.<variante>/`. El que importa es:
    - `percusynth_theredddmin.ino.merged.bin` ← este
-5. Copialo a esta carpeta y renombralo a `firmware.bin` (sobrescribí el anterior).
+5. Cópialo a esta carpeta y renómbralo a `firmware.bin` (sobrescribe el anterior).
 
-Si querés automatizar, podés correr esto cada vez que recompiles:
+Si quieres automatizar, puedes correr esto cada vez que recompiles:
 
 ```powershell
 # desde tools/percu_control/
@@ -35,17 +35,17 @@ Copy-Item "build/esp32.esp32.esp32s3-octal/percusynth_theredddmin.ino.merged.bin
 
 ## Servirlo localmente
 
-ESP Web Tools fetchea el `manifest.json` y `firmware.bin` por HTTP. **No funciona abriendo `index.html` con doble click** (file://). Tenés que servir la carpeta `tools/percu_control/` con un mini-servidor:
+ESP Web Tools fetchea el `manifest.json` y `firmware.bin` por HTTP. **No funciona abriendo `index.html` con doble click** (file://). Tienes que servir la carpeta `tools/percu_control/` con un mini-servidor:
 
 ```bash
 cd "tools/percu_control"
 python -m http.server 8000
 ```
 
-Luego abrís http://localhost:8000 en Chrome o Edge.
+Luego abres http://localhost:8000 en Chrome o Edge.
 
 ## Notas
 
 - Solo funciona en **Chrome** o **Edge** (Web Serial API).
-- Si cambias la variante de placa (Flash Mode, Partition Scheme, etc.) tenés que regenerar `firmware.bin`.
-- Si más adelante querés que un solo `.bin` sirva para distintas notas base sin recompilar, agregá un comando Serial tipo `BASE_HZ <valor>` que guarde en NVS — el panel ya puede mandarlo.
+- Si cambias la variante de placa (Flash Mode, Partition Scheme, etc.) tienes que regenerar `firmware.bin`.
+- Si más adelante quieres que un solo `.bin` sirva para distintas notas base sin recompilar, agrega un comando Serial tipo `BASE_HZ <valor>` que guarde en NVS — el panel ya puede mandarlo.

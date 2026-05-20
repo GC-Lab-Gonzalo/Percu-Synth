@@ -9,7 +9,7 @@ Hermano del firmware-en-desarrollo [`firmwares/dub_siren/`](../../firmwares/dub_
 Doble-click sobre `index.html`. Recomendado **Chrome o Edge** (soporte de Web Audio API).
 
 ```bash
-# Si querés servirla por HTTP:
+# Si quieres servirla por HTTP:
 cd tools/dub_siren_generator
 python -m http.server 8000
 ```
@@ -26,7 +26,7 @@ Una vez flasheada la placa, el dub siren corre standalone — la webapp no se vu
 
 ## Sample rate
 
-Elegís uno de dos modos antes de generar:
+Eliges uno de dos modos antes de generar:
 
 | SR        | Duración total máx (3 samples) | Carácter                              |
 |-----------|--------------------------------|----------------------------------------|

@@ -46,7 +46,7 @@ Ambas voces pasan por **filter LPF → delay tape-style con feedback (hasta auto
 - Esto da ~2.8 MB para sample embedido (después del código) = **~30 s @ 44.1 kHz mono o ~60 s @ 22 kHz mono**
 
 **Otros Arduino IDE settings críticos:**
-- USB CDC On Boot: **Enabled** (sólo si querés Serial debug)
+- USB CDC On Boot: **Enabled** (sólo si quieres Serial debug)
 - Flash Mode: **DIO** (OPI rompe I2S — ya documentado en el repo)
 - PSRAM: **OPI PSRAM** (no para el sample, sí para el delay largo opcional)
 

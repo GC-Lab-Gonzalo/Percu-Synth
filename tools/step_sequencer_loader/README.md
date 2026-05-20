@@ -2,8 +2,8 @@
 
 Webapp con **doble personalidad**:
 
-1. **Generador de firmware** — cargás 6 samples de drum kit, descargás el `.ino` listo para flashear con el secuenciador embebido.
-2. **Control remoto en vivo** — una vez flasheado, te conectás al PercuSynth vía Web MIDI y editás el patrón, FX y transport en tiempo real. **El PercuSynth queda como MIDI CLOCK MASTER**, así que mientras editás desde la web también podés enganchar un DAW como esclavo.
+1. **Generador de firmware** — cargas 6 samples de drum kit, descargas el `.ino` listo para flashear con el secuenciador embebido.
+2. **Control remoto en vivo** — una vez flasheado, te conectas al PercuSynth vía Web MIDI y editas el patrón, FX y transport en tiempo real. **El PercuSynth queda como MIDI CLOCK MASTER**, así que mientras editas desde la web también puedes enganchar un DAW como esclavo.
 
 Hermana del firmware `firmwares/step_sequencer_midi/` — los dos son las dos mitades del mismo sistema.
 
@@ -19,7 +19,7 @@ python -m http.server 8000
 
 ## Cómo se comunica con la placa
 
-**Web MIDI sobre USB** (no Web Serial). Cuando conectás el PercuSynth al PC aparece como dispositivo MIDI nativo.
+**Web MIDI sobre USB** (no Web Serial). Cuando conectas el PercuSynth al PC aparece como dispositivo MIDI nativo.
 
 | Dirección  | Canal | Mensaje                              | Significado                              |
 |------------|-------|--------------------------------------|------------------------------------------|
@@ -57,7 +57,7 @@ Toda la lógica MIDI completa está documentada en el header de [`firmwares/step
 
 - Los pots locales también editan FX (con histéresis para no pisarse con la web).
 - BTN1 = PLAY/STOP local · BTN2 = stutter momentáneo · BTN3 = reverse toggle · BTN4/BTN5 = trigger manual T0/T1.
-- Si desconectás el USB el patrón sigue sonando hasta que cortás la corriente.
+- Si desconectas el USB el patrón sigue sonando hasta que cortas la corriente.
 
 ## Limitaciones
 

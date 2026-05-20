@@ -9072,7 +9072,7 @@ const uint8_t POT_PINS[4] = {1, 2, 8, 10};
 #define IMU_SMOOTH      0.08f   // factor de EMA · más bajo = más smoothing
 
 // LED RGB on-board del módulo ESP32-S3 (DevKitC-1 estándar = GPIO 48).
-// Si tu placa lo expone en otro pin, cambialo acá.
+// Si tu placa lo expone en otro pin, cámbialo aquí.
 #define PIN_ONBOARD_LED 48
 #define LED_BRIGHTNESS  40      // 0-255 · bajo para no encandilar
 
@@ -9479,7 +9479,7 @@ void setup() {
   env_decay_per_sample =
     expf(-1.0f / ((float)SIREN_DECAY_MS * 0.001f * (float)I2S_SR));
 
-  Serial.println("Listo. Dale fuego.");
+  Serial.println("Listo.");
 }
 
 // ================================================================

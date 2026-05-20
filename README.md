@@ -120,7 +120,7 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 
 Páginas HTML standalone (sin build, sin npm) que cumplen tres roles distintos según la herramienta:
 
-1. **Generadores de firmware** — drag & drop de audios → la webapp produce un `.ino` con los samples embebidos en flash como arrays `PROGMEM`. Lo flasheás con Arduino IDE y la web no se usa más hasta que cambies los samples. (`sample_loader`, `loop_loader`, `dub_siren_generator`, `loops/bpm_mono_44100`)
+1. **Generadores de firmware** — drag & drop de audios → la webapp produce un `.ino` con los samples embebidos en flash como arrays `PROGMEM`. Lo flasheas con Arduino IDE y la web no se usa más hasta que cambies los samples. (`sample_loader`, `loop_loader`, `dub_siren_generator`, `loops/bpm_mono_44100`)
 2. **Flasheo desde el navegador** — instala el firmware compilado directo al ESP32-S3 vía **ESP Web Tools**, sin abrir Arduino IDE. (`percu_control`)
 3. **Control remoto en vivo** — se conecta al PercuSynth ya flasheado vía **Web MIDI** y edita patrón / FX / transport en tiempo real. (`step_sequencer_loader`)
 
@@ -155,7 +155,7 @@ Esta carpeta es una **biblioteca viva de firmwares generados por las webapps de 
 - **`percusynth_loop_player/`** — set dub/dance (generado con `loop_loader`)
 - **`sonidos/`** — archivos de audio crudos (WAV) listos para alimentar las webapps
 
-> Estos `.ino` son **artefactos generados**, no escritos a mano. Para hacer tus propios kits, abrí la webapp correspondiente, cargá tus audios y generá un nuevo `.ino`.
+> Estos `.ino` son **artefactos generados**, no escritos a mano. Para hacer tus propios kits, abre la webapp correspondiente, carga tus audios y genera un nuevo `.ino`.
 
 ---
 
@@ -163,14 +163,14 @@ Esta carpeta es una **biblioteca viva de firmwares generados por las webapps de 
 
 ### Opción A — Desde el navegador (sin Arduino IDE)
 
-Sirve `tools/percu_control/` con un mini-servidor HTTP y abrí la página en Chrome o Edge:
+Sirve `tools/percu_control/` con un mini-servidor HTTP y abre la página en Chrome o Edge:
 
 ```bash
 cd tools/percu_control
 python -m http.server 8000
 ```
 
-Luego abrí <http://localhost:8000>, conectá el Percu-Synth por USB y apretá **⚡ FLASH FW**.
+Luego abre <http://localhost:8000>, conecta el Percu-Synth por USB y aprieta **⚡ FLASH FW**.
 
 ### Opción B — Desde Arduino IDE
 
