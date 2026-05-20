@@ -432,15 +432,15 @@ esp-web-install-button{
     <p style="margin-top:14px;color:var(--mint)">✓ <code>firmware.bin</code> listo en <code>firmware/</code></p>
     <p><b style="color:var(--silk)">Para actualizar el firmware</b> (cuando cambies el sketch):</p>
     <ol>
-      <li>Abrí el sketch en Arduino IDE</li>
+      <li>Abre el sketch en Arduino IDE</li>
       <li>Board: <code>ESP32S3 Dev Module</code> · Flash Mode: <code>DIO</code> · USB CDC On Boot: <code>Enabled</code></li>
       <li><code>Sketch → Export Compiled Binary</code> (Ctrl+Alt+S)</li>
-      <li>Copiá <code>build/.../*.merged.bin</code> a <code>firmware/firmware.bin</code> (sobrescribí)</li>
+      <li>Copia <code>build/.../*.merged.bin</code> a <code>firmware/firmware.bin</code> (sobrescribe)</li>
     </ol>
     <div class="warn">⚠ ESP Web Tools <b>no funciona con file://</b>. Servir esta carpeta con un servidor local antes de instalar:<br><code style="display:inline-block;margin-top:6px">cd tools/percu_control &amp;&amp; python -m http.server 8000</code><br>luego abrir <code>http://localhost:8000</code></div>
     <p style="font-size:10px">Detalles en <code>firmware/README.md</code>.</p>
     <div class="install-row">
-      <span class="install-note">Conectá el ESP32 por USB →</span>
+      <span class="install-note">Conecta el ESP32 por USB →</span>
       <esp-web-install-button manifest="firmware/manifest.json">
         <button slot="activate" class="btn pri">⚡ INSTALAR</button>
         <span slot="unsupported" style="color:var(--red);font-size:11px">Navegador no soportado</span>

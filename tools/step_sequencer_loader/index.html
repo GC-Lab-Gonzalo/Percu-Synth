@@ -215,7 +215,7 @@ table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
     <button id="midi-connect">CONECTAR</button>
     <button id="midi-sync-push">↑ PUSH PATRÓN</button>
   </div>
-  <div class="hint">Requiere Chrome/Edge. Al conectar, el patrón local se envía al PercuSynth y empezás a recibir el clock + step actual.</div>
+  <div class="hint">Requiere Chrome/Edge. Al conectar, el patrón local se envía al PercuSynth y empiezas a recibir el clock + step actual.</div>
 </section>
 
 <!-- ============ TABS ============ -->
@@ -286,9 +286,9 @@ table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
 <!-- ============ TAB: SAMPLES & FIRMWARE ============ -->
 <div class="tab-body" id="tab-samples">
   <section>
-    <div class="section-title">SAMPLES (cargá MP3/WAV/OGG por pista)</div>
+    <div class="section-title">SAMPLES (carga MP3/WAV/OGG por pista)</div>
     <div id="tracks" class="tracks"></div>
-    <div class="hint">Los samples se hornean en el firmware. Después de cargar todos, generá un nuevo .ino y flasheá.</div>
+    <div class="hint">Los samples se hornean en el firmware. Después de cargar todos, genera un nuevo .ino y flashea.</div>
   </section>
   <section>
     <div class="section-title">GENERAR FIRMWARE</div>
@@ -375,7 +375,7 @@ function noteName(n) { return NOTE_NAMES[n%12] + (Math.floor(n/12)-1); }
 // ============================================================
 async function initMidi() {
   if (!navigator.requestMIDIAccess) {
-    log('✗ Web MIDI no soportado. Usá Chrome/Edge.');
+    log('✗ Web MIDI no soportado. Usa Chrome/Edge.');
     return;
   }
   try {
@@ -391,8 +391,8 @@ async function initMidi() {
 function refreshMidiDevices() {
   const inSel  = document.getElementById('midi-in');
   const outSel = document.getElementById('midi-out');
-  inSel.innerHTML  = '<option value="">— elegí —</option>';
-  outSel.innerHTML = '<option value="">— elegí —</option>';
+  inSel.innerHTML  = '<option value="">— elige —</option>';
+  outSel.innerHTML = '<option value="">— elige —</option>';
   let auto = null;
   for (const [id, p] of midiAccess.inputs) {
     const opt = document.createElement('option');
@@ -423,7 +423,7 @@ function connectMidi() {
   _midiSendCount = 0;
   setStatus(isLive ? `conectado a ${midiOut.name}` : 'sólo input');
   log(`MIDI: in=${midiIn?.name||'-'}  out=${midiOut?.name||'-'}`);
-  if (!isLive) log('⚠ Elegí OUTPUT también — sin output no se envían patrones.');
+  if (!isLive) log('⚠ Elige OUTPUT también — sin output no se envían patrones.');
   if (isLive) pushFullPattern();
 }
 
@@ -458,7 +458,7 @@ function midiSend(bytes) {
   if (!midiOut) {
     if (!_warnedNoOut) {
       _warnedNoOut = true;
-      log('⚠ MIDI OUT no conectado — apretá CONECTAR. Los cambios NO se envían al PercuSynth.');
+      log('⚠ MIDI OUT no conectado — aprieta CONECTAR. Los cambios NO se envían al PercuSynth.');
     }
     return;
   }
@@ -890,7 +890,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   log('Step Sequencer LIVE listo.');
-  log('1) Conectá PercuSynth por USB  2) HABILITAR WEB MIDI  3) CONECTAR  4) tocá pasos en vivo');
+  log('1) Conecta PercuSynth por USB  2) HABILITAR WEB MIDI  3) CONECTAR  4) toca pasos en vivo');
 });
 </script>
 

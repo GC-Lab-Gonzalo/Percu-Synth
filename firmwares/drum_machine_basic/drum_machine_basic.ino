@@ -54,10 +54,10 @@
 // - POT4 (ADC10) → Tono de la caja (180 – 260 Hz)
 //
 // MODO DE USO:
-// 1. Apretá BTN5 → entrás en modo GRAB (el metrónomo te marca el pulso).
-// 2. Tocá BTN1-4 al ritmo del click → los golpes se guardan en los 16 pasos.
-// 3. Apretá BTN5 de nuevo → vuelve a PLAYBACK y el loop suena solo.
-// 4. Encima del loop podés seguir disparando los drums en vivo.
+// 1. Aprieta BTN5 → entras en modo GRAB (el metrónomo te marca el pulso).
+// 2. Toca BTN1-4 al ritmo del click → los golpes se guardan en los 16 pasos.
+// 3. Aprieta BTN5 de nuevo → vuelve a PLAYBACK y el loop suena solo.
+// 4. Encima del loop puedes seguir disparando los drums en vivo.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

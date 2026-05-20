@@ -280,7 +280,7 @@ section {
   </section>
 
   <section class="generate-section">
-    <div id="size-breakdown">Cargá un sample para empezar</div>
+    <div id="size-breakdown">Carga un sample para empezar</div>
     <button class="generate-btn" id="generate-btn" disabled>⬇ GENERAR FIRMWARE (.ino)</button>
     <div class="log" id="log"></div>
   </section>
@@ -593,14 +593,14 @@ function updateSizeInfo() {
   document.getElementById('size-info').textContent =
     anyLoaded ? `${mb.toFixed(2)} MB total · ${pct.toFixed(0)}% Huge APP` : 'Sin samples';
   document.getElementById('size-breakdown').textContent =
-    parts.length ? parts.join('  ·  ') : 'Cargá al menos un sample para generar';
+    parts.length ? parts.join('  ·  ') : 'Carga al menos un sample para generar';
 
   const generateBtn = document.getElementById('generate-btn');
   if (!anyLoaded) {
     generateBtn.disabled = true;
   } else if (totalBytes > limit) {
     generateBtn.disabled = true;
-    log(`⚠ Total ${mb.toFixed(2)} MB excede el límite (${(limit/1024/1024).toFixed(2)} MB). Trimeá o bajá SR.`, 'err');
+    log(`⚠ Total ${mb.toFixed(2)} MB excede el límite (${(limit/1024/1024).toFixed(2)} MB). Recorta o baja el SR.`, 'err');
   } else {
     generateBtn.disabled = false;
   }
@@ -680,7 +680,7 @@ function generateFirmware() {
     sampleData.push(int16);
     if (int16 && int16.length > 0) anyLoaded = true;
   }
-  if (!anyLoaded) throw new Error('cargá al menos un sample');
+  if (!anyLoaded) throw new Error('carga al menos un sample');
 
   const L = [];
 
@@ -782,7 +782,7 @@ function generateFirmware() {
   L.push(`#define IMU_SMOOTH      0.08f   // factor de EMA · más bajo = más smoothing`);
   L.push(``);
   L.push(`// LED RGB on-board del módulo ESP32-S3 (DevKitC-1 estándar = GPIO 48).`);
-  L.push(`// Si tu placa lo expone en otro pin, cambialo acá.`);
+  L.push(`// Si tu placa lo expone en otro pin, cámbialo aquí.`);
   L.push(`#define PIN_ONBOARD_LED 48`);
   L.push(`#define LED_BRIGHTNESS  40      // 0-255 · bajo para no encandilar`);
   L.push(``);
@@ -1205,7 +1205,7 @@ function generateFirmware() {
   L.push(`  env_decay_per_sample =`);
   L.push(`    expf(-1.0f / ((float)SIREN_DECAY_MS * 0.001f * (float)I2S_SR));`);
   L.push(``);
-  L.push(`  Serial.println("Listo. Dale fuego.");`);
+  L.push(`  Serial.println("Listo.");`);
   L.push(`}`);
   L.push(``);
 
@@ -1339,7 +1339,7 @@ function generateFirmware() {
 function downloadFirmware() {
   const anyLoaded = samples.some(s => s.rawInt16 && s.rawInt16.length > 0);
   if (!anyLoaded) {
-    log('No hay samples cargados — cargá al menos uno', 'err');
+    log('No hay samples cargados — carga al menos uno', 'err');
     return;
   }
   const btn = document.getElementById('generate-btn');
@@ -1356,7 +1356,7 @@ function downloadFirmware() {
     a.href = url; a.download = fileName; a.click();
     URL.revokeObjectURL(url);
     log(`✓ ${fileName} — ${(code.length/1024).toFixed(0)} KB`, 'ok');
-    log('Abrí el .ino en Arduino IDE, seleccioná Partition Scheme: Huge APP (3MB No OTA), flasheá.', 'warn');
+    log('Abre el .ino en Arduino IDE, selecciona Partition Scheme: Huge APP (3MB No OTA), y flashea.', 'warn');
   } catch (e) {
     log(`Error: ${e.message}`, 'err');
   } finally {
@@ -1461,7 +1461,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupEvents();
   for (let i = 0; i < NUM_SAMPLES; i++) renderSample(i);
   updateSizeInfo();
-  log('dub_siren_generator v0.6 listo — cargá hasta 3 samples y dale fuego', 'ok');
+  log('dub_siren_generator v0.6 listo — carga hasta 3 samples y dale', 'ok');
   log('POTs: lfoDepth · lfoRate · delayTime · delayFb  ·  IMU eje X: pitch global', 'info');
   log('Todos los botones son HOLD — soltar detiene esa voz', 'info');
   log('Librerías Arduino IDE: FastLED + MPU6050 (Electronic Cats)', 'warn');

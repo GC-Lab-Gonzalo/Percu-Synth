@@ -9,7 +9,7 @@ Variante "pro" de `loop_loader`: agrega tap-tempo, transporte master con beat do
 Doble-click sobre `index.html`. Recomendado **Chrome o Edge**.
 
 ```bash
-# Si querés servirla por HTTP:
+# Si quieres servirla por HTTP:
 cd tools/loops/bpm_mono_44100
 python -m http.server 8000
 ```
@@ -60,7 +60,7 @@ loops + samples → webapp ajusta BPM y trim → .ino → Arduino IDE → flash
 | Loops de longitudes diversas          | Loops que tienen que estar sincronizados en BPM        |
 | Setups improvisatorios                | Sesiones de dub/dance donde el groove pisa todo        |
 | Hasta 3 loops                         | Hasta 5 loops con mono-switching                       |
-| Sin necesidad de tap-tempo            | Querés ajustar el BPM en vivo antes de flashear        |
+| Sin necesidad de tap-tempo            | Quieres ajustar el BPM en vivo antes de flashear       |
 
 Para sets en vivo donde un loop entra/sale al apretar un botón sin solapamiento, este genera firmware más limpio.
 

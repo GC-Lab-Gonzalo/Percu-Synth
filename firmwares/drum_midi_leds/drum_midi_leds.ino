@@ -69,11 +69,11 @@
 // - NoteOff diferido 30 ms después del NoteOn (cola interna de 8 slots).
 //
 // MODO DE USO:
-// 1. Conectá el PercuSynth al PC/Mac → aparece como dispositivo MIDI.
-// 2. Abrí tu DAW, seleccioná el PercuSynth como entrada MIDI canal 10.
-// 3. Apretá BTN5 → entrás en GRAB. Tocá BTN1-4 al ritmo y arma un patrón.
-// 4. Apretá BTN5 de nuevo → PLAYBACK. El patrón suena en loop + luces.
-// 5. Encima del loop podés seguir disparando drums en vivo (también se ven).
+// 1. Conecta el PercuSynth al PC/Mac → aparece como dispositivo MIDI.
+// 2. Abre tu DAW, selecciona el PercuSynth como entrada MIDI canal 10.
+// 3. Aprieta BTN5 → entras en GRAB. Toca BTN1-4 al ritmo y arma un patrón.
+// 4. Aprieta BTN5 de nuevo → PLAYBACK. El patrón suena en loop + luces.
+// 5. Encima del loop puedes seguir disparando drums en vivo (también se ven).
 // ==============================================================================================================================================
 
 #include <Arduino.h>

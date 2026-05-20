@@ -36,7 +36,7 @@
 // Secuenciador de samples (16 pasos × 6 pistas) que funciona como
 // MIDI CLOCK MASTER por USB. Los samples se embeben en flash en compile-time
 // — el firmware base trae placeholders vacíos y se regenera con la webapp
-// tools/step_sequencer_loader/ cada vez que querés cargar drum kits nuevos.
+// tools/step_sequencer_loader/ cada vez que quieras cargar drum kits nuevos.
 //
 // ARQUITECTURA:
 //   PercuSynth (ESP32-S3) → motor de audio + MIDI CLOCK MASTER (sale por USB).
@@ -91,7 +91,7 @@
 // 1. Generar firmware con samples: abrir tools/step_sequencer_loader/ en Chrome,
 //    cargar 6 samples cortos, descargar el .ino y flashearlo.
 // 2. Conectar al PC → aparece como "ESP32-S3 MIDI".
-// 3. Volver a abrir la webapp y "Conectar MIDI" → ahora editás patrón en vivo.
+// 3. Volver a abrir la webapp y "Conectar MIDI" → ahora editas patrón en vivo.
 // 4. Mandar Clock a un DAW: configurarlo como esclavo del PercuSynth.
 // ==============================================================================================================================================
 

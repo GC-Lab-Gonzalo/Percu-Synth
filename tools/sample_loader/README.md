@@ -9,7 +9,7 @@ App web standalone que toma archivos de audio del navegador (drag & drop o file 
 Abrir `index.html` directamente con doble-click funciona — esta tool no necesita Web Serial ni servidor. Recomendado usar **Chrome o Edge** porque son los que mejor soportan la Web Audio API que usa para previsualizar.
 
 ```bash
-# Opcional, si querés servirla por HTTP:
+# Opcional, si quieres servirla por HTTP:
 cd tools/sample_loader
 python -m http.server 8000
 ```
