@@ -1,0 +1,1736 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — Loop Loader</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0d0d14;
+  --bg2:     #161621;
+  --bg3:     #1e1e2c;
+  --border:  #2e2e44;
+  --accent:  #00e5a0;
+  --accent2: #7c5cff;
+  --text:    #d0d0e8;
+  --dim:     #5a5a80;
+  --warn:    #ffcc44;
+  --err:     #ff5555;
+  --loop-a:  #00e5a0;
+  --loop-b:  #00c8e5;
+  --loop-c:  #0080ff;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  padding: 16px;
+  font-size: 13px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: var(--bg2);
+}
+.logo { display: flex; align-items: baseline; gap: 6px; }
+.logo-mark { color: var(--accent); font-size: 22px; }
+.logo-title { font-size: 17px; font-weight: bold; letter-spacing: 5px; color: var(--accent); }
+.logo-sub   { font-size: 10px; color: var(--dim); letter-spacing: 3px; margin-left: 4px; }
+#total-size { font-size: 11px; color: var(--dim); }
+
+section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--dim);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* LOOP PADS */
+.loops-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.loop-pad {
+  flex: 1;
+  min-width: 200px;
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.loop-pad.playing {
+  animation: pulse-loop 1.6s ease-in-out infinite;
+}
+@keyframes pulse-loop {
+  0%, 100% { box-shadow: 0 0 12px var(--pc, var(--accent)), 0 0 24px transparent; }
+  50%       { box-shadow: 0 0 24px var(--pc, var(--accent)), 0 0 40px var(--pc, var(--accent))44; }
+}
+.loop-badge {
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: var(--pc, var(--accent));
+  border: 1px solid var(--pc, var(--accent));
+  border-radius: 3px;
+  padding: 2px 6px;
+  align-self: flex-start;
+}
+.loop-waveform {
+  width: 100%;
+  height: 70px;
+  border-radius: 4px;
+  display: block;
+  cursor: pointer;
+}
+.loop-trigger {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--pc, #888);
+  background: radial-gradient(circle at 38% 35%, rgba(255,255,255,0.08), #111116);
+  color: var(--pc, #888);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  letter-spacing: 1px;
+}
+.loop-trigger::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.loop-trigger:hover { box-shadow: 0 0 18px var(--pc, #888); }
+.loop-trigger.playing {
+  background: radial-gradient(circle at 38% 35%, var(--pc, #888), #151520);
+  box-shadow: 0 0 30px var(--pc, #888);
+  color: #000;
+}
+.loop-info { text-align: center; width: 100%; }
+.loop-name {
+  font-size: 11px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.loop-dur { font-size: 14px; color: var(--pc, var(--accent)); font-weight: bold; min-height: 18px; }
+.load-label {
+  font-size: 10px; letter-spacing: 1px; color: var(--dim);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px 12px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.load-label:hover { border-color: var(--accent); color: var(--accent); }
+.clear-btn {
+  font-size: 9px; color: var(--dim); background: none; border: none;
+  cursor: pointer; padding: 2px 4px; font-family: inherit;
+}
+.clear-btn:hover { color: var(--err); }
+
+/* HIT PADS */
+.hits-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hit-pad {
+  flex: 1;
+  min-width: 130px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s;
+}
+.hit-badge {
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: var(--pc, var(--dim));
+  border: 1px solid var(--pc, var(--border));
+  border-radius: 3px;
+  padding: 1px 5px;
+  align-self: flex-start;
+  opacity: 0.7;
+}
+.hit-waveform {
+  width: 100%;
+  height: 50px;
+  border-radius: 4px;
+  display: block;
+}
+.hit-trigger {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 3px solid var(--pc, #888);
+  background: radial-gradient(circle at 38% 35%, rgba(255,255,255,0.08), #111116);
+  color: var(--pc, #888);
+  font-family: 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.07s;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+}
+.hit-trigger::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.hit-trigger:hover { box-shadow: 0 0 16px var(--pc, #888); }
+.hit-trigger.pressed {
+  background: radial-gradient(circle at 38% 35%, var(--pc, #888), #222);
+  box-shadow: 0 0 28px var(--pc, #888);
+  color: #000;
+  transform: scale(0.92);
+}
+.hit-name {
+  font-size: 10px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 140px; text-align: center;
+}
+.hit-dur { font-size: 12px; color: var(--pc, var(--accent)); font-weight: bold; min-height: 16px; }
+
+/* INFO SECTION */
+.pin-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+.pin-table td { padding: 3px 8px; border-bottom: 1px solid var(--border); color: var(--dim); }
+.pin-table td:first-child { color: var(--text); }
+.pin-table td:nth-child(2) { color: var(--accent); font-size: 11px; }
+
+/* GENERATE */
+.generate-section { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#size-breakdown { font-size: 11px; color: var(--dim); text-align: center; }
+.generate-btn {
+  padding: 14px 52px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px; letter-spacing: 3px;
+  background: linear-gradient(135deg, #002a1a, #000d08);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 6px; cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 16px rgba(0,229,160,0.15);
+}
+.generate-btn:hover {
+  background: linear-gradient(135deg, #005533, #001f0f);
+  box-shadow: 0 0 28px rgba(0,229,160,0.35);
+  transform: translateY(-1px);
+}
+.generate-btn:active { transform: translateY(0); }
+.generate-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.log {
+  width: 100%; max-height: 140px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 8px; font-size: 11px; line-height: 1.6;
+}
+.log-info { color: var(--dim); }
+.log-ok   { color: var(--accent); }
+.log-warn { color: var(--warn); }
+.log-err  { color: var(--err); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* TRIM PANEL */
+.trim-panel {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.trim-ctrl-row {
+  display: flex; align-items: center; gap: 3px;
+}
+.trim-lbl {
+  font-size: 8px; letter-spacing: 2px; color: var(--dim);
+  min-width: 38px;
+}
+.tarr {
+  width: 24px; height: 22px; flex-shrink: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--dim); font-family: 'Courier New', monospace;
+  font-size: 10px; cursor: pointer; border-radius: 3px;
+  user-select: none; -webkit-user-select: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.tarr:hover  { border-color: var(--accent); color: var(--accent); }
+.tarr:active { background: var(--bg3); }
+.trim-val {
+  flex: 1; text-align: center;
+  font-size: 11px; color: var(--accent); font-weight: bold;
+  min-width: 60px;
+}
+.trim-reset {
+  font-size: 8px; letter-spacing: 1px; color: var(--dim);
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; padding: 1px 4px; align-self: flex-end;
+}
+.trim-reset:hover { color: var(--err); }
+
+/* CONTROLS */
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.ctrl-row { display: flex; flex-direction: column; gap: 5px; }
+.ctrl-header { display: flex; justify-content: space-between; align-items: baseline; }
+.ctrl-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
+.ctrl-label-sub { font-size: 8px; letter-spacing: 1px; color: var(--border); }
+.ctrl-value { font-size: 13px; color: var(--accent); font-weight: bold; min-width: 66px; text-align: right; }
+input[type=range] {
+  width: 100%; accent-color: var(--accent); cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-mark">◈</span>
+    <span class="logo-title">PERCUSYNTH</span>
+    <span class="logo-sub">LOOP LOADER</span>
+  </div>
+  <div>
+    <span id="total-size">0.00 MB total</span>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <div class="section-title">LOOP SAMPLES — Q W E togglean el loop · hasta 8s · el loop es preciso, wrappea sin click</div>
+    <div class="loops-grid" id="loops-grid"></div>
+  </section>
+
+  <section>
+    <div class="section-title">HIT SAMPLES — teclas 1-6 · piezos ADC 4-7 · botones GPIO 45,47 · máx 3s · hasta 3 voces simultáneas</div>
+    <div class="hits-grid" id="hits-grid"></div>
+  </section>
+
+  <section>
+    <div class="section-title">CONTROLES EN VIVO — simulan pots &amp; IMU · afectan preview en tiempo real</div>
+    <div class="controls-grid">
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LOOP FADE <span class="ctrl-label-sub">crossfade wrap</span></span>
+          <span class="ctrl-value" id="cv-lfade">0 ms</span>
+        </div>
+        <input type="range" id="sl-lfade" min="0" max="50" value="0" step="1">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">PITCH / SPEED <span class="ctrl-label-sub">ADC 1</span></span>
+          <span class="ctrl-value" id="cv-pitch">1.00×</span>
+        </div>
+        <input type="range" id="sl-pitch" min="0" max="4095" value="2048">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">HPF CUTOFF <span class="ctrl-label-sub">ADC 2</span></span>
+          <span class="ctrl-value" id="cv-hpf">20 Hz</span>
+        </div>
+        <input type="range" id="sl-hpf" min="0" max="4095" value="0">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LPF FREQ <span class="ctrl-label-sub">IMU AccelX</span></span>
+          <span class="ctrl-value" id="cv-lpf-f">10.0 kHz</span>
+        </div>
+        <input type="range" id="sl-lpf-f" min="-32768" max="32767" value="0">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">LPF Q <span class="ctrl-label-sub">IMU AccelY</span></span>
+          <span class="ctrl-value" id="cv-lpf-q">0.71</span>
+        </div>
+        <input type="range" id="sl-lpf-q" min="-32768" max="32767" value="0">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-header">
+          <span class="ctrl-label">VOLUMEN <span class="ctrl-label-sub">ADC 10</span></span>
+          <span class="ctrl-value" id="cv-vol">100%</span>
+        </div>
+        <input type="range" id="sl-vol" min="0" max="4095" value="4095">
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">MAPA DE HARDWARE</div>
+    <table class="pin-table">
+      <tr><td>Loop A toggle</td><td>BTN GPIO 44</td><td style="color:var(--dim)">tecla Q</td></tr>
+      <tr><td>Loop B toggle</td><td>BTN GPIO 42</td><td style="color:var(--dim)">tecla W</td></tr>
+      <tr><td>Loop C toggle</td><td>BTN GPIO 0</td><td style="color:var(--dim)">tecla E</td></tr>
+      <tr><td>Hit 0</td><td>BTN GPIO 45</td><td style="color:var(--dim)">tecla 1</td></tr>
+      <tr><td>Hit 1</td><td>BTN GPIO 47</td><td style="color:var(--dim)">tecla 2</td></tr>
+      <tr><td>Hit 2–5</td><td>Piezo ADC 4,5,6,7</td><td style="color:var(--dim)">teclas 3-6</td></tr>
+      <tr><td>Pot 0 — Pitch</td><td>ADC 1</td><td style="color:var(--dim)">loops &amp; hits · 0.5× a 2.0×</td></tr>
+      <tr><td>Pot 1 — HPF cutoff</td><td>ADC 2</td><td style="color:var(--dim)">20 – 4000 Hz</td></tr>
+      <tr><td>Pot 2 — Sens. piezo</td><td>ADC 8</td><td style="color:var(--dim)">umbral de disparo</td></tr>
+      <tr><td>Pot 3 — Volumen</td><td>ADC 10</td><td style="color:var(--dim)">volumen master</td></tr>
+      <tr><td>IMU AccelX — LPF frec</td><td>MPU6050 I2C</td><td style="color:var(--dim)">200 – 20000 Hz</td></tr>
+      <tr><td>IMU AccelY — LPF Q</td><td>MPU6050 I2C</td><td style="color:var(--dim)">0.5 – 10.0</td></tr>
+    </table>
+  </section>
+
+  <section class="generate-section">
+    <div id="size-breakdown">Sin samples cargados</div>
+    <button class="generate-btn" id="generate-btn">⬇ GENERATE FIRMWARE (.ino)</button>
+    <div class="log" id="log"></div>
+  </section>
+
+</main>
+
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const SR           = 44100;
+const MAX_LOOP_S   = 8.0;
+const MAX_HIT_S    = 3.0;
+const NUM_LOOPS    = 3;
+const NUM_HITS     = 6;
+const LOOP_COLORS  = ['#00e5a0', '#00c8e5', '#0080ff'];
+const LOOP_KEYS    = ['q', 'w', 'e'];
+const LOOP_LABELS  = ['A', 'B', 'C'];
+const HIT_COLORS   = ['#ff6b6b', '#ffd93d', '#6bff6b', '#6bb8ff', '#d06bff', '#ff9f43'];
+const HIT_KEYS     = ['1', '2', '3', '4', '5', '6'];
+
+// ============================================================
+// STATE
+// ============================================================
+const loops = Array.from({length: NUM_LOOPS}, (_, i) => ({
+  idx: i, name: null, audioBuffer: null, int16Data: null,
+  rawData: null, rawInt16: null,   // rawData completo (Float32 y Int16 para display)
+  trimStart: 0, trimEnd: -1,       // samples; trimEnd=-1 significa largo completo
+  source: null, gain: null, playing: false
+}));
+
+let dragState = null;  // {idx, type:'start'|'end'}
+
+const hits = Array.from({length: NUM_HITS}, (_, i) => ({
+  idx: i, name: null, audioBuffer: null, int16Data: null
+}));
+
+let audioCtx = null;
+let g_pitch    = 1.0;
+let g_loopFade = 0;   // samples de crossfade en loop boundary
+let masterGain = null, hpfFilter = null, lpfFilter = null;
+
+function getCtx() {
+  if (!audioCtx) audioCtx = new AudioContext({ sampleRate: SR });
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function getChain() {
+  const ctx = getCtx();
+  if (!masterGain) {
+    hpfFilter = ctx.createBiquadFilter();
+    hpfFilter.type = 'highpass';
+    hpfFilter.frequency.value = 20;
+    hpfFilter.Q.value = 0.707;
+
+    lpfFilter = ctx.createBiquadFilter();
+    lpfFilter.type = 'lowpass';
+    lpfFilter.frequency.value = 10000;
+    lpfFilter.Q.value = 0.707;
+
+    masterGain = ctx.createGain();
+    masterGain.gain.value = 1.0;
+
+    hpfFilter.connect(lpfFilter);
+    lpfFilter.connect(masterGain);
+    masterGain.connect(ctx.destination);
+  }
+  return hpfFilter;
+}
+
+// ============================================================
+// LOOP ALIGNMENT TOOLS
+// ============================================================
+
+// Recorta inicio y fin al cruce de cero upward más cercano (max 200ms de búsqueda)
+function trimToZeroCrossings(data) {
+  const MAX_SEARCH = Math.min(data.length >> 2, Math.round(SR * 0.2));
+  let start = 0, end = data.length - 1;
+
+  for (let i = 1; i < MAX_SEARCH; i++) {
+    if (data[i - 1] < 0 && data[i] >= 0) { start = i; break; }
+  }
+  for (let i = data.length - 2; i > data.length - 1 - MAX_SEARCH; i--) {
+    if (data[i] < 0 && data[i + 1] >= 0) { end = i + 1; break; }
+  }
+  return (end > start) ? data.slice(start, end) : data;
+}
+
+// Crossfade end→start en F samples para que el wrap sea seamless.
+// Idea: al inicio del loop mezcla material del final (que suena igual a lo que
+// acaba de sonar) con el inicio real, eliminando el click de transición.
+function applyLoopCrossfade(data, fadeSamples) {
+  if (fadeSamples <= 0) return data;
+  const N = data.length;
+  const F = Math.min(fadeSamples, Math.floor(N / 8));
+  if (F <= 0) return data;
+  const out = new Float32Array(data);
+  for (let i = 0; i < F; i++) {
+    const t = i / F;          // 0 → 1
+    // i=0 → 100% end material (idéntico al sample previo al wrap)
+    // i=F → 100% start material
+    out[i] = data[i] * t + data[N - F + i] * (1 - t);
+  }
+  return out;
+}
+
+// Aplica trimEnd (no-destructivo) + crossfade desde rawData y reconstruye audioBuffer/int16Data.
+function reprocessLoop(idx) {
+  const lp = loops[idx];
+  if (!lp.rawData) return;
+
+  const start = lp.trimStart;
+  const end   = (lp.trimEnd >= 0) ? lp.trimEnd : lp.rawData.length;
+  const data  = (start > 0 || end < lp.rawData.length)
+    ? lp.rawData.slice(start, end)
+    : lp.rawData;
+  const faded = applyLoopCrossfade(data, g_loopFade);
+  const N = faded.length;
+  const finalBuffer = new AudioBuffer({ numberOfChannels: 1, length: N, sampleRate: SR });
+  finalBuffer.getChannelData(0).set(faded);
+  const finalInt16 = new Int16Array(N);
+  for (let i = 0; i < N; i++) {
+    finalInt16[i] = Math.round(Math.max(-32768, Math.min(32767, faded[i] * 32767)));
+  }
+
+  const wasPlaying = lp.playing;
+  if (wasPlaying) toggleLoop(idx);   // stop
+  lp.audioBuffer = finalBuffer;
+  lp.int16Data   = finalInt16;
+  if (wasPlaying) toggleLoop(idx);   // restart con nuevo buffer
+
+  renderLoop(idx);
+  updateSizeInfo();
+}
+
+// Auto-repeat al mantener presionado un botón (350ms delay, 80ms interval)
+function makeHoldBtn(btn, fn) {
+  let t, iv;
+  const go  = () => fn();
+  const up  = () => { clearTimeout(t); clearInterval(iv); };
+  const dn  = e => { e.preventDefault(); go(); t = setTimeout(() => { iv = setInterval(go, 80); }, 350); };
+  btn.addEventListener('mousedown',  dn);
+  btn.addEventListener('touchstart', dn, {passive:false});
+  btn.addEventListener('mouseup',   up);
+  btn.addEventListener('mouseleave', up);
+  btn.addEventListener('touchend',  up);
+}
+
+// Ajusta trimStart o trimEnd por stepMs milisegundos (puede ser negativo)
+function adjustTrim(idx, isEnd, stepMs) {
+  const lp  = loops[idx];
+  if (!lp.rawData) return;
+  const step = Math.round(Math.abs(stepMs) * SR / 1000);
+  const sign = stepMs > 0 ? 1 : -1;
+  const raw  = lp.rawData.length;
+
+  if (!isEnd) {
+    const maxStart = (lp.trimEnd >= 0 ? lp.trimEnd : raw) - 441;
+    lp.trimStart = Math.max(0, Math.min(lp.trimStart + sign * step, maxStart));
+  } else {
+    const cur    = lp.trimEnd >= 0 ? lp.trimEnd : raw;
+    const minEnd = lp.trimStart + 441;
+    const next   = Math.max(minEnd, Math.min(cur + sign * step, raw));
+    lp.trimEnd   = (next >= raw) ? -1 : next;
+  }
+  reprocessLoop(idx);
+  updateTrimLabels(idx);
+}
+
+function updateTrimLabels(idx) {
+  const lp = loops[idx];
+  if (!lp.rawData) return;
+  const rawLen   = lp.rawData.length;
+  const endSamp  = lp.trimEnd >= 0 ? lp.trimEnd : rawLen;
+  document.getElementById(`lts-ms-${idx}`).textContent = (lp.trimStart / SR * 1000).toFixed(1) + 'ms';
+  document.getElementById(`lte-ms-${idx}`).textContent = (endSamp     / SR * 1000).toFixed(1) + 'ms';
+  const durEl = document.getElementById(`ldur-${idx}`);
+  if (lp.int16Data) {
+    const cur = (lp.int16Data.length / SR).toFixed(3);
+    const raw = (rawLen / SR).toFixed(3);
+    const trimmed = lp.trimStart > 0 || lp.trimEnd >= 0;
+    durEl.textContent = trimmed ? `${cur}s  ←  ${raw}s` : `${cur}s`;
+  }
+  drawTrimMarkers(idx);
+}
+
+function drawTrimMarkers(idx) {
+  const lp = loops[idx];
+  if (!lp.rawInt16) return;
+  const canvas = document.getElementById(`lwave-${idx}`);
+  if (!canvas) return;
+  drawWaveform(canvas, lp.rawInt16, LOOP_COLORS[idx], true);
+
+  const W = canvas.width, H = canvas.height;
+  const c = canvas.getContext('2d');
+  const rawLen  = lp.rawInt16.length;
+  const startX  = Math.round((lp.trimStart / rawLen) * W);
+  const endSamp = lp.trimEnd >= 0 ? lp.trimEnd : rawLen;
+  const endX    = Math.round((endSamp / rawLen) * W);
+
+  // Zonas inactivas oscuras
+  if (startX > 0) { c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(0, 0, startX, H); }
+  if (endX < W)   { c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(endX, 0, W - endX, H); }
+
+  // Marcador INICIO (verde/accent)
+  c.strokeStyle = '#00e5a0'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(startX, 0); c.lineTo(startX, H); c.stroke();
+  c.fillStyle = '#00e5a0';
+  c.font = 'bold 9px Courier New'; c.textAlign = 'left';
+  c.fillText('I', startX + 3, 11);
+
+  // Marcador FIN (amarillo)
+  c.strokeStyle = '#ffcc44'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(endX, 0); c.lineTo(endX, H); c.stroke();
+  c.fillStyle = '#ffcc44';
+  c.textAlign = 'right';
+  c.fillText('F', endX - 3, 11);
+}
+
+function trimLoopTo(idx, targetMs) {
+  const lp = loops[idx];
+  if (!lp.rawData) return;
+  const targetSamples = Math.round(targetMs * SR / 1000);
+  const maxSamples    = lp.rawData.length;
+  if (targetSamples < 441 || targetSamples > maxSamples) {
+    log(`Loop ${LOOP_LABELS[idx]}: ${targetMs.toFixed(0)}ms fuera de rango (max ${(maxSamples/SR*1000).toFixed(0)}ms)`, 'warn');
+    return;
+  }
+  lp.trimEnd = targetSamples;
+  reprocessLoop(idx);
+  renderLoop(idx);
+  log(`Loop ${LOOP_LABELS[idx]}: trimmed a ${(targetSamples/SR*1000).toFixed(1)}ms (${(targetSamples/SR).toFixed(4)}s)`, 'ok');
+}
+
+// ============================================================
+// SAMPLE LOADING
+// ============================================================
+async function processBuffer(buf, maxSecs) {
+  const maxSamples = Math.ceil(Math.min(buf.duration, maxSecs) * SR);
+  const off = new OfflineAudioContext(1, maxSamples, SR);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start(0);
+  const rendered = await off.startRendering();
+
+  const raw = rendered.getChannelData(0);
+  let peak = 0;
+  for (const v of raw) if (Math.abs(v) > peak) peak = Math.abs(v);
+  const scale = peak > 0.001 ? 1.0 / peak : 1.0;
+
+  const normalized = new Float32Array(raw.length);
+  for (let i = 0; i < raw.length; i++) normalized[i] = raw[i] * scale;
+
+  const audioBuffer = new AudioBuffer({ numberOfChannels: 1, length: normalized.length, sampleRate: SR });
+  audioBuffer.getChannelData(0).set(normalized);
+
+  const int16Data = new Int16Array(normalized.length);
+  for (let i = 0; i < normalized.length; i++) {
+    int16Data[i] = Math.round(Math.max(-32768, Math.min(32767, normalized[i] * 32767)));
+  }
+  return { audioBuffer, int16Data, rawData: normalized };
+}
+
+async function loadLoop(idx, file) {
+  log(`Cargando loop ${LOOP_LABELS[idx]}: ${file.name} ...`);
+  try {
+    const ab  = await file.arrayBuffer();
+    const raw = await getCtx().decodeAudioData(ab);
+    const { rawData } = await processBuffer(raw, MAX_LOOP_S);
+
+    // Zero-crossing trim automático
+    const trimmed = trimToZeroCrossings(rawData);
+    const trimDiff = rawData.length - trimmed.length;
+    if (trimDiff > 0)
+      log(`Zero-cross trim: ${(trimDiff/SR*1000).toFixed(1)} ms recortados`, 'info');
+
+    // Int16 cacheado de rawData para display rápido en drawWaveform
+    const rawInt16 = new Int16Array(trimmed.length);
+    for (let k = 0; k < trimmed.length; k++) rawInt16[k] = Math.round(trimmed[k] * 32767);
+
+    loops[idx].name      = file.name.replace(/\.[^.]+$/, '');
+    loops[idx].rawData   = trimmed;
+    loops[idx].rawInt16  = rawInt16;
+    loops[idx].trimStart = 0;
+    loops[idx].trimEnd   = -1;
+
+    // Aplicar crossfade actual y construir audioBuffer/int16Data
+    const faded = applyLoopCrossfade(trimmed, g_loopFade);
+    const N = faded.length;
+    const finalBuffer = new AudioBuffer({ numberOfChannels: 1, length: N, sampleRate: SR });
+    finalBuffer.getChannelData(0).set(faded);
+    const finalInt16 = new Int16Array(N);
+    for (let i = 0; i < N; i++) {
+      finalInt16[i] = Math.round(Math.max(-32768, Math.min(32767, faded[i] * 32767)));
+    }
+    loops[idx].audioBuffer = finalBuffer;
+    loops[idx].int16Data   = finalInt16;
+
+    // Pre-llenar el input de duración manual
+    const msInput = document.getElementById(`ltrim-ms-${idx}`);
+    if (msInput) msInput.value = (N / SR * 1000).toFixed(1);
+
+    renderLoop(idx);
+    updateSizeInfo();
+    log(`OK loop ${LOOP_LABELS[idx]}: ${(N/SR).toFixed(3)}s · ${(N*2/1024).toFixed(1)} KB`, 'ok');
+  } catch(e) { log(`Error: ${e.message}`, 'err'); }
+}
+
+async function loadHit(idx, file) {
+  log(`Cargando hit ${idx}: ${file.name} ...`);
+  try {
+    const ab  = await file.arrayBuffer();
+    const raw = await getCtx().decodeAudioData(ab);
+    if (raw.duration > MAX_HIT_S)
+      log(`Aviso: hit truncado a ${MAX_HIT_S}s (original: ${raw.duration.toFixed(2)}s)`, 'warn');
+    const { audioBuffer, int16Data } = await processBuffer(raw, MAX_HIT_S);
+    hits[idx].name = file.name.replace(/\.[^.]+$/, '');
+    hits[idx].audioBuffer = audioBuffer;
+    hits[idx].int16Data   = int16Data;
+    renderHit(idx);
+    updateSizeInfo();
+    log(`OK hit ${idx}: ${audioBuffer.duration.toFixed(3)}s · ${(int16Data.length*2/1024).toFixed(1)} KB`, 'ok');
+  } catch(e) { log(`Error: ${e.message}`, 'err'); }
+}
+
+// ============================================================
+// PLAYBACK — LOOPS
+// ============================================================
+function toggleLoop(idx) {
+  const lp = loops[idx];
+  if (!lp.audioBuffer) return;
+  const ctx = getCtx();
+  const t   = ctx.currentTime;
+
+  if (lp.playing) {
+    // Stop with 10ms fade to avoid click
+    if (lp.gain) {
+      lp.gain.gain.cancelScheduledValues(t);
+      lp.gain.gain.setValueAtTime(lp.gain.gain.value, t);
+      lp.gain.gain.linearRampToValueAtTime(0, t + 0.01);
+    }
+    const src = lp.source, gn = lp.gain;
+    setTimeout(() => { try { src.stop(); src.disconnect(); gn.disconnect(); } catch(e){} }, 60);
+    lp.source  = null;
+    lp.gain    = null;
+    lp.playing = false;
+  } else {
+    // Start with 10ms fade-in
+    const dest = getChain();
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(1, t + 0.01);
+    gain.connect(dest);
+
+    const src = ctx.createBufferSource();
+    src.buffer = lp.audioBuffer;
+    src.loop   = true;
+    src.playbackRate.value = g_pitch;
+    src.connect(gain);
+    src.start(t);
+
+    lp.source  = src;
+    lp.gain    = gain;
+    lp.playing = true;
+  }
+  updateLoopButton(idx);
+  const padEl = document.getElementById(`lpad-${idx}`);
+  if (padEl) {
+    if (lp.playing) padEl.classList.add('playing');
+    else            padEl.classList.remove('playing');
+  }
+}
+
+function updateLoopButton(idx) {
+  const btn = document.getElementById(`ltrig-${idx}`);
+  if (!btn) return;
+  if (loops[idx].playing) btn.classList.add('playing');
+  else                    btn.classList.remove('playing');
+  btn.textContent = loops[idx].playing ? '■ STOP' : '▶ LOOP';
+}
+
+// ============================================================
+// PLAYBACK — HITS
+// ============================================================
+function triggerHit(idx) {
+  const h = hits[idx];
+  if (!h.audioBuffer) return;
+  const ctx  = getCtx();
+  const dest = getChain();
+  const t    = ctx.currentTime;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(1, t + 0.005);
+  gain.connect(dest);
+
+  const src = ctx.createBufferSource();
+  src.buffer = h.audioBuffer;
+  src.playbackRate.value = g_pitch;
+  src.connect(gain);
+  src.start(t);
+  src.onended = () => { try { gain.disconnect(); } catch(e){} };
+
+  flashHit(idx);
+}
+
+function flashHit(idx) {
+  const btn = document.getElementById(`htrig-${idx}`);
+  if (!btn) return;
+  btn.classList.add('pressed');
+  setTimeout(() => btn.classList.remove('pressed'), 120);
+}
+
+// ============================================================
+// WAVEFORM DRAWING
+// ============================================================
+function drawWaveform(canvas, int16Data, color, isLoop) {
+  const ctx2 = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx2.clearRect(0, 0, W, H);
+  ctx2.fillStyle = '#12121c';
+  ctx2.fillRect(0, 0, W, H);
+
+  if (!int16Data) {
+    ctx2.fillStyle = '#2a2a3c';
+    ctx2.font = '10px Courier New';
+    ctx2.textAlign = 'center';
+    ctx2.fillText(isLoop ? 'drag & drop WAV/MP3' : 'drag & drop', W/2, H/2+4);
+    return;
+  }
+
+  const step = int16Data.length / W;
+  ctx2.fillStyle = color + '33';
+  for (let x = 0; x < W; x++) {
+    let mn = 0, mx = 0;
+    const i0 = Math.floor(x * step);
+    const i1 = Math.min(Math.floor((x+1)*step), int16Data.length);
+    for (let j = i0; j < i1; j++) {
+      const v = int16Data[j] / 32768;
+      if (v < mn) mn = v; if (v > mx) mx = v;
+    }
+    const yT = (H/2) - mx*(H/2-2);
+    const yB = (H/2) - mn*(H/2-2);
+    ctx2.fillRect(x, yT, 1, Math.max(1, yB-yT));
+  }
+  ctx2.strokeStyle = color + 'cc';
+  ctx2.lineWidth = 1;
+  ctx2.beginPath();
+  for (let x = 0; x < W; x++) {
+    const i = Math.floor(x * step);
+    const y = (H/2) - (int16Data[i]/32768)*(H/2-2);
+    x === 0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+  }
+  ctx2.stroke();
+
+  const dur = (int16Data.length / SR).toFixed(3);
+  const kb  = (int16Data.length*2/1024).toFixed(0);
+  ctx2.fillStyle = color + 'bb';
+  ctx2.font = '9px Courier New';
+  ctx2.textAlign = 'right';
+  ctx2.fillText(`${dur}s · ${kb}KB`, W-4, H-4);
+}
+
+// ============================================================
+// UI RENDERING
+// ============================================================
+function createLoops() {
+  const grid = document.getElementById('loops-grid');
+  for (let i = 0; i < NUM_LOOPS; i++) {
+    const col = LOOP_COLORS[i];
+    const el  = document.createElement('div');
+    el.className = 'loop-pad';
+    el.id = `lpad-${i}`;
+    el.style.setProperty('--pc', col);
+    el.style.borderColor = col + '55';
+    el.innerHTML = `
+      <div class="loop-badge">LOOP ${LOOP_LABELS[i]}</div>
+      <canvas class="loop-waveform" id="lwave-${i}" width="260" height="70" style="cursor:crosshair"></canvas>
+      <button class="loop-trigger" id="ltrig-${i}"
+              style="--pc:${col}; border-color:${col}; color:${col}">
+        ▶ LOOP
+      </button>
+      <div class="loop-info">
+        <div class="loop-name" id="lname-${i}">— vacío —</div>
+        <div class="loop-dur"  id="ldur-${i}"></div>
+      </div>
+
+      <div class="trim-panel" id="ltrim-panel-${i}" style="display:none">
+        <div class="trim-ctrl-row">
+          <span class="trim-lbl">INICIO</span>
+          <button class="tarr" id="lss--10-${i}">«</button>
+          <button class="tarr" id="lss--1-${i}">‹</button>
+          <span class="trim-val" id="lts-ms-${i}">0.0ms</span>
+          <button class="tarr" id="lss-1-${i}">›</button>
+          <button class="tarr" id="lss-10-${i}">»</button>
+        </div>
+        <div class="trim-ctrl-row">
+          <span class="trim-lbl">FIN</span>
+          <button class="tarr" id="lse--10-${i}">«</button>
+          <button class="tarr" id="lse--1-${i}">‹</button>
+          <span class="trim-val" id="lte-ms-${i}">0.0ms</span>
+          <button class="tarr" id="lse-1-${i}">›</button>
+          <button class="tarr" id="lse-10-${i}">»</button>
+        </div>
+        <button class="trim-reset" id="ltrim-reset-${i}">↺ restaurar</button>
+      </div>
+
+      <label class="load-label" for="lfile-${i}">Cargar Sample</label>
+      <input type="file" id="lfile-${i}" accept="audio/*" hidden>
+      <button class="clear-btn" id="lclr-${i}" style="display:none">✕ quitar</button>
+    `;
+    grid.appendChild(el);
+
+    // Botones de ajuste fino (INICIO y FIN) con auto-repeat al mantener
+    const steps = [[-10,'lss--10'], [-1,'lss--1'], [1,'lss-1'], [10,'lss-10'],
+                   [-10,'lse--10'], [-1,'lse--1'], [1,'lse-1'], [10,'lse-10']];
+    for (const [ms, id] of steps) {
+      const btn   = document.getElementById(`${id}-${i}`);
+      const isEnd = id.startsWith('lse');
+      makeHoldBtn(btn, () => adjustTrim(i, isEnd, ms));
+    }
+
+    // Reset al largo completo
+    document.getElementById(`ltrim-reset-${i}`).addEventListener('click', () => {
+      loops[i].trimStart = 0;
+      loops[i].trimEnd   = -1;
+      reprocessLoop(i);
+      updateTrimLabels(i);
+      renderLoop(i);
+      log(`Loop ${LOOP_LABELS[i]}: trim restaurado`, 'ok');
+    });
+
+    // Drag de marcadores sobre el waveform
+    const canvas = document.getElementById(`lwave-${i}`);
+    canvas.addEventListener('mousedown', e => {
+      const lp = loops[i];
+      if (!lp.rawInt16) return;
+      const rect   = canvas.getBoundingClientRect();
+      const x      = e.clientX - rect.left;
+      const rawLen = lp.rawInt16.length;
+      const startX = (lp.trimStart / rawLen) * canvas.width;
+      const endSmp = lp.trimEnd >= 0 ? lp.trimEnd : rawLen;
+      const endX   = (endSmp / rawLen) * canvas.width;
+      if (Math.abs(x - startX) <= 10) dragState = {idx: i, type: 'start'};
+      else if (Math.abs(x - endX) <= 10) dragState = {idx: i, type: 'end'};
+    });
+    canvas.addEventListener('mousemove', e => {
+      if (dragState && dragState.idx === i) return;  // handled globally
+      const lp = loops[i];
+      if (!lp.rawInt16) { canvas.style.cursor = 'default'; return; }
+      const rect   = canvas.getBoundingClientRect();
+      const x      = e.clientX - rect.left;
+      const rawLen = lp.rawInt16.length;
+      const startX = (lp.trimStart / rawLen) * canvas.width;
+      const endSmp = lp.trimEnd >= 0 ? lp.trimEnd : rawLen;
+      const endX   = (endSmp / rawLen) * canvas.width;
+      canvas.style.cursor =
+        (Math.abs(x - startX) <= 10 || Math.abs(x - endX) <= 10) ? 'ew-resize' : 'default';
+    });
+
+    document.getElementById(`lfile-${i}`).addEventListener('change', async e => {
+      if (e.target.files[0]) await loadLoop(i, e.target.files[0]);
+      e.target.value = '';
+    });
+    document.getElementById(`lclr-${i}`).addEventListener('click', () => {
+      if (loops[i].playing) toggleLoop(i);
+      loops[i].name = null; loops[i].audioBuffer = null; loops[i].int16Data = null;
+      loops[i].rawData = null; loops[i].rawInt16 = null;
+      loops[i].trimStart = 0; loops[i].trimEnd = -1;
+      renderLoop(i); updateSizeInfo();
+    });
+    el.addEventListener('dragover', e => { e.preventDefault(); el.style.borderColor = col; });
+    el.addEventListener('dragleave', () => { el.style.borderColor = col + '55'; });
+    el.addEventListener('drop', async e => {
+      e.preventDefault(); el.style.borderColor = col + '55';
+      if (e.dataTransfer.files[0]) await loadLoop(i, e.dataTransfer.files[0]);
+    });
+    document.getElementById(`ltrig-${i}`).addEventListener('click', () => toggleLoop(i));
+  }
+}
+
+function renderLoop(idx) {
+  const lp = loops[idx];
+  document.getElementById(`lname-${idx}`).textContent = lp.name ?? '— vacío —';
+
+  const hasData = !!lp.int16Data;
+  document.getElementById(`lclr-${idx}`).style.display   = hasData ? '' : 'none';
+  document.getElementById(`ltrim-panel-${idx}`).style.display = lp.rawData ? '' : 'none';
+
+  if (hasData) {
+    const curS   = (lp.int16Data.length / SR).toFixed(3);
+    const rawS   = lp.rawData ? (lp.rawData.length / SR).toFixed(3) : curS;
+    const trimmed = lp.trimStart > 0 || lp.trimEnd >= 0;
+    document.getElementById(`ldur-${idx}`).textContent =
+      trimmed ? `${curS}s  ←  ${rawS}s` : `${curS}s`;
+  } else {
+    document.getElementById(`ldur-${idx}`).textContent = '';
+  }
+
+  // Waveform siempre muestra rawInt16 (completo) con marcadores encima
+  if (lp.rawInt16) {
+    drawTrimMarkers(idx);   // llama a drawWaveform + overlays
+  } else {
+    const canvas = document.getElementById(`lwave-${idx}`);
+    drawWaveform(canvas, null, LOOP_COLORS[idx], true);
+  }
+
+  // Actualizar labels de posición
+  if (lp.rawData) updateTrimLabels(idx);
+}
+
+function createHits() {
+  const grid = document.getElementById('hits-grid');
+  for (let i = 0; i < NUM_HITS; i++) {
+    const col = HIT_COLORS[i];
+    const el  = document.createElement('div');
+    el.className = 'hit-pad';
+    el.id = `hpad-${i}`;
+    el.style.setProperty('--pc', col);
+    const src = i < 2
+      ? `BTN GPIO ${[45,47][i]}`
+      : `Piezo ADC ${[4,5,6,7][i-2]}`;
+    el.innerHTML = `
+      <div class="hit-badge">HIT ${i} · ${src}</div>
+      <canvas class="hit-waveform" id="hwave-${i}" width="180" height="50"></canvas>
+      <button class="hit-trigger" id="htrig-${i}"
+              style="--pc:${col}; border-color:${col}; color:${col}">
+        ${HIT_KEYS[i]}
+      </button>
+      <div class="hit-name" id="hname-${i}">— vacío —</div>
+      <div class="hit-dur"  id="hdur-${i}"></div>
+      <label class="load-label" for="hfile-${i}">Cargar</label>
+      <input type="file" id="hfile-${i}" accept="audio/*" hidden>
+      <button class="clear-btn" id="hclr-${i}" style="display:none">✕</button>
+    `;
+    grid.appendChild(el);
+
+    document.getElementById(`hfile-${i}`).addEventListener('change', async e => {
+      if (e.target.files[0]) await loadHit(i, e.target.files[0]);
+      e.target.value = '';
+    });
+    document.getElementById(`hclr-${i}`).addEventListener('click', () => {
+      hits[i].name = null; hits[i].audioBuffer = null; hits[i].int16Data = null;
+      renderHit(i); updateSizeInfo();
+    });
+    el.addEventListener('dragover', e => { e.preventDefault(); el.style.borderColor = col; });
+    el.addEventListener('dragleave', () => { el.style.borderColor = ''; });
+    el.addEventListener('drop', async e => {
+      e.preventDefault(); el.style.borderColor = '';
+      if (e.dataTransfer.files[0]) await loadHit(i, e.dataTransfer.files[0]);
+    });
+    document.getElementById(`htrig-${i}`).addEventListener('mousedown', e => {
+      e.preventDefault(); triggerHit(i);
+    });
+    document.getElementById(`htrig-${i}`).addEventListener('touchstart', e => {
+      e.preventDefault(); triggerHit(i);
+    }, {passive:false});
+  }
+}
+
+function renderHit(idx) {
+  const h = hits[idx];
+  document.getElementById(`hname-${idx}`).textContent = h.name ?? '— vacío —';
+  const dur = h.int16Data ? (h.int16Data.length/SR).toFixed(3)+'s' : '';
+  document.getElementById(`hdur-${idx}`).textContent = dur;
+  document.getElementById(`hclr-${idx}`).style.display = h.int16Data ? '' : 'none';
+  const canvas = document.getElementById(`hwave-${idx}`);
+  drawWaveform(canvas, h.int16Data, HIT_COLORS[idx], false);
+}
+
+// ============================================================
+// SIZE INFO
+// ============================================================
+function updateSizeInfo() {
+  let total = 0;
+  const parts = [];
+  for (const lp of loops) {
+    if (lp.int16Data) {
+      const b = lp.int16Data.length * 2;
+      total += b;
+      parts.push(`Loop${LOOP_LABELS[lp.idx]}: ${(b/1024).toFixed(0)}KB`);
+    }
+  }
+  for (const h of hits) {
+    if (h.int16Data) {
+      const b = h.int16Data.length * 2;
+      total += b;
+      parts.push(`Hit${h.idx}: ${(b/1024).toFixed(0)}KB`);
+    }
+  }
+  const mb = total/1024/1024;
+  document.getElementById('total-size').textContent = `${mb.toFixed(2)} MB total`;
+  document.getElementById('size-breakdown').textContent =
+    parts.length ? parts.join('  ·  ') : 'Sin samples cargados';
+  // A 22050 Hz, 3 loops×8s + 6 hits×3s = máx ~2.1MB. Huge APP (3MB) aguanta.
+  if (mb > 2.8) log(`Aviso: ${mb.toFixed(2)} MB — cerca del límite de Huge APP (3MB). Considera acortar samples.`, 'warn');
+  else if (mb > 0) log(`${mb.toFixed(2)} MB — OK para Huge APP (3MB). ✓`, 'ok');
+}
+
+// ============================================================
+// LOG
+// ============================================================
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const d  = document.createElement('div');
+  d.className = `log-${type}`;
+  d.textContent = `> ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// CODE GENERATION
+// ============================================================
+function int16ToC(arr, name) {
+  const PL = 16;
+  const lines = [];
+  lines.push(`// ${name}: ${arr.length} samples (${(arr.length*2/1024).toFixed(1)} KB, ${(arr.length/SR).toFixed(4)} s)`);
+  lines.push(`const int16_t ${name}[] PROGMEM = {`);
+  for (let i = 0; i < arr.length; i += PL) {
+    const chunk = Array.from(arr.slice(i, i+PL)).join(', ');
+    lines.push('  ' + chunk + (i+PL < arr.length ? ',' : ''));
+  }
+  lines.push('};');
+  lines.push(`const uint32_t ${name}_LEN = ${arr.length}UL;`);
+  return lines.join('\n');
+}
+
+function generateFirmware() {
+  const L = [];
+
+  // Header
+  L.push(`// ================================================================`);
+  L.push(`// PercuSynth — Loop Player Firmware`);
+  L.push(`// Generado por PercuSynth Loop Loader`);
+  L.push(`// ${new Date().toLocaleString()}`);
+  L.push(`//`);
+  L.push(`// Board : ESP32-S3`);
+  L.push(`// Audio : PCM5102 I2S @ 44100 Hz 16-bit stereo`);
+  L.push(`// IMU   : MPU6050 I2C SDA=21 SCL=38`);
+  L.push(`//`);
+  L.push(`// LOOPS (3): BTN GPIO 44/42/0 togglean cada loop`);
+  L.push(`//   El loop wrappea sin glitch — s1 en el último sample lee desde inicio`);
+  L.push(`//`);
+  L.push(`// HITS (6): BTN GPIO 45/47 · Piezo ADC 4/5/6/7`);
+  L.push(`//   3-voice polyphony con voice stealing (roba la voz más avanzada)`);
+  L.push(`//`);
+  L.push(`// POTS: ADC1=pitch(hits) ADC2=HPF ADC8=sensibilidad ADC10=volumen`);
+  L.push(`// IMU : AccelX=LPF_freq  AccelY=LPF_Q`);
+  L.push(`// ================================================================`);
+  L.push(`#include <Arduino.h>`);
+  L.push(`#include "driver/i2s_std.h"`);
+  L.push(`#include <Wire.h>`);
+  L.push(`#include <math.h>`);
+  L.push(``);
+
+  // Sample data — loops
+  L.push(`// ================================================================`);
+  L.push(`// LOOP SAMPLE DATA`);
+  L.push(`// ================================================================`);
+  L.push(``);
+  for (let i = 0; i < NUM_LOOPS; i++) {
+    const lp = loops[i];
+    if (lp.int16Data) {
+      L.push(int16ToC(lp.int16Data, `LOOP_${i}`));
+    } else {
+      L.push(`// LOOP_${i}: no cargado`);
+      L.push(`const int16_t LOOP_${i}[] PROGMEM = {0, 0};`);
+      L.push(`const uint32_t LOOP_${i}_LEN = 0UL;`);
+    }
+    L.push(``);
+  }
+
+  // Sample data — hits
+  L.push(`// ================================================================`);
+  L.push(`// HIT SAMPLE DATA`);
+  L.push(`// ================================================================`);
+  L.push(``);
+  for (let i = 0; i < NUM_HITS; i++) {
+    const h = hits[i];
+    if (h.int16Data) {
+      L.push(int16ToC(h.int16Data, `HIT_${i}`));
+    } else {
+      L.push(`// HIT_${i}: no cargado`);
+      L.push(`const int16_t HIT_${i}[] PROGMEM = {0, 0};`);
+      L.push(`const uint32_t HIT_${i}_LEN = 0UL;`);
+    }
+    L.push(``);
+  }
+
+  // Constants
+  L.push(`// ================================================================`);
+  L.push(`// CONSTANTES Y PINOUT`);
+  L.push(`// ================================================================`);
+  L.push(`#define SAMPLE_RATE   44100`);
+  L.push(`#define BUF_SAMPLES   128`);
+  L.push(`#define NUM_LOOPS     3`);
+  L.push(`#define NUM_HITS      6`);
+  L.push(`#define NUM_HIT_VOICES 3`);
+  L.push(`#define PIN_I2S_LRCK  39`);
+  L.push(`#define PIN_I2S_DIN   40`);
+  L.push(`#define PIN_I2S_BCK   41`);
+  L.push(``);
+  L.push(`// Botones: 0-2 = loops A/B/C, 3-4 = hit 0/1`);
+  L.push(`const uint8_t BTN_PINS[5]   = {44, 42, 0, 45, 47};`);
+  L.push(`// Piezos: hit 2-5`);
+  L.push(`const uint8_t PIEZO_PINS[4] = {4, 5, 6, 7};`);
+  L.push(`// Pots: pitch, HPF, sensibilidad, volumen`);
+  L.push(`const uint8_t POT_PINS[4]   = {1, 2, 8, 10};`);
+  L.push(``);
+  L.push(`// Inicializados en setup() para evitar crash en static-init de C++`);
+  L.push(`const int16_t* LOOP_DATA[NUM_LOOPS];`);
+  L.push(`uint32_t       LOOP_LENS[NUM_LOOPS];`);
+  L.push(`const int16_t* HIT_DATA[NUM_HITS];`);
+  L.push(`uint32_t       HIT_LENS[NUM_HITS];`);
+  L.push(``);
+
+  // Structs
+  L.push(`// ================================================================`);
+  L.push(`// STRUCTS DE VOCES`);
+  L.push(`// ================================================================`);
+  L.push(`struct LoopVoice {`);
+  L.push(`  const int16_t* data;`);
+  L.push(`  uint32_t       length;`);
+  L.push(`  float          pos;`);
+  L.push(`  bool           active;`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`struct HitVoice {`);
+  L.push(`  const int16_t* data;`);
+  L.push(`  uint32_t       length;`);
+  L.push(`  float          pos;`);
+  L.push(`  float          pitchRatio;`);
+  L.push(`  float          velocity;`);
+  L.push(`  bool           active;`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`LoopVoice loop_v[NUM_LOOPS];`);
+  L.push(`HitVoice  hit_v[NUM_HIT_VOICES];`);
+  L.push(``);
+
+  // Filters
+  L.push(`// ================================================================`);
+  L.push(`// FILTROS BIQUAD — HPF (pot) + LPF (IMU)`);
+  L.push(`// ================================================================`);
+  L.push(`static float hpf_x1=0,hpf_x2=0,hpf_y1=0,hpf_y2=0;`);
+  L.push(`static float hpf_b0=1,hpf_b1=0,hpf_b2=0,hpf_a1=0,hpf_a2=0;`);
+  L.push(`static float lpf_x1=0,lpf_x2=0,lpf_y1=0,lpf_y2=0;`);
+  L.push(`static float lpf_b0=1,lpf_b1=0,lpf_b2=0,lpf_a1=0,lpf_a2=0;`);
+  L.push(``);
+  L.push(`void computeHPF(float freq, float Q) {`);
+  L.push(`  float w = 2.0f * (float)M_PI * freq / SAMPLE_RATE;`);
+  L.push(`  float c = cosf(w), s = sinf(w);`);
+  L.push(`  float a = s / (2.0f * Q);`);
+  L.push(`  float n = 1.0f / (1.0f + a);`);
+  L.push(`  hpf_b0 =  (1.0f + c) * 0.5f * n;`);
+  L.push(`  hpf_b1 = -(1.0f + c) * n;`);
+  L.push(`  hpf_b2 =  hpf_b0;`);
+  L.push(`  hpf_a1 = -2.0f * c * n;`);
+  L.push(`  hpf_a2 =  (1.0f - a) * n;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`inline float applyHPF(float x) {`);
+  L.push(`  float y = hpf_b0*x + hpf_b1*hpf_x1 + hpf_b2*hpf_x2`);
+  L.push(`              - hpf_a1*hpf_y1 - hpf_a2*hpf_y2;`);
+  L.push(`  hpf_x2=hpf_x1; hpf_x1=x; hpf_y2=hpf_y1; hpf_y1=y;`);
+  L.push(`  return y;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`void computeLPF(float freq, float Q) {`);
+  L.push(`  float w = 2.0f * (float)M_PI * freq / SAMPLE_RATE;`);
+  L.push(`  float c = cosf(w), s = sinf(w);`);
+  L.push(`  float a = s / (2.0f * Q);`);
+  L.push(`  float n = 1.0f / (1.0f + a);`);
+  L.push(`  lpf_b0 = (1.0f - c) * 0.5f * n;`);
+  L.push(`  lpf_b1 = (1.0f - c) * n;`);
+  L.push(`  lpf_b2 = lpf_b0;`);
+  L.push(`  lpf_a1 = -2.0f * c * n;`);
+  L.push(`  lpf_a2 = (1.0f - a) * n;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`inline float applyLPF(float x) {`);
+  L.push(`  float y = lpf_b0*x + lpf_b1*lpf_x1 + lpf_b2*lpf_x2`);
+  L.push(`              - lpf_a1*lpf_y1 - lpf_a2*lpf_y2;`);
+  L.push(`  lpf_x2=lpf_x1; lpf_x1=x; lpf_y2=lpf_y1; lpf_y1=y;`);
+  L.push(`  return y;`);
+  L.push(`}`);
+  L.push(``);
+  // Soft limiter
+  L.push(`// Soft limiter: transparente hasta 0.85, saturación suave hasta 1.0`);
+  L.push(`inline float softLimit(float x) {`);
+  L.push(`  const float knee = 0.85f;`);
+  L.push(`  float a = fabsf(x);`);
+  L.push(`  if (a <= knee) return x;`);
+  L.push(`  float s = (x < 0.0f) ? -1.0f : 1.0f;`);
+  L.push(`  return s * (knee + (1.0f - knee) * tanhf((a - knee) / (1.0f - knee)));`);
+  L.push(`}`);
+  L.push(``);
+
+  // IMU — MPU6050 raw I2C
+  L.push(`// ================================================================`);
+  L.push(`// IMU — MPU6050 I2C SDA=21 SCL=38`);
+  L.push(`// AccelX → LPF freq (200–20000 Hz log), AccelY → LPF Q (0.5–10.0)`);
+  L.push(`// ================================================================`);
+  L.push(`#define MPU_ADDR 0x68`);
+  L.push(``);
+  L.push(`void initIMU() {`);
+  L.push(`  Wire.begin(21, 38);`);
+  L.push(`  Wire.beginTransmission(MPU_ADDR);`);
+  L.push(`  Wire.write(0x6B); Wire.write(0);  // wake up`);
+  L.push(`  Wire.endTransmission(true);`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`bool readIMU(int16_t &ax, int16_t &ay) {`);
+  L.push(`  Wire.beginTransmission(MPU_ADDR);`);
+  L.push(`  Wire.write(0x3B);`);
+  L.push(`  if (Wire.endTransmission(false) != 0) return false;`);
+  L.push(`  Wire.requestFrom((uint8_t)MPU_ADDR, (uint8_t)4, (uint8_t)true);`);
+  L.push(`  if (Wire.available() < 4) return false;`);
+  L.push(`  ax = (int16_t)((Wire.read() << 8) | Wire.read());`);
+  L.push(`  ay = (int16_t)((Wire.read() << 8) | Wire.read());`);
+  L.push(`  return true;`);
+  L.push(`}`);
+  L.push(``);
+
+  // I2S
+  L.push(`// ================================================================`);
+  L.push(`// I2S (PCM5102)`);
+  L.push(`// ================================================================`);
+  L.push(`i2s_chan_handle_t tx_handle;`);
+  L.push(``);
+  L.push(`void initI2S() {`);
+  L.push(`  i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);`);
+  L.push(`  i2s_new_channel(&cc, &tx_handle, NULL);`);
+  L.push(`  i2s_std_config_t sc = {`);
+  L.push(`    .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),`);
+  L.push(`    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(`);
+  L.push(`                  I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),`);
+  L.push(`    .gpio_cfg = {`);
+  L.push(`      .mclk = I2S_GPIO_UNUSED,`);
+  L.push(`      .bclk = (gpio_num_t)PIN_I2S_BCK,`);
+  L.push(`      .ws   = (gpio_num_t)PIN_I2S_LRCK,`);
+  L.push(`      .dout = (gpio_num_t)PIN_I2S_DIN,`);
+  L.push(`      .din  = I2S_GPIO_UNUSED`);
+  L.push(`    }`);
+  L.push(`  };`);
+  L.push(`  i2s_channel_init_std_mode(tx_handle, &sc);`);
+  L.push(`  i2s_channel_enable(tx_handle);`);
+  L.push(`}`);
+  L.push(``);
+
+  // Helpers
+  L.push(`// ================================================================`);
+  L.push(`// HELPERS`);
+  L.push(`// ================================================================`);
+  L.push(`int readPot(uint8_t pin) {`);
+  L.push(`  int s = 0;`);
+  L.push(`  for (int i = 0; i < 8; i++) s += analogRead(pin);`);
+  L.push(`  return s >> 3;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Dispara una voz de hit con voice stealing si no hay voces libres`);
+  L.push(`float g_pitchRatio = 1.0f;`);
+  L.push(``);
+  L.push(`void triggerHit(int sampleIdx, float velocity) {`);
+  L.push(`  if (HIT_LENS[sampleIdx] == 0) return;`);
+  L.push(`  int voice = -1;`);
+  L.push(`  for (int i = 0; i < NUM_HIT_VOICES; i++) {`);
+  L.push(`    if (!hit_v[i].active) { voice = i; break; }`);
+  L.push(`  }`);
+  L.push(`  if (voice < 0) {`);
+  L.push(`    // Roba la voz más avanzada (mayor pos/length)`);
+  L.push(`    float mx = -1.0f;`);
+  L.push(`    for (int i = 0; i < NUM_HIT_VOICES; i++) {`);
+  L.push(`      float prog = hit_v[i].pos / (float)hit_v[i].length;`);
+  L.push(`      if (prog > mx) { mx = prog; voice = i; }`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(`  hit_v[voice].data       = HIT_DATA[sampleIdx];`);
+  L.push(`  hit_v[voice].length     = HIT_LENS[sampleIdx];`);
+  L.push(`  hit_v[voice].pos        = 0.0f;`);
+  L.push(`  hit_v[voice].pitchRatio = g_pitchRatio;`);
+  L.push(`  hit_v[voice].velocity   = velocity;`);
+  L.push(`  hit_v[voice].active     = true;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(``);
+
+  // Setup
+  L.push(`// ================================================================`);
+  L.push(`// SETUP`);
+  L.push(`// ================================================================`);
+  L.push(`bool     btnPrev[5]        = {};`);
+  L.push(`uint32_t btnLastMs[5]      = {};`);
+  L.push(`uint32_t piezoLastMs[4]    = {};`);
+  L.push(`#define  DEBOUNCE_MS  50`);
+  L.push(`#define  PIEZO_DEBOUNCE_MS 60`);
+  L.push(``);
+  L.push(`void setup() {`);
+  L.push(`  Serial.begin(115200);`);
+  L.push(`  Serial.println("BOOT");`);
+  L.push(`  // Inicializar arrays de samples aqui para evitar crash en static-init`);
+  L.push(`  const int16_t* ld[] = {LOOP_0,LOOP_1,LOOP_2};`);
+  L.push(`  const uint32_t ll[] = {LOOP_0_LEN,LOOP_1_LEN,LOOP_2_LEN};`);
+  L.push(`  const int16_t* hd[] = {HIT_0,HIT_1,HIT_2,HIT_3,HIT_4,HIT_5};`);
+  L.push(`  const uint32_t hl[] = {HIT_0_LEN,HIT_1_LEN,HIT_2_LEN,HIT_3_LEN,HIT_4_LEN,HIT_5_LEN};`);
+  L.push(`  for(int i=0;i<NUM_LOOPS;i++){LOOP_DATA[i]=ld[i];LOOP_LENS[i]=ll[i];}`);
+  L.push(`  for(int i=0;i<NUM_HITS;i++){HIT_DATA[i]=hd[i];HIT_LENS[i]=hl[i];}`);
+  L.push(`  Serial.println("PercuSynth Loop Player — iniciando...");`);
+  L.push(`  analogReadResolution(12);`);
+  L.push(`  for (int i = 0; i < 5; i++) pinMode(BTN_PINS[i], INPUT_PULLUP);`);
+  L.push(`  for (int i = 0; i < NUM_LOOPS; i++)      loop_v[i].active = false;`);
+  L.push(`  for (int i = 0; i < NUM_HIT_VOICES; i++) hit_v[i].active  = false;`);
+  L.push(`  initI2S();`);
+  L.push(`  initIMU();`);
+  L.push(`  computeLPF(10000.0f, 0.707f);`);
+  L.push(`  computeHPF(20.0f,    0.707f);`);
+  L.push(`  Serial.println("Listo.");`);
+  L.push(`  for (int i = 0; i < NUM_LOOPS; i++)`);
+  L.push(`    Serial.printf("  Loop %d: %u samples (%.3fs)\\n", i, LOOP_LENS[i], LOOP_LENS[i]/(float)SAMPLE_RATE);`);
+  L.push(`  for (int i = 0; i < NUM_HITS; i++)`);
+  L.push(`    Serial.printf("  Hit  %d: %u samples (%.3fs)\\n", i, HIT_LENS[i], HIT_LENS[i]/(float)SAMPLE_RATE);`);
+  L.push(`  Serial.println("Pots: ADC1=pitch ADC2=HPF ADC8=piezoSens ADC10=vol");`);
+  L.push(`}`);
+  L.push(``);
+
+  // Loop
+  L.push(`// ================================================================`);
+  L.push(`// LOOP`);
+  L.push(`// ================================================================`);
+  L.push(`void loop() {`);
+  L.push(`  uint32_t now = millis();`);
+  L.push(``);
+  L.push(`  // --- Leer pots ---`);
+  L.push(`  float potPitch = readPot(POT_PINS[0]) / 4095.0f;  // 0..1`);
+  L.push(`  float potHPF   = readPot(POT_PINS[1]) / 4095.0f;`);
+  L.push(`  float potSens  = readPot(POT_PINS[2]) / 4095.0f;  // sensibilidad piezo`);
+  L.push(`  // Volumen: rango 0.1–1.0 (nunca cero para evitar silencio total con pot a cero)`);
+  L.push(`  float potVol   = 0.1f + readPot(POT_PINS[3]) / 4095.0f * 0.9f;`);
+  L.push(``);
+  L.push(`  // Pitch: centro(0.5)=1.0x, izq=0.5x (octava abajo), der=2.0x (octava arriba)`);
+  L.push(`  g_pitchRatio = powf(2.0f, (potPitch - 0.5f) * 2.0f);`);
+  L.push(``);
+  L.push(`  // HPF: pot^2 para respuesta musical, rango 20–4000 Hz`);
+  L.push(`  float hpfFreq = 20.0f + potHPF * potHPF * 3980.0f;`);
+  L.push(`  computeHPF(hpfFreq, 0.707f);`);
+  L.push(``);
+  L.push(`  // --- IMU → LPF (50 Hz) ---`);
+  L.push(`  static uint32_t lastIMU = 0;`);
+  L.push(`  if (now - lastIMU >= 20) {`);
+  L.push(`    lastIMU = now;`);
+  L.push(`    int16_t imuX = 0, imuY = 0;`);
+  L.push(`    if (readIMU(imuX, imuY)) {`);
+  L.push(`      float xn = constrain(imuX / 16384.0f, -1.0f, 1.0f);`);
+  L.push(`      float yn = constrain(imuY / 16384.0f, -1.0f, 1.0f);`);
+  L.push(`      // Log mapping: flat=10kHz, tilt→ 200Hz o 20kHz`);
+  L.push(`      float lpfFreq = 200.0f * powf(100.0f, (xn + 1.0f) * 0.5f);`);
+  L.push(`      float lpfQ    = 0.5f + (yn + 1.0f) * 0.5f * 9.5f;`);
+  L.push(`      computeLPF(lpfFreq, lpfQ);`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // --- Botones loops (0,1,2) — toggle ---`);
+  L.push(`  for (int i = 0; i < 3; i++) {`);
+  L.push(`    bool pressed = (digitalRead(BTN_PINS[i]) == LOW);`);
+  L.push(`    if (pressed && !btnPrev[i] && now - btnLastMs[i] > DEBOUNCE_MS) {`);
+  L.push(`      btnLastMs[i] = now;`);
+  L.push(`      if (loop_v[i].active) {`);
+  L.push(`        loop_v[i].active = false;`);
+  L.push(`        Serial.printf("Loop %d OFF\\n", i);`);
+  L.push(`      } else if (LOOP_LENS[i] > 0) {`);
+  L.push(`        loop_v[i].data   = LOOP_DATA[i];`);
+  L.push(`        loop_v[i].length = LOOP_LENS[i];`);
+  L.push(`        loop_v[i].pos    = 0.0f;`);
+  L.push(`        loop_v[i].active = true;`);
+  L.push(`        Serial.printf("Loop %d ON  len=%u\\n", i, LOOP_LENS[i]);`);
+  L.push(`      }`);
+  L.push(`    }`);
+  L.push(`    btnPrev[i] = pressed;`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // --- Botones hits (3,4) → hit 0,1 ---`);
+  L.push(`  for (int i = 3; i < 5; i++) {`);
+  L.push(`    bool pressed = (digitalRead(BTN_PINS[i]) == LOW);`);
+  L.push(`    if (pressed && !btnPrev[i] && now - btnLastMs[i] > DEBOUNCE_MS) {`);
+  L.push(`      btnLastMs[i] = now;`);
+  L.push(`      triggerHit(i - 3, 1.0f);`);
+  L.push(`      Serial.printf("Hit %d  pitch=%.3f\\n", i-3, g_pitchRatio);`);
+  L.push(`    }`);
+  L.push(`    btnPrev[i] = pressed;`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // --- Piezos → hits 2-5 ---`);
+  L.push(`  // Umbral: potSens mapea [0,1] → [200, 2500] (ADC 12-bit)`);
+  L.push(`  int piezoThreshold = (int)(200 + potSens * 2300);`);
+  L.push(`  for (int p = 0; p < 4; p++) {`);
+  L.push(`    int val = analogRead(PIEZO_PINS[p]);`);
+  L.push(`    if (val > piezoThreshold && now - piezoLastMs[p] > PIEZO_DEBOUNCE_MS) {`);
+  L.push(`      piezoLastMs[p] = now;`);
+  L.push(`      float vel = constrain((float)(val - piezoThreshold) / (float)(4095 - piezoThreshold), 0.2f, 1.0f);`);
+  L.push(`      triggerHit(p + 2, vel);`);
+  L.push(`      Serial.printf("Piezo %d  val=%d vel=%.2f\\n", p, val, vel);`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // --- Llenar buffer de audio ---`);
+  L.push(`  static int16_t buf[BUF_SAMPLES * 2];`);
+  L.push(``);
+  L.push(`  for (int s = 0; s < BUF_SAMPLES; s++) {`);
+  L.push(`    float loopMix = 0.0f;`);
+  L.push(`    float hitMix  = 0.0f;`);
+  L.push(``);
+  L.push(`    // Loops — pitch pot controla velocidad (0.5× a 2.0×)`);
+  L.push(`    for (int i = 0; i < NUM_LOOPS; i++) {`);
+  L.push(`      if (!loop_v[i].active) continue;`);
+  L.push(`      uint32_t pos  = (uint32_t)loop_v[i].pos;`);
+  L.push(`      float    frac = loop_v[i].pos - (float)pos;`);
+  L.push(`      float    s0   = (float)loop_v[i].data[pos];`);
+  L.push(`      // s1 wrappea al inicio si pos es el último sample`);
+  L.push(`      float    s1   = (float)loop_v[i].data[(pos + 1 < loop_v[i].length) ? pos + 1 : 0];`);
+  L.push(`      loopMix += s0 + frac * (s1 - s0);`);
+  L.push(`      loop_v[i].pos += g_pitchRatio;`);
+  L.push(`      if (loop_v[i].pos >= (float)loop_v[i].length)`);
+  L.push(`        loop_v[i].pos -= (float)loop_v[i].length;`);
+  L.push(`    }`);
+  L.push(``);
+  L.push(`    // Hits (con pitch y velocity)`);
+  L.push(`    for (int i = 0; i < NUM_HIT_VOICES; i++) {`);
+  L.push(`      if (!hit_v[i].active) continue;`);
+  L.push(`      uint32_t pos  = (uint32_t)hit_v[i].pos;`);
+  L.push(`      float    frac = hit_v[i].pos - (float)pos;`);
+  L.push(`      float    s0   = (float)hit_v[i].data[pos];`);
+  L.push(`      float    s1   = (pos + 1 < hit_v[i].length) ? (float)hit_v[i].data[pos+1] : 0.0f;`);
+  L.push(`      hitMix += (s0 + frac*(s1-s0)) * hit_v[i].velocity;`);
+  L.push(`      hit_v[i].pos += hit_v[i].pitchRatio;`);
+  L.push(`      if ((uint32_t)hit_v[i].pos >= hit_v[i].length) hit_v[i].active = false;`);
+  L.push(`    }`);
+  L.push(``);
+  L.push(`    // Mezclar: loop@45% + hits@33% cada uno → max ~0.45+0.99=1.44 antes del softLimit`);
+  L.push(`    float mix = (loopMix * 0.45f + hitMix * 0.33f) / 32768.0f;`);
+  L.push(``);
+  L.push(`    // Volumen master`);
+  L.push(`    mix *= potVol;`);
+  L.push(``);
+  L.push(`    // Cadena de filtros: HPF (pot) → LPF (IMU)`);
+  L.push(`    mix = applyHPF(mix);`);
+  L.push(`    mix = applyLPF(mix);`);
+  L.push(``);
+  L.push(`    // Soft limiter — no hay clipping duro`);
+  L.push(`    mix = softLimit(mix);`);
+  L.push(``);
+  L.push(`    int16_t out = (int16_t)(mix * 32767.0f);`);
+  L.push(`    buf[s*2]   = out;  // L`);
+  L.push(`    buf[s*2+1] = out;  // R`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  size_t written;`);
+  L.push(`  i2s_channel_write(tx_handle, buf, sizeof(buf), &written, pdMS_TO_TICKS(200));`);
+  L.push(`}`);
+
+  return L.join('\n');
+}
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
+function downloadFirmware() {
+  log('Generando firmware...');
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+
+  // Warn about empty samples
+  const emptyLoops = loops.filter(l => !l.int16Data).map(l => `Loop ${LOOP_LABELS[l.idx]}`);
+  const emptyHits  = hits.filter(h => !h.int16Data).map(h => `Hit ${h.idx}`);
+  if (emptyLoops.length) log(`Aviso: ${emptyLoops.join(', ')} no cargados (silencio)`, 'warn');
+  if (emptyHits.length)  log(`Aviso: ${emptyHits.join(', ')} no cargados (silencio)`, 'warn');
+
+  try {
+    const code = generateFirmware();
+    const blob = new Blob([code], {type: 'text/plain'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'percusynth_loop_player.ino';
+    a.click();
+    URL.revokeObjectURL(url);
+    log(`Listo! ${(code.length/1024).toFixed(0)} KB — abre percusynth_loop_player.ino en Arduino IDE`, 'ok');
+    log('Arduino IDE: Tools → Partition Scheme → Huge APP (3MB No OTA/1MB SPIFFS)', 'warn');
+    log('Requiere: ESP32-S3, Wire.h, driver/i2s_std.h', 'info');
+  } catch(e) {
+    log(`Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+// CONTROLS — sliders que simulan pots e IMU
+// ============================================================
+function setupControls() {
+  document.getElementById('sl-lfade').addEventListener('input', e => {
+    const ms = +e.target.value;
+    g_loopFade = Math.round(ms * SR / 1000);
+    document.getElementById('cv-lfade').textContent = ms + ' ms';
+    for (let i = 0; i < NUM_LOOPS; i++) {
+      if (loops[i].rawData) reprocessLoop(i);
+    }
+  });
+
+  document.getElementById('sl-pitch').addEventListener('input', e => {
+    const v = +e.target.value / 4095;
+    g_pitch = Math.pow(2, (v - 0.5) * 2);
+    document.getElementById('cv-pitch').textContent = g_pitch.toFixed(2) + '×';
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    for (const lp of loops) {
+      if (lp.source) lp.source.playbackRate.setTargetAtTime(g_pitch, t, 0.05);
+    }
+  });
+
+  document.getElementById('sl-hpf').addEventListener('input', e => {
+    const v = +e.target.value / 4095;
+    const freq = 20 + v * v * 3980;
+    if (hpfFilter) hpfFilter.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.02);
+    document.getElementById('cv-hpf').textContent =
+      freq < 1000 ? freq.toFixed(0) + ' Hz' : (freq / 1000).toFixed(1) + ' kHz';
+  });
+
+  document.getElementById('sl-lpf-f').addEventListener('input', e => {
+    const xn = +e.target.value / 32768;
+    const freq = 200 * Math.pow(100, (xn + 1) * 0.5);
+    if (lpfFilter) lpfFilter.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.02);
+    document.getElementById('cv-lpf-f').textContent =
+      freq < 1000 ? freq.toFixed(0) + ' Hz' : (freq / 1000).toFixed(1) + ' kHz';
+  });
+
+  document.getElementById('sl-lpf-q').addEventListener('input', e => {
+    const yn = +e.target.value / 32768;
+    const q = 0.5 + (yn + 1) * 0.5 * 9.5;
+    if (lpfFilter) lpfFilter.Q.setTargetAtTime(q, audioCtx.currentTime, 0.02);
+    document.getElementById('cv-lpf-q').textContent = q.toFixed(2);
+  });
+
+  document.getElementById('sl-vol').addEventListener('input', e => {
+    const v = +e.target.value / 4095;
+    const vol = 0.1 + v * 0.9;
+    if (masterGain) masterGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.02);
+    document.getElementById('cv-vol').textContent = Math.round(vol * 100) + '%';
+  });
+}
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+const keysDown = new Set();
+document.addEventListener('keydown', e => {
+  if (e.repeat || keysDown.has(e.key)) return;
+  keysDown.add(e.key);
+  const key = e.key.toLowerCase();
+  const li = LOOP_KEYS.indexOf(key);
+  if (li >= 0) { toggleLoop(li); return; }
+  const hi = HIT_KEYS.indexOf(e.key);
+  if (hi >= 0) { triggerHit(hi); flashHit(hi); }
+});
+document.addEventListener('keyup', e => keysDown.delete(e.key));
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  createLoops();
+  createHits();
+  setupControls();
+  document.getElementById('generate-btn').addEventListener('click', downloadFirmware);
+
+  // Drag global de marcadores de trim
+  document.addEventListener('mousemove', e => {
+    if (!dragState) return;
+    const lp = loops[dragState.idx];
+    if (!lp.rawInt16) { dragState = null; return; }
+    const canvas = document.getElementById(`lwave-${dragState.idx}`);
+    const rect   = canvas.getBoundingClientRect();
+    const x      = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const frac   = x / rect.width;
+    const samp   = Math.round(frac * lp.rawInt16.length);
+    if (dragState.type === 'start') {
+      const maxS = (lp.trimEnd >= 0 ? lp.trimEnd : lp.rawInt16.length) - 441;
+      lp.trimStart = Math.max(0, Math.min(samp, maxS));
+    } else {
+      const minE = lp.trimStart + 441;
+      const next  = Math.max(minE, Math.min(samp, lp.rawInt16.length));
+      lp.trimEnd  = (next >= lp.rawInt16.length) ? -1 : next;
+    }
+    reprocessLoop(dragState.idx);
+    updateTrimLabels(dragState.idx);
+  });
+  document.addEventListener('mouseup', () => { dragState = null; });
+
+  window.addEventListener('resize', () => {
+    for (let i = 0; i < NUM_LOOPS; i++) {
+      drawWaveform(document.getElementById(`lwave-${i}`), loops[i].int16Data, LOOP_COLORS[i], true);
+    }
+    for (let i = 0; i < NUM_HITS; i++) {
+      drawWaveform(document.getElementById(`hwave-${i}`), hits[i].int16Data, HIT_COLORS[i], false);
+    }
+  });
+
+  log('PercuSynth Loop Loader listo.', 'ok');
+  log('Teclas Q/W/E = loops · 1-6 = hits · drag & drop para cargar.');
+  log('Arduino IDE: Tools → Partition Scheme → Huge APP (3MB No OTA/1MB SPIFFS)', 'warn');
+  log('Los loops deben tener loop-points precisos (inicio/fin en zero-crossing).');
+});
+</script>
+</body>
+</html>

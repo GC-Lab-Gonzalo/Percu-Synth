@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — Dub Siren Generator</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0d0d14;
+  --bg2:     #161621;
+  --bg3:     #1e1e2c;
+  --border:  #2e2e44;
+  --accent:  #ff6b35;   /* naranja dub */
+  --accent2: #ffcc44;   /* amarillo siren */
+  --text:    #d0d0e8;
+  --dim:     #5a5a80;
+  --warn:    #ffcc44;
+  --err:     #ff5555;
+  --ok:      #00e5a0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  padding: 16px;
+  font-size: 13px;
+}
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: var(--bg2);
+}
+.logo { display: flex; align-items: baseline; gap: 6px; }
+.logo-mark  { color: var(--accent); font-size: 22px; }
+.logo-title { font-size: 17px; font-weight: bold; letter-spacing: 5px; color: var(--accent); }
+.logo-sub   { font-size: 10px; color: var(--dim); letter-spacing: 3px; margin-left: 4px; }
+#size-info  { font-size: 11px; color: var(--dim); }
+
+section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 9px; letter-spacing: 4px; color: var(--dim);
+  margin-bottom: 12px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* SAMPLES STACK + PAD */
+.samples-stack {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sample-pad {
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  position: relative;
+}
+.sample-tag {
+  position: absolute; top: 8px; left: 12px;
+  font-size: 9px; letter-spacing: 3px;
+  color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 3px; padding: 2px 8px;
+  background: var(--bg2);
+}
+.sample-waveform {
+  width: 100%;
+  height: 80px;
+  border-radius: 4px;
+  display: block;
+  cursor: pointer;
+  background: #12121c;
+}
+.sample-info {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px;
+}
+.sample-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sample-dur {
+  color: var(--accent);
+  font-weight: bold;
+  font-size: 14px;
+  margin-left: 12px;
+}
+.load-label {
+  font-size: 10px; letter-spacing: 1px; color: var(--dim);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 14px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.load-label:hover { border-color: var(--accent); color: var(--accent); }
+.clear-btn {
+  font-size: 9px; color: var(--dim); background: none; border: none;
+  cursor: pointer; padding: 2px 4px; font-family: inherit;
+}
+.clear-btn:hover { color: var(--err); }
+
+/* TRIM PANEL */
+.trim-panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex; gap: 18px; align-items: center;
+}
+.trim-group { display: flex; align-items: center; gap: 4px; }
+.trim-lbl { font-size: 9px; letter-spacing: 2px; color: var(--dim); min-width: 38px; }
+.tarr {
+  width: 24px; height: 22px; flex-shrink: 0;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--dim); font-family: 'Courier New', monospace;
+  font-size: 11px; cursor: pointer; border-radius: 3px;
+  user-select: none; -webkit-user-select: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.tarr:hover  { border-color: var(--accent); color: var(--accent); }
+.tarr:active { background: var(--bg3); }
+.trim-val {
+  text-align: center; min-width: 70px;
+  font-size: 11px; color: var(--accent); font-weight: bold;
+}
+.trim-reset {
+  font-size: 9px; letter-spacing: 1px; color: var(--dim);
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; padding: 2px 6px;
+  margin-left: auto;
+}
+.trim-reset:hover { color: var(--err); }
+
+/* SR SELECTOR */
+.sr-options {
+  display: flex; gap: 10px;
+}
+.sr-opt {
+  flex: 1;
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sr-opt:hover { border-color: var(--accent2); }
+.sr-opt.selected {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, #1e1e2c, #2a1a14);
+}
+.sr-name  { font-size: 13px; color: var(--text); font-weight: bold; letter-spacing: 2px; }
+.sr-desc  { font-size: 10px; color: var(--dim); margin-top: 4px; }
+.sr-quota { font-size: 10px; color: var(--accent2); margin-top: 6px; }
+
+/* INFO TABLE */
+.pin-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+.pin-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--dim); }
+.pin-table td:first-child  { color: var(--text); }
+.pin-table td:nth-child(2) { color: var(--accent); font-size: 11px; }
+
+/* GENERATE */
+.generate-section { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#size-breakdown { font-size: 11px; color: var(--dim); text-align: center; }
+.generate-btn {
+  padding: 14px 52px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px; letter-spacing: 3px;
+  background: linear-gradient(135deg, #3a1a08, #1a0a04);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 6px; cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 0 16px rgba(255,107,53,0.15);
+}
+.generate-btn:hover {
+  background: linear-gradient(135deg, #5a2810, #2a0f05);
+  box-shadow: 0 0 28px rgba(255,107,53,0.35);
+  transform: translateY(-1px);
+}
+.generate-btn:active { transform: translateY(0); }
+.generate-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+.log {
+  width: 100%; max-height: 140px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 8px; font-size: 11px; line-height: 1.6;
+}
+.log-info { color: var(--dim); }
+.log-ok   { color: var(--ok); }
+.log-warn { color: var(--warn); }
+.log-err  { color: var(--err); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.fase-tag {
+  display: inline-block;
+  font-size: 9px; letter-spacing: 2px;
+  color: var(--warn); border: 1px solid var(--warn);
+  border-radius: 3px; padding: 1px 6px;
+  margin-left: 8px;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-mark">◈</span>
+    <span class="logo-title">PERCUSYNTH</span>
+    <span class="logo-sub">DUB SIREN GENERATOR</span>
+    <span class="fase-tag">v0.6</span>
+  </div>
+  <div>
+    <span id="size-info">Sin sample</span>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <div class="section-title">SAMPLES — sample 1 = BTN1 · sample 2 = BTN2 · sample 3 = BTN3 · mezclables</div>
+    <div class="samples-stack" id="samples-stack">
+      <!-- 3 sample-pads renderizados por JS en init -->
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">SAMPLE RATE INTERNO — define calidad vs duración máxima</div>
+    <div class="sr-options">
+      <div class="sr-opt selected" data-sr="44100">
+        <div class="sr-name">44.1 kHz</div>
+        <div class="sr-desc">calidad estudio · alineado con el DAC PCM5102</div>
+        <div class="sr-quota">~28 s máx · 2 bytes/sample</div>
+      </div>
+      <div class="sr-opt" data-sr="22050">
+        <div class="sr-name">22.05 kHz</div>
+        <div class="sr-desc">lo-fi tipo cassette · doble duración · grano de dub clásico</div>
+        <div class="sr-quota">~56 s máx · 2 bytes/sample</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">MAPA DE HARDWARE — controles del firmware generado</div>
+    <table class="pin-table">
+      <tr><td colspan="3" style="color:var(--accent2); padding-top:8px; letter-spacing:2px;">— CONTROLES CONTINUOS —</td></tr>
+      <tr><td>POT1 — LFO depth</td><td>ADC 1</td><td>0 – 100 % · profundidad de modulación del wobble</td></tr>
+      <tr><td>POT2 — LFO rate</td><td>ADC 2</td><td>0.1 – 20 Hz (exp) · velocidad del wobble</td></tr>
+      <tr><td>POT3 — Delay time</td><td>ADC 8</td><td>10 ms – 1 s (exp) · pitch shift estilo cinta al mover</td></tr>
+      <tr><td>POT4 — Delay feedback</td><td>ADC 10</td><td>0 – 100 % (auto-osc estable en el tope)</td></tr>
+      <tr><td>IMU eje X (roll) — Pitch global</td><td>MPU6050 I2C</td><td>0.25× a 4× exp · centro = 1× · afecta los 3 samples + siren</td></tr>
+      <tr><td colspan="3" style="color:var(--accent2); padding-top:8px; letter-spacing:2px;">— BOTONES —</td></tr>
+      <tr><td>BTN1 — TRIGGER sample 1</td><td>GPIO 44</td><td><b>hold</b> = suena · release = stop</td></tr>
+      <tr><td>BTN2 — TRIGGER sample 2</td><td>GPIO 42</td><td><b>hold</b> = suena · release = stop</td></tr>
+      <tr><td>BTN3 — TRIGGER sample 3</td><td>GPIO 0</td><td><b>hold</b> = suena · release = stop</td></tr>
+      <tr><td>BTN4 — SIREN gate</td><td>GPIO 45</td><td><b>hold</b> = sostiene osc siren · release = decay exp (~220 ms)</td></tr>
+      <tr><td>BTN5 — RANDOM sample</td><td>GPIO 47</td><td><b>hold</b> = elige uno aleatorio de los 3 cargados · release = stop</td></tr>
+      <tr><td colspan="3" style="color:var(--accent2); padding-top:8px; letter-spacing:2px;">— SALIDAS —</td></tr>
+      <tr><td>Audio out</td><td>I2S → PCM5102</td><td>BCK 41 · LCK 39 · DIN 40 · 44.1 kHz 16-bit estéreo</td></tr>
+      <tr><td>LED on-board — transporte</td><td>WS2812 RGB (GPIO 48)</td><td>⚫ stop · 🔴 play · 🟢 random · requiere lib <b>FastLED</b></td></tr>
+    </table>
+    <p style="font-size:10px; color:var(--dim); margin-top:8px;">
+      3 samples cargables independientemente — mezclables, todos comparten pitch global del IMU.
+      Cada sample sale a ~40 % de su nivel para que la suma + siren no sature.
+      Requiere librerías <b>FastLED</b> y <b>MPU6050</b> (Electronic Cats) en Arduino IDE Library Manager.
+    </p>
+  </section>
+
+  <section class="generate-section">
+    <div id="size-breakdown">Cargá un sample para empezar</div>
+    <button class="generate-btn" id="generate-btn" disabled>⬇ GENERAR FIRMWARE (.ino)</button>
+    <div class="log" id="log"></div>
+  </section>
+
+</main>
+
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const I2S_SR        = 44100;          // sample rate del DAC (fijo)
+const MAX_BYTES_44  = 28 * 44100 * 2; // ~28 s a 44.1 kHz → 2.46 MB
+const MAX_BYTES_22  = 56 * 22050 * 2; // ~56 s a 22.05 kHz → 2.47 MB
+const ACCENT        = '#ff6b35';
+
+// ============================================================
+// STATE — 3 samples cargables, comparten el sample rate target
+// ============================================================
+const NUM_SAMPLES   = 3;
+const SAMPLE_LABELS = ['1', '2', '3'];
+let samples = Array.from({length: NUM_SAMPLES}, (_, i) => ({
+  idx: i,
+  name: null,
+  rawData: null,      // Float32Array post resample, sin trim
+  rawInt16: null,     // Int16Array de rawData para display
+  trimStart: 0,       // sample index
+  trimEnd: -1,        // -1 = hasta el final
+}));
+let targetSR = 44100;   // común para los 3
+
+let audioCtx = null;
+
+function getCtx() {
+  if (!audioCtx) audioCtx = new AudioContext({ sampleRate: I2S_SR });
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// ============================================================
+// LOG
+// ============================================================
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const d  = document.createElement('div');
+  d.className = `log-${type}`;
+  d.textContent = `> ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// AUDIO PROCESSING
+// ============================================================
+async function processBuffer(buf, targetSR) {
+  // Resamplea a targetSR mono, normaliza por peak
+  const targetSamples = Math.ceil(buf.duration * targetSR);
+  const off = new OfflineAudioContext(1, targetSamples, targetSR);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start(0);
+  const rendered = await off.startRendering();
+
+  const raw = rendered.getChannelData(0);
+  let peak = 0;
+  for (const v of raw) if (Math.abs(v) > peak) peak = Math.abs(v);
+  const scale = peak > 0.001 ? 0.98 / peak : 1.0;
+
+  const normalized = new Float32Array(raw.length);
+  for (let i = 0; i < raw.length; i++) normalized[i] = raw[i] * scale;
+
+  return normalized;
+}
+
+function float32ToInt16(arr) {
+  const out = new Int16Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    out[i] = Math.round(Math.max(-32768, Math.min(32767, arr[i] * 32767)));
+  }
+  return out;
+}
+
+async function loadSample(idx, file) {
+  log(`S${SAMPLE_LABELS[idx]}: cargando ${file.name} ...`);
+  try {
+    const ab  = await file.arrayBuffer();
+    const raw = await getCtx().decodeAudioData(ab);
+    log(`  decodificado: ${raw.duration.toFixed(2)}s · ${raw.numberOfChannels}ch · ${raw.sampleRate} Hz`);
+
+    const rawData  = await processBuffer(raw, targetSR);
+    const rawInt16 = float32ToInt16(rawData);
+
+    const s = samples[idx];
+    s.name      = file.name.replace(/\.[^.]+$/, '');
+    s.rawData   = rawData;
+    s.rawInt16  = rawInt16;
+    s.trimStart = 0;
+    s.trimEnd   = -1;
+
+    log(`  pre-procesado: ${rawData.length} samples @ ${targetSR} Hz mono`, 'ok');
+    renderSample(idx);
+    updateSizeInfo();
+  } catch (e) {
+    log(`  error: ${e.message}`, 'err');
+  }
+}
+
+// ============================================================
+// WAVEFORM RENDERING
+// ============================================================
+function drawWaveform(canvas, int16Data, color) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#12121c';
+  ctx.fillRect(0, 0, W, H);
+
+  if (!int16Data) {
+    ctx.fillStyle = '#2a2a3c';
+    ctx.font = '11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('drag & drop WAV / MP3 / FLAC / OGG aquí', W/2, H/2 + 4);
+    return;
+  }
+
+  const step = int16Data.length / W;
+  ctx.fillStyle = color + '33';
+  for (let x = 0; x < W; x++) {
+    let mn = 0, mx = 0;
+    const i0 = Math.floor(x * step);
+    const i1 = Math.min(Math.floor((x+1)*step), int16Data.length);
+    for (let j = i0; j < i1; j++) {
+      const v = int16Data[j] / 32768;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const yT = (H/2) - mx*(H/2 - 4);
+    const yB = (H/2) - mn*(H/2 - 4);
+    ctx.fillRect(x, yT, 1, Math.max(1, yB - yT));
+  }
+  // línea de envolvente
+  ctx.strokeStyle = color + 'cc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x++) {
+    const i = Math.floor(x * step);
+    const y = (H/2) - (int16Data[i]/32768) * (H/2 - 4);
+    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // línea central
+  ctx.strokeStyle = '#2a2a3c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H/2);
+  ctx.lineTo(W, H/2);
+  ctx.stroke();
+}
+
+function drawTrimMarkers(idx) {
+  const s = samples[idx];
+  if (!s.rawInt16) return;
+  const canvas = document.getElementById(`wave-canvas-${idx}`);
+  if (!canvas) return;
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+
+  drawWaveform(canvas, s.rawInt16, ACCENT);
+
+  const rawLen  = s.rawInt16.length;
+  const startX  = Math.round((s.trimStart / rawLen) * W);
+  const endSamp = s.trimEnd >= 0 ? s.trimEnd : rawLen;
+  const endX    = Math.round((endSamp / rawLen) * W);
+
+  // zonas inactivas
+  if (startX > 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, startX, H);
+  }
+  if (endX < W) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(endX, 0, W - endX, H);
+  }
+  // marcadores
+  ctx.strokeStyle = '#00e5a0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(startX, 0); ctx.lineTo(startX, H);
+  ctx.stroke();
+  ctx.fillStyle = '#00e5a0';
+  ctx.font = 'bold 10px Courier New';
+  ctx.textAlign = 'left';
+  ctx.fillText('I', startX + 3, 12);
+
+  ctx.strokeStyle = '#ffcc44';
+  ctx.beginPath();
+  ctx.moveTo(endX, 0); ctx.lineTo(endX, H);
+  ctx.stroke();
+  ctx.fillStyle = '#ffcc44';
+  ctx.textAlign = 'right';
+  ctx.fillText('F', endX - 3, 12);
+}
+
+function renderSample(idx) {
+  const s = samples[idx];
+  const nameEl = document.getElementById(`sample-name-${idx}`);
+  const durEl  = document.getElementById(`sample-dur-${idx}`);
+  const trimEl = document.getElementById(`trim-panel-${idx}`);
+  if (!nameEl) return;   // pads aún no construidos
+
+  if (!s.rawInt16) {
+    nameEl.textContent = `sin sample ${SAMPLE_LABELS[idx]}`;
+    durEl.textContent  = '';
+    trimEl.style.display = 'none';
+    drawWaveform(document.getElementById(`wave-canvas-${idx}`), null, ACCENT);
+    return;
+  }
+
+  nameEl.textContent = s.name;
+  const effLen = effectiveLength(idx);
+  durEl.textContent  = `${(effLen / targetSR).toFixed(3)} s`;
+  trimEl.style.display = 'flex';
+  drawTrimMarkers(idx);
+  updateTrimLabels(idx);
+}
+
+function effectiveLength(idx) {
+  const s = samples[idx];
+  if (!s.rawInt16) return 0;
+  const end = s.trimEnd >= 0 ? s.trimEnd : s.rawInt16.length;
+  return Math.max(0, end - s.trimStart);
+}
+
+function effectiveInt16(idx) {
+  const s = samples[idx];
+  if (!s.rawInt16) return null;
+  const end = s.trimEnd >= 0 ? s.trimEnd : s.rawInt16.length;
+  return s.rawInt16.slice(s.trimStart, end);
+}
+
+// ============================================================
+// TRIM CONTROLS
+// ============================================================
+function adjustTrim(idx, isEnd, stepMs) {
+  const s = samples[idx];
+  if (!s.rawData) return;
+  const step = Math.round(Math.abs(stepMs) * targetSR / 1000);
+  const sign = stepMs > 0 ? 1 : -1;
+  const raw  = s.rawData.length;
+
+  if (!isEnd) {
+    const maxStart = (s.trimEnd >= 0 ? s.trimEnd : raw) - Math.round(targetSR * 0.01);
+    s.trimStart = Math.max(0, Math.min(s.trimStart + sign * step, maxStart));
+  } else {
+    const cur    = s.trimEnd >= 0 ? s.trimEnd : raw;
+    const minEnd = s.trimStart + Math.round(targetSR * 0.01);
+    const next   = Math.max(minEnd, Math.min(cur + sign * step, raw));
+    s.trimEnd = (next >= raw) ? -1 : next;
+  }
+  renderSample(idx);
+  updateSizeInfo();
+}
+
+function updateTrimLabels(idx) {
+  const s = samples[idx];
+  if (!s.rawInt16) return;
+  const rawLen  = s.rawInt16.length;
+  const endSamp = s.trimEnd >= 0 ? s.trimEnd : rawLen;
+  document.getElementById(`ts-val-${idx}`).textContent = (s.trimStart / targetSR * 1000).toFixed(1) + ' ms';
+  document.getElementById(`te-val-${idx}`).textContent = (endSamp     / targetSR * 1000).toFixed(1) + ' ms';
+}
+
+// hold-to-repeat (mismo patrón que loop_loader)
+function makeHoldBtn(btn, fn) {
+  let t, iv;
+  const go = () => fn();
+  const up = () => { clearTimeout(t); clearInterval(iv); };
+  const dn = e => { e.preventDefault(); go(); t = setTimeout(() => { iv = setInterval(go, 80); }, 350); };
+  btn.addEventListener('mousedown',  dn);
+  btn.addEventListener('touchstart', dn, {passive:false});
+  btn.addEventListener('mouseup',    up);
+  btn.addEventListener('mouseleave', up);
+  btn.addEventListener('touchend',   up);
+}
+
+// ============================================================
+// SIZE INFO
+// ============================================================
+function updateSizeInfo() {
+  let totalBytes = 0;
+  const parts = [];
+  let anyLoaded = false;
+  for (let i = 0; i < NUM_SAMPLES; i++) {
+    const len = effectiveLength(i);
+    if (len > 0) {
+      anyLoaded = true;
+      const b = len * 2;
+      totalBytes += b;
+      parts.push(`S${SAMPLE_LABELS[i]}: ${(b/1024).toFixed(0)} KB · ${(len/targetSR).toFixed(2)}s`);
+    }
+  }
+
+  const limit = targetSR === 44100 ? MAX_BYTES_44 : MAX_BYTES_22;
+  const mb = totalBytes / 1024 / 1024;
+  const pct = (totalBytes / limit) * 100;
+
+  document.getElementById('size-info').textContent =
+    anyLoaded ? `${mb.toFixed(2)} MB total · ${pct.toFixed(0)}% Huge APP` : 'Sin samples';
+  document.getElementById('size-breakdown').textContent =
+    parts.length ? parts.join('  ·  ') : 'Cargá al menos un sample para generar';
+
+  const generateBtn = document.getElementById('generate-btn');
+  if (!anyLoaded) {
+    generateBtn.disabled = true;
+  } else if (totalBytes > limit) {
+    generateBtn.disabled = true;
+    log(`⚠ Total ${mb.toFixed(2)} MB excede el límite (${(limit/1024/1024).toFixed(2)} MB). Trimeá o bajá SR.`, 'err');
+  } else {
+    generateBtn.disabled = false;
+  }
+}
+
+// ============================================================
+// CODE GENERATION
+// ============================================================
+function int16ToC(arr, name) {
+  const PL = 16;
+  const lines = [];
+  lines.push(`// ${name}: ${arr.length} samples (${(arr.length*2/1024).toFixed(1)} KB, ${(arr.length/targetSR).toFixed(4)} s @ ${targetSR} Hz)`);
+  lines.push(`const int16_t ${name}[] PROGMEM = {`);
+  for (let i = 0; i < arr.length; i += PL) {
+    const chunk = Array.from(arr.slice(i, i + PL)).join(', ');
+    lines.push('  ' + chunk + (i + PL < arr.length ? ',' : ''));
+  }
+  lines.push('};');
+  lines.push(`const uint32_t ${name}_LEN = ${arr.length}UL;`);
+  return lines.join('\n');
+}
+
+// ============================================================
+// SAMPLE PADS — construye los 3 pads en el DOM
+// ============================================================
+function buildSamplePads() {
+  const stack = document.getElementById('samples-stack');
+  if (!stack) return;
+  stack.innerHTML = '';
+  for (let i = 0; i < NUM_SAMPLES; i++) {
+    const pad = document.createElement('div');
+    pad.className = 'sample-pad';
+    pad.innerHTML = `
+      <span class="sample-tag">S${SAMPLE_LABELS[i]} · BTN${i+1}</span>
+      <canvas id="wave-canvas-${i}" class="sample-waveform" width="900" height="80"></canvas>
+      <div class="sample-info">
+        <span class="sample-name" id="sample-name-${i}">sin sample ${SAMPLE_LABELS[i]}</span>
+        <span class="sample-dur" id="sample-dur-${i}"></span>
+      </div>
+      <div class="trim-panel" id="trim-panel-${i}" style="display:none;">
+        <div class="trim-group">
+          <span class="trim-lbl">INICIO</span>
+          <button class="tarr" id="ts-l1-${i}">«</button>
+          <button class="tarr" id="ts-l2-${i}">‹</button>
+          <span class="trim-val" id="ts-val-${i}">0.0 ms</span>
+          <button class="tarr" id="ts-r1-${i}">›</button>
+          <button class="tarr" id="ts-r2-${i}">»</button>
+        </div>
+        <div class="trim-group">
+          <span class="trim-lbl">FIN</span>
+          <button class="tarr" id="te-l1-${i}">«</button>
+          <button class="tarr" id="te-l2-${i}">‹</button>
+          <span class="trim-val" id="te-val-${i}">0.0 ms</span>
+          <button class="tarr" id="te-r1-${i}">›</button>
+          <button class="tarr" id="te-r2-${i}">»</button>
+        </div>
+        <button class="trim-reset" id="trim-reset-${i}">reset trim</button>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <label class="load-label">
+          cargar audio
+          <input type="file" id="file-input-${i}" accept="audio/*" style="display:none;">
+        </label>
+        <button class="clear-btn" id="clear-btn-${i}">limpiar</button>
+      </div>
+    `;
+    stack.appendChild(pad);
+  }
+}
+
+function generateFirmware() {
+  // Recolectar los 3 samples (los que estén vacíos van como placeholder silencio)
+  const sampleData = [];
+  let anyLoaded = false;
+  for (let i = 0; i < NUM_SAMPLES; i++) {
+    const int16 = effectiveInt16(i);
+    sampleData.push(int16);
+    if (int16 && int16.length > 0) anyLoaded = true;
+  }
+  if (!anyLoaded) throw new Error('cargá al menos un sample');
+
+  const L = [];
+
+  L.push(`// ================================================================`);
+  L.push(`// PercuSynth — dub_siren  v0.6`);
+  L.push(`// 3 samples polifónicos · Siren osc · LFO modulado por POT · Delay tape`);
+  L.push(`// Generado por dub_siren_generator · ${new Date().toLocaleString()}`);
+  for (let i = 0; i < NUM_SAMPLES; i++) {
+    const d = sampleData[i];
+    if (d && d.length > 0) {
+      L.push(`// SAMPLE ${i+1}: ${samples[i].name} · ${(d.length/targetSR).toFixed(3)}s · ${targetSR} Hz mono · ${(d.length*2/1024).toFixed(0)} KB`);
+    } else {
+      L.push(`// SAMPLE ${i+1}: (vacío — placeholder de silencio)`);
+    }
+  }
+  L.push(`//`);
+  L.push(`// ARDUINO IDE — settings críticos:`);
+  L.push(`//   Board              : ESP32S3 Dev Module`);
+  L.push(`//   USB CDC On Boot    : Enabled`);
+  L.push(`//   Flash Mode         : DIO        (¡OPI rompe I2S!)`);
+  L.push(`//   PSRAM              : OPI PSRAM`);
+  L.push(`//   Partition Scheme   : Huge APP (3MB No OTA/1MB SPIFFS)`);
+  L.push(`//`);
+  L.push(`// CONTROLES CONTINUOS:`);
+  L.push(`//   POT1 ADC1  → LFO depth (0–100 %)`);
+  L.push(`//   POT2 ADC2  → LFO rate (0.1 – 20 Hz exp)`);
+  L.push(`//   POT3 ADC8  → Delay time (10 ms – 1 s exp) · pitch shift estilo cinta al mover`);
+  L.push(`//   POT4 ADC10 → Delay feedback (0 – 100 %, auto-osc estable en el tope)`);
+  L.push(`//   IMU eje X  → Pitch global (0.25× – 4× exp · afecta los 3 samples + siren freq)`);
+  L.push(`//`);
+  L.push(`// BOTONES (todos HOLD · soltar = detiene esa voz):`);
+  L.push(`//   BTN1 GPIO44 → sample 1 (hold = suena · release = stop)`);
+  L.push(`//   BTN2 GPIO42 → sample 2 (hold = suena · release = stop)`);
+  L.push(`//   BTN3 GPIO0  → sample 3 (hold = suena · release = stop)`);
+  L.push(`//   BTN4 GPIO45 → SIREN gate (hold = sostén env=1 · release = decay exp)`);
+  L.push(`//   BTN5 GPIO47 → RANDOM sample (hold = uno de los 3 al azar · release = stop)`);
+  L.push(`//`);
+  L.push(`// Los 3 samples pueden sonar simultáneos. Cada uno sale a 40% para headroom.`);
+  L.push(`// LFO modula pitch (±6%) y siren freq (±25%) — el wobble del IMU al mover el pitch.`);
+  L.push(`//`);
+  L.push(`// LED RGB on-board (GPIO 48 default — DevKitC-1) · transporte:`);
+  L.push(`//   ⚫ stop  ·  🔴 algún sample sonando  ·  🟢 random (BTN5)`);
+  L.push(`//`);
+  L.push(`// LIBRERÍAS: FastLED, MPU6050 (Electronic Cats) — ambas via Library Manager`);
+  L.push(`// ================================================================`);
+  L.push(``);
+  L.push(`#include <Arduino.h>`);
+  L.push(`#include "driver/i2s_std.h"`);
+  L.push(`#include <Wire.h>`);
+  L.push(`#include <MPU6050.h>`);
+  L.push(`#include <FastLED.h>`);
+  L.push(`#include <math.h>`);
+  L.push(``);
+
+  // Sample data — 3 samples
+  L.push(`// ================================================================`);
+  L.push(`// SAMPLE DATA — 3 samples (PROGMEM)`);
+  L.push(`// ================================================================`);
+  for (let i = 0; i < NUM_SAMPLES; i++) {
+    const d = sampleData[i];
+    if (d && d.length > 0) {
+      L.push(int16ToC(d, `SAMPLE_${i+1}`));
+    } else {
+      L.push(`// SAMPLE_${i+1}: vacío — placeholder de silencio (2 samples)`);
+      L.push(`const int16_t SAMPLE_${i+1}[] PROGMEM = {0, 0};`);
+      L.push(`const uint32_t SAMPLE_${i+1}_LEN = 2UL;`);
+    }
+    L.push(``);
+  }
+  L.push(`const uint32_t SAMPLE_SR = ${targetSR}UL;`);
+  L.push(``);
+  L.push(`// Tabla indexable de los 3 samples`);
+  L.push(`const int16_t* const SAMPLE_DATA[3] PROGMEM = {SAMPLE_1, SAMPLE_2, SAMPLE_3};`);
+  L.push(`const uint32_t      SAMPLE_LENS[3]         = {SAMPLE_1_LEN, SAMPLE_2_LEN, SAMPLE_3_LEN};`);
+  L.push(``);
+
+  // Constantes
+  L.push(`// ================================================================`);
+  L.push(`// CONFIGURACIÓN`);
+  L.push(`// ================================================================`);
+  L.push(`#define I2S_SR        44100      // sample rate del DAC, fijo`);
+  L.push(`#define BUF_SAMPLES   128`);
+  L.push(`#define PIN_I2S_LRCK  39`);
+  L.push(`#define PIN_I2S_DIN   40`);
+  L.push(`#define PIN_I2S_BCK   41`);
+  L.push(``);
+  L.push(`// Pines de entrada — orden BTN1..BTN5`);
+  L.push(`const uint8_t BTN_PINS[5] = {44, 42, 0, 45, 47};`);
+  L.push(`const uint8_t POT_PINS[4] = {1, 2, 8, 10};`);
+  L.push(``);
+  L.push(`#define DEBOUNCE_MS     25`);
+  L.push(`#define DELAY_SAMPLES   44100   // 1 s a 44.1 kHz → ~88 KB en heap`);
+  L.push(`#define SIREN_DECAY_MS  220`);
+  L.push(``);
+  L.push(`// IMU MPU6050 vía I2C (mismos pines que el resto de firmwares PercuSynth)`);
+  L.push(`#define IMU_SDA         21`);
+  L.push(`#define IMU_SCL         38`);
+  L.push(`#define IMU_READ_MS     10      // cadencia de lectura del IMU`);
+  L.push(`#define IMU_SMOOTH      0.08f   // factor de EMA · más bajo = más smoothing`);
+  L.push(``);
+  L.push(`// LED RGB on-board del módulo ESP32-S3 (DevKitC-1 estándar = GPIO 48).`);
+  L.push(`// Si tu placa lo expone en otro pin, cambialo acá.`);
+  L.push(`#define PIN_ONBOARD_LED 48`);
+  L.push(`#define LED_BRIGHTNESS  40      // 0-255 · bajo para no encandilar`);
+  L.push(``);
+
+  // Estructuras
+  L.push(`// ================================================================`);
+  L.push(`// ESTRUCTURAS`);
+  L.push(`// ================================================================`);
+  L.push(`struct SamplePlayer {`);
+  L.push(`  const int16_t *buf;     // apunta a SAMPLE_DATA[i] · puede cambiar (BTN5)`);
+  L.push(`  uint32_t       len;     // SAMPLE_LENS[i] correspondiente`);
+  L.push(`  double         phase;`);
+  L.push(`  bool           playing;`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`enum SirenWave    { WAVE_SINE = 0, WAVE_SQUARE = 1, WAVE_SAW = 2 };`);
+  L.push(`enum TransportMode {`);
+  L.push(`  TRANSPORT_STOP = 0,        // nada sonando`);
+  L.push(`  TRANSPORT_PLAY,            // al menos un sample en reproducción normal`);
+  L.push(`  TRANSPORT_RANDOM,          // BTN5 hold con sample aleatorio activo`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`struct SirenOsc {`);
+  L.push(`  float     phase;`);
+  L.push(`  float     freq;        // Hz`);
+  L.push(`  float     env;         // 0..1 — sustain mientras gate=true, decay al soltar`);
+  L.push(`  bool      gate;        // true mientras BTN4 está hold`);
+  L.push(`  SirenWave wave;`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`struct LFO {`);
+  L.push(`  float phase;`);
+  L.push(`  float rate;            // Hz · controlado por POT2`);
+  L.push(`  float depth;           // 0..1 · suavizado desde IMU eje X`);
+  L.push(`};`);
+  L.push(``);
+  L.push(`struct DelayTape {`);
+  L.push(`  int16_t  buf[DELAY_SAMPLES];   // buffer circular (~88 KB)`);
+  L.push(`  uint32_t write_pos;`);
+  L.push(`  float    time;                  // 0..1 → target delay (en fracción del buffer)`);
+  L.push(`  float    current_delay;         // delay actual en samples · slewed hacia target`);
+  L.push(`                                  //   → mientras converge, read avanza a velocidad ≠ 1`);
+  L.push(`                                  //   → eso produce el pitch shift estilo cinta`);
+  L.push(`  float    feedback;              // 0..1.0 (1.0 = auto-osc estable)`);
+  L.push(`};`);
+  L.push(``);
+
+  // Estado global
+  L.push(`// ================================================================`);
+  L.push(`// ESTADO GLOBAL`);
+  L.push(`// ================================================================`);
+  L.push(`// Las 3 voces de sample — sp[0]=BTN1, sp[1]=BTN2, sp[2]=BTN3`);
+  L.push(`// sp[2] también la usa BTN5 (random) — sobreescribe buf y len antes de tocar.`);
+  L.push(`SamplePlayer  sp[3];   // init en setup()`);
+  L.push(`bool          random_active  = false;  // BTN5 hold flag`);
+  L.push(`int           random_idx     = 0;       // voz elegida por BTN5 al apretar`);
+  L.push(`bool          random_restore = false;   // estado a restaurar al soltar BTN5`);
+  L.push(``);
+  L.push(`SirenOsc      osc = {0.0f, 440.0f, 0.0f, false, WAVE_SQUARE};`);
+  L.push(`LFO           lfo = {0.0f, 4.0f, 0.0f};`);
+  L.push(`DelayTape     dly;                   // zero-init en setup()`);
+  L.push(`float         env_decay_per_sample = 0.0f;   // calculado en setup()`);
+  L.push(`CRGB          onboard_led[1];                 // LED RGB on-board`);
+  L.push(`MPU6050       mpu;                              // IMU vía I2C`);
+  L.push(`bool          imu_ok = false;                   // marca si el IMU respondió`);
+  L.push(``);
+  L.push(`// Pitch global controlado por IMU eje X (afecta los 3 samples + siren freq).`);
+  L.push(`// Smoothed con EMA para que el gesto sea suave y no genere clicks.`);
+  L.push(`float         global_pitch_smoothed = 1.0f;`);
+  L.push(``);
+  L.push(`TransportMode transport = TRANSPORT_STOP;`);
+  L.push(``);
+  L.push(`// Pinta el LED on-board según transport.`);
+  L.push(`static inline void updateTransportLed() {`);
+  L.push(`  switch (transport) {`);
+  L.push(`    case TRANSPORT_STOP:   onboard_led[0] = CRGB::Black; break;`);
+  L.push(`    case TRANSPORT_PLAY:   onboard_led[0] = CRGB::Red;   break;`);
+  L.push(`    case TRANSPORT_RANDOM: onboard_led[0] = CRGB::Green; break;`);
+  L.push(`  }`);
+  L.push(`  FastLED.show();`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Recalcula transport en base al estado de las voces y BTN5.`);
+  L.push(`// Llamar después de cualquier cambio en sp[].playing o random_active.`);
+  L.push(`static void refreshTransport() {`);
+  L.push(`  TransportMode m;`);
+  L.push(`  if (random_active)                                  m = TRANSPORT_RANDOM;`);
+  L.push(`  else if (sp[0].playing || sp[1].playing || sp[2].playing) m = TRANSPORT_PLAY;`);
+  L.push(`  else                                                m = TRANSPORT_STOP;`);
+  L.push(`  if (m != transport) {`);
+  L.push(`    transport = m;`);
+  L.push(`    updateTransportLed();`);
+  L.push(`  }`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Ratio de avance: si SAMPLE_SR < I2S_SR (ej 22050 vs 44100) los samples`);
+  L.push(`// avanzan a velocidad reducida para mantener su tono natural.`);
+  L.push(`const double SR_RATIO   = (double)SAMPLE_SR / (double)I2S_SR;`);
+  L.push(`const float  INV_I2S_SR = 1.0f / (float)I2S_SR;`);
+  L.push(``);
+  L.push(`static i2s_chan_handle_t tx_chan;`);
+  L.push(`static int16_t out_buf[BUF_SAMPLES * 2];`);
+  L.push(``);
+
+  // Botones state
+  L.push(`// ================================================================`);
+  L.push(`// BOTONES (debounce + edge detect)`);
+  L.push(`// ================================================================`);
+  L.push(`struct BtnState { bool cur, prev_edge; uint32_t lastMs; };`);
+  L.push(`BtnState btns[5];`);
+  L.push(``);
+  L.push(`static void buttonsInit() {`);
+  L.push(`  for (int i = 0; i < 5; i++) {`);
+  L.push(`    pinMode(BTN_PINS[i], INPUT_PULLUP);`);
+  L.push(`    btns[i] = {false, false, 0};`);
+  L.push(`  }`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`static void buttonsUpdate() {`);
+  L.push(`  uint32_t now = millis();`);
+  L.push(`  for (int i = 0; i < 5; i++) {`);
+  L.push(`    bool raw = (digitalRead(BTN_PINS[i]) == LOW);  // active low`);
+  L.push(`    if (raw != btns[i].cur && (now - btns[i].lastMs) > DEBOUNCE_MS) {`);
+  L.push(`      btns[i].cur    = raw;`);
+  L.push(`      btns[i].lastMs = now;`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Edge detect — los queries NO consumen el flanco (se podría llamar`);
+  L.push(`// btnPressed Y btnReleased al mismo botón en la misma iteración).`);
+  L.push(`// El flanco se consume llamando buttonsClearEdges() al final del loop.`);
+  L.push(`static bool btnPressed(int i)  { return  btns[i].cur && !btns[i].prev_edge; }`);
+  L.push(`static bool btnReleased(int i) { return !btns[i].cur &&  btns[i].prev_edge; }`);
+  L.push(`static bool btnHeld(int i)     { return  btns[i].cur; }`);
+  L.push(`static void buttonsClearEdges() {`);
+  L.push(`  for (int i = 0; i < 5; i++) btns[i].prev_edge = btns[i].cur;`);
+  L.push(`}`);
+  L.push(``);
+
+  // Pots (oversampling 16x + EMA smoothing software con deadband)
+  L.push(`// ================================================================`);
+  L.push(`// POTENCIÓMETROS — oversampling 16× HW + EMA SW con deadband`);
+  L.push(`// El ADC del ESP32-S3 tira ±10-30 LSB de jitter incluso con el pot quieto;`);
+  L.push(`// sin este filtrado los parámetros con mapeo exponencial bailotean audible.`);
+  L.push(`// ================================================================`);
+  L.push(`static uint16_t readPot(uint8_t pin) {`);
+  L.push(`  uint32_t s = 0;`);
+  L.push(`  for (int i = 0; i < 16; i++) s += analogRead(pin);`);
+  L.push(`  return (uint16_t)(s >> 4);`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`struct PotState { float smoothed; };`);
+  L.push(`PotState pot_state[4] = {{0.0f}, {0.0f}, {0.0f}, {0.0f}};`);
+  L.push(``);
+  L.push(`// Devuelve el valor del pot smoothed en rango 0..1.`);
+  L.push(`//  - EMA con factor 0.10 → respuesta razonable sin lag perceptible`);
+  L.push(`//  - Deadband: ignora cambios menores a ~3 LSB → cero ruido en posición fija`);
+  L.push(`static float readPotSmooth(int idx) {`);
+  L.push(`  const float SMOOTH   = 0.10f;`);
+  L.push(`  const float DEADBAND = 0.0008f;   // ~3 LSB del ADC 12-bit`);
+  L.push(`  float raw   = readPot(POT_PINS[idx]) * (1.0f / 4095.0f);`);
+  L.push(`  float delta = raw - pot_state[idx].smoothed;`);
+  L.push(`  if (delta > DEADBAND || delta < -DEADBAND) {`);
+  L.push(`    pot_state[idx].smoothed += SMOOTH * delta;`);
+  L.push(`  }`);
+  L.push(`  return pot_state[idx].smoothed;`);
+  L.push(`}`);
+  L.push(``);
+
+  // I2S setup
+  L.push(`// ================================================================`);
+  L.push(`// I2S (PCM5102)`);
+  L.push(`// ================================================================`);
+  L.push(`static void i2sSetup() {`);
+  L.push(`  i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);`);
+  L.push(`  i2s_new_channel(&cc, &tx_chan, NULL);`);
+  L.push(``);
+  L.push(`  i2s_std_config_t sc = {`);
+  L.push(`    .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(I2S_SR),`);
+  L.push(`    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(`);
+  L.push(`                  I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),`);
+  L.push(`    .gpio_cfg = {`);
+  L.push(`      .mclk = I2S_GPIO_UNUSED,`);
+  L.push(`      .bclk = (gpio_num_t)PIN_I2S_BCK,`);
+  L.push(`      .ws   = (gpio_num_t)PIN_I2S_LRCK,`);
+  L.push(`      .dout = (gpio_num_t)PIN_I2S_DIN,`);
+  L.push(`      .din  = I2S_GPIO_UNUSED,`);
+  L.push(`      .invert_flags = { false, false, false },`);
+  L.push(`    },`);
+  L.push(`  };`);
+  L.push(`  i2s_channel_init_std_mode(tx_chan, &sc);`);
+  L.push(`  i2s_channel_enable(tx_chan);`);
+  L.push(`}`);
+  L.push(``);
+
+  // DSP helpers
+  L.push(`// ================================================================`);
+  L.push(`// DSP HELPERS`);
+  L.push(`// ================================================================`);
+  L.push(``);
+  L.push(`// Lectura de UN sample (cualquiera de los 3) con interpolación lineal.`);
+  L.push(`// buf+len permiten pasar SAMPLE_1, SAMPLE_2 o SAMPLE_3 al vuelo.`);
+  L.push(`static inline float readSampleAt(const int16_t *buf, uint32_t len, double pos) {`);
+  L.push(`  if (len < 2) return 0.0f;`);
+  L.push(`  uint32_t i0 = (uint32_t)pos;`);
+  L.push(`  if (i0 >= len) i0 = len - 1;`);
+  L.push(`  uint32_t i1 = (i0 + 1 < len) ? (i0 + 1) : 0;`);
+  L.push(`  float frac = (float)(pos - (double)i0);`);
+  L.push(`  float s0   = (float)buf[i0];`);
+  L.push(`  float s1   = (float)buf[i1];`);
+  L.push(`  return s0 + frac * (s1 - s0);`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Soft-clip cúbico para el OUTPUT final · agrega un poquito de armónicos`);
+  L.push(`// musicales en señales fuertes. Se aplica UNA sola vez por sample → ok.`);
+  L.push(`static inline int16_t softClip(float x) {`);
+  L.push(`  float xn = x * (1.0f / 32768.0f);`);
+  L.push(`  if (xn >  1.5f) xn =  1.5f;`);
+  L.push(`  if (xn < -1.5f) xn = -1.5f;`);
+  L.push(`  float y = xn - (xn * xn * xn) * 0.3333333f;`);
+  L.push(`  int32_t out = (int32_t)(y * 36044.0f);`);
+  L.push(`  if (out >  32767) out =  32767;`);
+  L.push(`  if (out < -32768) out = -32768;`);
+  L.push(`  return (int16_t)out;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Saturador racional: y = x / (1 + |x|/k) · transparente para niveles`);
+  L.push(`// bajos, asintótico a ±k. NO genera los armónicos acumulativos del cúbico —`);
+  L.push(`// crucial para señales que recirculan en el feedback del delay.`);
+  L.push(`static inline int16_t softSaturate(float x) {`);
+  L.push(`  const float k = 30000.0f;`);
+  L.push(`  float ax = fabsf(x);`);
+  L.push(`  float y  = x / (1.0f + ax * (1.0f / k));`);
+  L.push(`  int32_t out = (int32_t)y;`);
+  L.push(`  if (out >  32767) out =  32767;`);
+  L.push(`  if (out < -32768) out = -32768;`);
+  L.push(`  return (int16_t)out;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Dispara el osc siren: env=1, fase a cero (clic mínimo).`);
+  L.push(`static inline void sirenTrigger(float freq) {`);
+  L.push(`  osc.freq  = freq;`);
+  L.push(`  osc.phase = 0.0f;`);
+  L.push(`  osc.env   = 1.0f;`);
+  L.push(`}`);
+  L.push(``);
+  L.push(`// Genera una muestra del osc según su forma de onda.`);
+  L.push(`static inline float sirenSample(float phase, SirenWave w) {`);
+  L.push(`  switch (w) {`);
+  L.push(`    case WAVE_SINE:   return sinf(phase * 6.2831853f);`);
+  L.push(`    case WAVE_SQUARE: return (phase < 0.5f) ? 1.0f : -1.0f;`);
+  L.push(`    case WAVE_SAW:    return phase * 2.0f - 1.0f;`);
+  L.push(`  }`);
+  L.push(`  return 0.0f;`);
+  L.push(`}`);
+  L.push(``);
+
+  // Render — pipeline completo
+  L.push(`// ================================================================`);
+  L.push(`// RENDER — pipeline:`);
+  L.push(`//   [Sample 1] ─┐`);
+  L.push(`//   [Sample 2] ─┼─→ Σ → [Delay tape c/feedback] → softClip → I2S`);
+  L.push(`//   [Sample 3] ─┤`);
+  L.push(`//   [Siren]    ─┘`);
+  L.push(`//   IMU eje X → global_pitch (afecta los 3 samples y siren freq).`);
+  L.push(`//   LFO modula global_pitch (±6%) y siren freq (±25%).`);
+  L.push(`// ================================================================`);
+  L.push(`static void renderBlock() {`);
+  L.push(`  const float  lfo_inc     = lfo.rate * INV_I2S_SR;`);
+  L.push(`  const float  sample_mod  = lfo.depth * 0.50f;   // ±50% wobble dramático en samples`);
+  L.push(`  const float  siren_mod   = lfo.depth * 0.50f;   // ±50% siren freq swing`);
+  L.push(``);
+  L.push(`  // Target delay en samples (mínimo 1 para evitar comb instantáneo)`);
+  L.push(`  float target_delay = dly.time * (float)(DELAY_SAMPLES - 1);`);
+  L.push(`  if (target_delay < 1.0f) target_delay = 1.0f;`);
+  L.push(``);
+  L.push(`  // SLEW rate del current_delay hacia target. Más bajo = pitch sweep más largo`);
+  L.push(`  // y dramático al mover POT3; más alto = settling más rápido. 0.0003 ≈ 50 ms`);
+  L.push(`  // para llegar al 50% del target — el sweet spot de un tape echo clásico.`);
+  L.push(`  const float TAPE_SLEW = 0.0003f;`);
+  L.push(``);
+  L.push(`  // Snapshot del pitch global modulado — se aplica a las 3 voces y al siren.`);
+  L.push(`  const float global_pitch = global_pitch_smoothed;`);
+  L.push(``);
+  L.push(`  for (uint32_t i = 0; i < BUF_SAMPLES; i++) {`);
+  L.push(`    // ---- LFO ----`);
+  L.push(`    lfo.phase += lfo_inc;`);
+  L.push(`    if (lfo.phase >= 1.0f) lfo.phase -= 1.0f;`);
+  L.push(`    float lfo_val = sinf(lfo.phase * 6.2831853f);`);
+  L.push(``);
+  L.push(`    // ---- 3 voces de sample sumadas (pitch unificado por IMU + LFO) ----`);
+  L.push(`    float sample_out = 0.0f;`);
+  L.push(`    float pitch_eff  = global_pitch * (1.0f + sample_mod * lfo_val);`);
+  L.push(`    double phase_inc = (double)pitch_eff * SR_RATIO;`);
+  L.push(`    for (int v = 0; v < 3; v++) {`);
+  L.push(`      if (!sp[v].playing) continue;`);
+  L.push(`      sp[v].phase += phase_inc;`);
+  L.push(`      while (sp[v].phase >= (double)sp[v].len) sp[v].phase -= (double)sp[v].len;`);
+  L.push(`      while (sp[v].phase <  0.0)               sp[v].phase += (double)sp[v].len;`);
+  L.push(`      // Cada voz aporta 30% para que la suma de 3 voces + siren tenga headroom.`);
+  L.push(`      sample_out += readSampleAt(sp[v].buf, sp[v].len, sp[v].phase) * 0.30f;`);
+  L.push(`    }`);
+  L.push(``);
+  L.push(`    // ---- Siren osc (gate sostiene, release inicia decay) ----`);
+  L.push(`    float siren_out = 0.0f;`);
+  L.push(`    if (osc.gate) {`);
+  L.push(`      osc.env = 1.0f;       // sustain mientras BTN4 está hold`);
+  L.push(`    } else {`);
+  L.push(`      osc.env *= env_decay_per_sample;   // decay al soltar`);
+  L.push(`      if (osc.env < 0.0001f) osc.env = 0.0f;`);
+  L.push(`    }`);
+  L.push(`    if (osc.env > 0.0001f) {`);
+  L.push(`      float freq_eff = osc.freq * (1.0f + siren_mod * lfo_val);`);
+  L.push(`      osc.phase += freq_eff * INV_I2S_SR;`);
+  L.push(`      if (osc.phase >= 1.0f) osc.phase -= 1.0f;`);
+  L.push(`      if (osc.phase <  0.0f) osc.phase += 1.0f;`);
+  L.push(`      siren_out = sirenSample(osc.phase, osc.wave) * osc.env * 9000.0f;`);
+  L.push(`    }`);
+  L.push(``);
+  L.push(`    // ---- Mix sample + siren (full level para el dry del output) ----`);
+  L.push(`    float pre = sample_out + siren_out;`);
+  L.push(``);
+  L.push(`    // ---- Delay tape ----`);
+  L.push(`    // El INPUT al delay va atenuado para dar headroom: cuando recircula con`);
+  L.push(`    // feedback alto, no acumula saturación. El dry sigue saliendo full level`);
+  L.push(`    // por el mix de abajo — esto solo afecta lo que se feedbackea.`);
+  L.push(`    const float DELAY_INPUT_GAIN = 0.5f;`);
+  L.push(``);
+  L.push(`    // Slew del delay actual hacia el target → efecto cinta.`);
+  L.push(`    // El read avanza a (write_speed - d(current_delay)/dn) por output sample.`);
+  L.push(`    // Cuando current_delay crece (target_delay subió, e.g. POT3 hacia arriba),`);
+  L.push(`    // el read avanza < 1 sample/sample → pitch BAJA (cinta frenando).`);
+  L.push(`    // Cuando decrece → pitch SUBE (cinta acelerando).`);
+  L.push(`    dly.current_delay += TAPE_SLEW * (target_delay - dly.current_delay);`);
+  L.push(``);
+  L.push(`    // Read fraccional con interpolación lineal`);
+  L.push(`    float read_phase = (float)dly.write_pos - dly.current_delay;`);
+  L.push(`    while (read_phase <  0.0f)                  read_phase += (float)DELAY_SAMPLES;`);
+  L.push(`    while (read_phase >= (float)DELAY_SAMPLES)  read_phase -= (float)DELAY_SAMPLES;`);
+  L.push(`    uint32_t r0   = (uint32_t)read_phase;`);
+  L.push(`    uint32_t r1   = (r0 + 1) % DELAY_SAMPLES;`);
+  L.push(`    float    rfr  = read_phase - (float)r0;`);
+  L.push(`    float    delayed = (float)dly.buf[r0] + rfr * ((float)dly.buf[r1] - (float)dly.buf[r0]);`);
+  L.push(``);
+  L.push(`    float to_write = pre * DELAY_INPUT_GAIN + delayed * dly.feedback;`);
+  L.push(`    // softSaturate (racional) en vez de softClip (cúbico) — no acumula armónicos`);
+  L.push(`    // al recircular. Esto es lo que vuelve limpias las repeticiones.`);
+  L.push(`    dly.buf[dly.write_pos] = softSaturate(to_write);`);
+  L.push(`    dly.write_pos = (dly.write_pos + 1) % DELAY_SAMPLES;`);
+  L.push(``);
+  L.push(`    // ---- Mix dry + wet (el dry pasa entero, el wet escalado a equilibrar) ----`);
+  L.push(`    // El wet se sube ×1.6 para compensar el DELAY_INPUT_GAIN y que las`);
+  L.push(`    // repeticiones se oigan al mismo nivel que el dry original.`);
+  L.push(`    float mix = pre * 0.55f + delayed * 0.9f;`);
+  L.push(``);
+  L.push(`    // softClip cúbico solo en el output final · agrega calor pero NO recircula`);
+  L.push(`    int16_t s = softClip(mix);`);
+  L.push(`    out_buf[i * 2]     = s;`);
+  L.push(`    out_buf[i * 2 + 1] = s;`);
+  L.push(`  }`);
+  L.push(`}`);
+  L.push(``);
+
+  // setup()
+  L.push(`// ================================================================`);
+  L.push(`// SETUP`);
+  L.push(`// ================================================================`);
+  L.push(`void setup() {`);
+  L.push(`  Serial.begin(115200);`);
+  L.push(`  uint32_t t = millis();`);
+  L.push(`  while (!Serial && millis() - t < 2000) delay(10);`);
+  L.push(``);
+  L.push(`  Serial.println();`);
+  L.push(`  Serial.println("================================================");`);
+  L.push(`  Serial.println(" dub_siren v0.6  ·  PercuSynth · 3 samples");`);
+  L.push(`  Serial.println("================================================");`);
+  L.push(`  for (int i = 0; i < 3; i++) {`);
+  L.push(`    Serial.printf(" Sample %d: %u samples (%.3fs)\\n",`);
+  L.push(`                  i+1, SAMPLE_LENS[i], (float)SAMPLE_LENS[i] / (float)SAMPLE_SR);`);
+  L.push(`  }`);
+  L.push(`  Serial.printf(" SR ratio (sample→I2S): %.3f\\n", SR_RATIO);`);
+  L.push(`  Serial.println(" POTs: POT1=lfoDepth  POT2=lfoRate  POT3=dlyTime  POT4=dlyFb");`);
+  L.push(`  Serial.println(" IMU:  eje X → pitch global (0.25× a 4×)");`);
+  L.push(`  Serial.println(" BTNs: 1=sample1 HOLD · 2=sample2 HOLD · 3=sample3 HOLD");`);
+  L.push(`  Serial.println("       4=siren HOLD    · 5=random sample HOLD");`);
+  L.push(`  Serial.println();`);
+  L.push(``);
+  L.push(`  analogReadResolution(12);`);
+  L.push(`  buttonsInit();`);
+  L.push(`  i2sSetup();`);
+  L.push(``);
+  L.push(`  // I2C + MPU6050`);
+  L.push(`  Wire.begin(IMU_SDA, IMU_SCL);`);
+  L.push(`  mpu.initialize();`);
+  L.push(`  imu_ok = mpu.testConnection();`);
+  L.push(`  Serial.printf(" IMU MPU6050: %s\\n", imu_ok ? "OK" : "NO RESPONDE (pitch global = 1.0×)");`);
+  L.push(``);
+  L.push(`  // LED on-board RGB · estado de transporte`);
+  L.push(`  FastLED.addLeds<WS2812, PIN_ONBOARD_LED, GRB>(onboard_led, 1);`);
+  L.push(`  FastLED.setBrightness(LED_BRIGHTNESS);`);
+  L.push(`  updateTransportLed();   // arranca apagado (TRANSPORT_STOP)`);
+  L.push(``);
+  L.push(`  // Init de las 3 voces — cada una apunta a su sample correspondiente`);
+  L.push(`  for (int i = 0; i < 3; i++) {`);
+  L.push(`    sp[i].buf     = SAMPLE_DATA[i];`);
+  L.push(`    sp[i].len     = SAMPLE_LENS[i];`);
+  L.push(`    sp[i].phase   = 0.0;`);
+  L.push(`    sp[i].playing = false;`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // Init del delay buffer (zero) y posición de escritura`);
+  L.push(`  for (uint32_t i = 0; i < DELAY_SAMPLES; i++) dly.buf[i] = 0;`);
+  L.push(`  dly.write_pos     = 0;`);
+  L.push(`  dly.time          = 0.3f;`);
+  L.push(`  dly.feedback      = 0.55f;`);
+  L.push(`  dly.current_delay = dly.time * (float)(DELAY_SAMPLES - 1);`);
+  L.push(``);
+  L.push(`  // Coeficiente de decay exponencial del env del siren`);
+  L.push(`  env_decay_per_sample =`);
+  L.push(`    expf(-1.0f / ((float)SIREN_DECAY_MS * 0.001f * (float)I2S_SR));`);
+  L.push(``);
+  L.push(`  Serial.println("Listo. Dale fuego.");`);
+  L.push(`}`);
+  L.push(``);
+
+  // loop()
+  L.push(`// ================================================================`);
+  L.push(`// LOOP`);
+  L.push(`// ================================================================`);
+  L.push(`void loop() {`);
+  L.push(`  buttonsUpdate();`);
+  L.push(`  uint32_t now = millis();`);
+  L.push(``);
+  L.push(`  // ---- Pots SMOOTHED: POT1 lfoDepth · POT2 lfoRate · POT3 dlyTime · POT4 dlyFb ----`);
+  L.push(`  float n1 = readPotSmooth(0);`);
+  L.push(`  float n2 = readPotSmooth(1);`);
+  L.push(`  float n3 = readPotSmooth(2);`);
+  L.push(`  float n4 = readPotSmooth(3);`);
+  L.push(``);
+  L.push(`  lfo.depth    = n1;                                  // 0 – 100% (POT1)`);
+  L.push(`  lfo.rate     = 0.1f  * powf(200.0f, n2);           // 0.1 – 20 Hz exp`);
+  L.push(`  dly.time     = 0.01f + n3 * n3 * 0.99f;            // 1% – 100% (x²)`);
+  L.push(`  dly.feedback = n4 * 1.0f;                           // 0 – 100%`);
+  L.push(``);
+  L.push(`  // ---- IMU → pitch global (gestual, eje X) ----`);
+  L.push(`  // ax/16384 da -1 a +1 g · mapeo a 0.25× – 4× exp simétrico.`);
+  L.push(`  // Inclinar a izq baja 2 octavas, a der sube 2 octavas. Centro = 1×.`);
+  L.push(`  static uint32_t imu_last_ms = 0;`);
+  L.push(`  if (imu_ok && now - imu_last_ms >= IMU_READ_MS) {`);
+  L.push(`    imu_last_ms = now;`);
+  L.push(`    int16_t ax, ay, az, gx, gy, gz;`);
+  L.push(`    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);`);
+  L.push(`    float ax_norm = (float)ax * (1.0f / 16384.0f);`);
+  L.push(`    if (ax_norm >  1.0f) ax_norm =  1.0f;`);
+  L.push(`    if (ax_norm < -1.0f) ax_norm = -1.0f;`);
+  L.push(`    float pitch_target = powf(2.0f, ax_norm * 2.0f);   // 0.25× – 4×`);
+  L.push(`    global_pitch_smoothed += IMU_SMOOTH * (pitch_target - global_pitch_smoothed);`);
+  L.push(`  }`);
+  L.push(`  // El siren freq también sigue al pitch global (base 440 Hz × pitch_factor)`);
+  L.push(`  osc.freq = 440.0f * global_pitch_smoothed;`);
+  L.push(``);
+  L.push(`  // ---- BTN1/2/3 → TRIGGER sample 1/2/3 (HOLD para sonar) ----`);
+  L.push(`  for (int i = 0; i < 3; i++) {`);
+  L.push(`    if (btnPressed(i)) {`);
+  L.push(`      sp[i].playing = true;`);
+  L.push(`      sp[i].phase   = 0.0;`);
+  L.push(`      // Si BTN5 random tiene esta voz capturada, marcar restore=true`);
+  L.push(`      // para que al soltar BTN5 la voz quede ON mientras este BTN siga hold.`);
+  L.push(`      if (random_active && random_idx == i) random_restore = true;`);
+  L.push(`      Serial.printf("S%d ON\\n", i + 1);`);
+  L.push(`      refreshTransport();`);
+  L.push(`    }`);
+  L.push(`    if (btnReleased(i)) {`);
+  L.push(`      // Solo apagar si BTN5 random NO sostiene esta voz`);
+  L.push(`      if (random_active && random_idx == i) {`);
+  L.push(`        // BTN5 sigue hold sobre esta voz → no apagar, solo marcar el restore`);
+  L.push(`        random_restore = false;`);
+  L.push(`      } else {`);
+  L.push(`        sp[i].playing = false;`);
+  L.push(`        Serial.printf("S%d OFF\\n", i + 1);`);
+  L.push(`        refreshTransport();`);
+  L.push(`      }`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // ---- BTN4 → TRIGGER siren (HOLD = sustain con gate, release = decay) ----`);
+  L.push(`  if (btnPressed(3)) {`);
+  L.push(`    sirenTrigger(osc.freq);`);
+  L.push(`    osc.gate = true;`);
+  L.push(`    Serial.printf("SIREN gate freq=%.0f Hz\\n", osc.freq);`);
+  L.push(`  }`);
+  L.push(`  if (btnReleased(3)) {`);
+  L.push(`    osc.gate = false;`);
+  L.push(`    Serial.println("SIREN release");`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // ---- BTN5 → RANDOM sample (HOLD) — elige uno de los 3 al apretar ----`);
+  L.push(`  // Restaura el estado previo de esa voz al soltar (para no apagar lo que ya estaba).`);
+  L.push(`  // random_idx / random_restore son globales (también usados por BTN1/2/3 sync).`);
+  L.push(`  if (btnPressed(4)) {`);
+  L.push(`    // elegir solo entre samples realmente cargados (len > 16 = no placeholder)`);
+  L.push(`    int loaded[3]; int n = 0;`);
+  L.push(`    for (int i = 0; i < 3; i++) if (SAMPLE_LENS[i] > 16) loaded[n++] = i;`);
+  L.push(`    if (n > 0) {`);
+  L.push(`      random_idx     = loaded[esp_random() % n];`);
+  L.push(`      // restore basado en si el BTN del sample elegido está sostenido en este momento`);
+  L.push(`      random_restore = btnHeld(random_idx);`);
+  L.push(`      sp[random_idx].playing = true;`);
+  L.push(`      sp[random_idx].phase   = 0.0;`);
+  L.push(`      random_active = true;`);
+  L.push(`      refreshTransport();`);
+  L.push(`      Serial.printf("RANDOM sample %d (restore=%d)\\n", random_idx + 1, random_restore);`);
+  L.push(`    } else {`);
+  L.push(`      Serial.println("RANDOM ignorado — no hay samples cargados");`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(`  if (btnReleased(4)) {`);
+  L.push(`    if (random_active) {`);
+  L.push(`      sp[random_idx].playing = random_restore;`);
+  L.push(`      random_active = false;`);
+  L.push(`      refreshTransport();`);
+  L.push(`      Serial.println("RANDOM release");`);
+  L.push(`    }`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // Heartbeat 2s`);
+  L.push(`  static uint32_t hb_t = 0;`);
+  L.push(`  if (now - hb_t > 2000) {`);
+  L.push(`    hb_t = now;`);
+  L.push(`    const char* tnames[] = {"STOP", "PLAY", "RANDOM"};`);
+  L.push(`    Serial.printf("HB %s s1=%d s2=%d s3=%d pitch=%.2f dlyT=%.2f dlyFb=%.2f lfoR=%.2f lfoD=%.2f\\n",`);
+  L.push(`                  tnames[(int)transport],`);
+  L.push(`                  sp[0].playing, sp[1].playing, sp[2].playing,`);
+  L.push(`                  global_pitch_smoothed, dly.time, dly.feedback,`);
+  L.push(`                  lfo.rate, lfo.depth);`);
+  L.push(`  }`);
+  L.push(``);
+  L.push(`  // Consumir los flancos de los botones — DEBE ir después de todos los btnPressed/Released.`);
+  L.push(`  buttonsClearEdges();`);
+  L.push(``);
+  L.push(`  // Render y output`);
+  L.push(`  renderBlock();`);
+  L.push(`  size_t written;`);
+  L.push(`  i2s_channel_write(tx_chan, out_buf, sizeof(out_buf), &written, portMAX_DELAY);`);
+  L.push(`}`);
+
+  return L.join('\n');
+}
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
+function downloadFirmware() {
+  const anyLoaded = samples.some(s => s.rawInt16 && s.rawInt16.length > 0);
+  if (!anyLoaded) {
+    log('No hay samples cargados — cargá al menos uno', 'err');
+    return;
+  }
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+  log('Generando firmware con 3 samples...');
+  try {
+    const code = generateFirmware();
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const firstName = samples.find(s => s.name)?.name || 'samples';
+    const safeName = firstName.replace(/[^a-z0-9_-]/gi, '_');
+    const fileName = `dub_siren_${safeName}.ino`;
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName; a.click();
+    URL.revokeObjectURL(url);
+    log(`✓ ${fileName} — ${(code.length/1024).toFixed(0)} KB`, 'ok');
+    log('Abrí el .ino en Arduino IDE, seleccioná Partition Scheme: Huge APP (3MB No OTA), flasheá.', 'warn');
+  } catch (e) {
+    log(`Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+// EVENT HANDLERS
+// ============================================================
+function setupEventsForPad(idx) {
+  // File input
+  document.getElementById(`file-input-${idx}`).addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) loadSample(idx, f);
+    e.target.value = '';
+  });
+
+  // Drag & drop sobre el waveform de ESTE pad
+  const canvas = document.getElementById(`wave-canvas-${idx}`);
+  ['dragover', 'dragenter'].forEach(ev => {
+    canvas.addEventListener(ev, e => {
+      e.preventDefault();
+      canvas.style.boxShadow = `inset 0 0 0 2px ${ACCENT}`;
+    });
+  });
+  ['dragleave', 'drop'].forEach(ev => {
+    canvas.addEventListener(ev, e => {
+      e.preventDefault();
+      canvas.style.boxShadow = '';
+    });
+  });
+  canvas.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) loadSample(idx, f);
+  });
+
+  // Clear
+  document.getElementById(`clear-btn-${idx}`).addEventListener('click', () => {
+    samples[idx] = { idx, name: null, rawData: null, rawInt16: null, trimStart: 0, trimEnd: -1 };
+    renderSample(idx);
+    updateSizeInfo();
+    log(`Sample ${SAMPLE_LABELS[idx]} limpiado`);
+  });
+
+  // Trim controls (hold-to-repeat)
+  const trimBtns = [
+    [`ts-l1-${idx}`, false, -10], [`ts-l2-${idx}`, false, -1], [`ts-r1-${idx}`, false, 1], [`ts-r2-${idx}`, false, 10],
+    [`te-l1-${idx}`, true,  -10], [`te-l2-${idx}`, true,  -1], [`te-r1-${idx}`, true,  1], [`te-r2-${idx}`, true,  10],
+  ];
+  for (const [id, isEnd, ms] of trimBtns) {
+    const el = document.getElementById(id);
+    if (el) makeHoldBtn(el, () => adjustTrim(idx, isEnd, ms));
+  }
+  document.getElementById(`trim-reset-${idx}`).addEventListener('click', () => {
+    samples[idx].trimStart = 0;
+    samples[idx].trimEnd   = -1;
+    renderSample(idx);
+    updateSizeInfo();
+  });
+}
+
+function setupEvents() {
+  for (let i = 0; i < NUM_SAMPLES; i++) setupEventsForPad(i);
+
+  // SR selector — re-resamplea los 3 samples cargados
+  document.querySelectorAll('.sr-opt').forEach(opt => {
+    opt.addEventListener('click', async () => {
+      document.querySelectorAll('.sr-opt').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      const newSR = parseInt(opt.dataset.sr);
+      if (newSR === targetSR) return;
+      const oldSR = targetSR;
+      targetSR = newSR;
+      log(`Sample rate target: ${newSR} Hz`);
+      for (let i = 0; i < NUM_SAMPLES; i++) {
+        const s = samples[i];
+        if (!s.rawData) continue;
+        const ab = new AudioBuffer({ numberOfChannels: 1, length: s.rawData.length, sampleRate: oldSR });
+        ab.getChannelData(0).set(s.rawData);
+        const newData = await processBuffer(ab, newSR);
+        s.rawData  = newData;
+        s.rawInt16 = float32ToInt16(newData);
+        s.trimStart = 0;
+        s.trimEnd   = -1;
+        log(`  S${SAMPLE_LABELS[i]}: re-resampleado a ${newSR} Hz`, 'ok');
+        renderSample(i);
+      }
+      updateSizeInfo();
+    });
+  });
+
+  // Generate
+  document.getElementById('generate-btn').addEventListener('click', downloadFirmware);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  buildSamplePads();          // crea los 3 sample-pads en el DOM
+  setupEvents();
+  for (let i = 0; i < NUM_SAMPLES; i++) renderSample(i);
+  updateSizeInfo();
+  log('dub_siren_generator v0.6 listo — cargá hasta 3 samples y dale fuego', 'ok');
+  log('POTs: lfoDepth · lfoRate · delayTime · delayFb  ·  IMU eje X: pitch global', 'info');
+  log('Todos los botones son HOLD — soltar detiene esa voz', 'info');
+  log('Librerías Arduino IDE: FastLED + MPU6050 (Electronic Cats)', 'warn');
+});
+</script>
+</body>
+</html>
