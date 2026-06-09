@@ -10,3 +10,5 @@ tools/percu_control/build/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+build_pdf.py

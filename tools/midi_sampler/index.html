@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — MIDI Sampler</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0d0d14; --bg2:#161621; --bg3:#1e1e2c; --bg4:#24243a; --border:#2e2e44;
+  --accent:#00e5a0; --accent2:#7c5cff; --warn:#ffcc44; --err:#ff5555;
+  --text:#d0d0e8; --dim:#5a5a80;
+}
+body { background:var(--bg); color:var(--text); font-family:'Courier New',monospace; min-height:100vh; padding:16px; font-size:13px; }
+.header { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; border:1px solid var(--border); border-radius:8px; margin-bottom:14px; background:var(--bg2); }
+.logo { display:flex; align-items:baseline; gap:6px; }
+.logo-mark { color:var(--accent); font-size:22px; }
+.logo-title { font-size:17px; font-weight:bold; letter-spacing:5px; color:var(--accent); }
+.logo-sub { font-size:10px; color:var(--dim); letter-spacing:3px; margin-left:4px; }
+#status { font-size:11px; color:var(--dim); }
+.live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--err); margin-right:6px; }
+.live-dot.on { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+section { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.section-title { font-size:9px; letter-spacing:4px; color:var(--dim); margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.midi-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.midi-row label { font-size:10px; color:var(--dim); letter-spacing:2px; }
+.midi-row select, .midi-row button { background:var(--bg3); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12px; padding:6px 12px; border-radius:4px; letter-spacing:1px; cursor:pointer; }
+.midi-row button:hover { border-color:var(--accent); color:var(--accent); }
+.midi-row select { min-width:220px; }
+.tabs { display:flex; gap:4px; margin-bottom:12px; }
+.tabs button { background:var(--bg2); border:1px solid var(--border); color:var(--dim); padding:6px 14px; font-family:inherit; cursor:pointer; letter-spacing:2px; border-radius:4px 4px 0 0; font-size:11px; }
+.tabs button.active { background:var(--bg3); color:var(--accent); border-bottom-color:var(--bg3); }
+.tab-body { display:none; }
+.tab-body.active { display:block; }
+/* knobs */
+.knob-row { display:flex; gap:24px; flex-wrap:wrap; justify-content:center; }
+.knob { width:96px; display:flex; flex-direction:column; align-items:center; gap:4px; user-select:none; -webkit-user-select:none; }
+.knob canvas { cursor:ns-resize; touch-action:none; }
+.knob .k-label { font-size:9px; letter-spacing:2px; color:var(--dim); }
+.knob .k-val { font-size:12px; color:var(--accent); font-weight:bold; min-height:16px; }
+.knob .k-cc { font-size:8px; color:var(--dim); letter-spacing:1px; }
+/* sample loader (uno solo) */
+.sample-card { background:var(--bg3); border:2px solid var(--border); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.sample-card.loaded { border-color:var(--accent); }
+.sample-card canvas { width:100%; height:90px; background:var(--bg); border-radius:4px; display:block; cursor:pointer; }
+.sample-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.sample-name { font-size:13px; color:var(--text); flex:1; min-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.base-note { display:flex; align-items:center; gap:6px; }
+.base-note label { font-size:9px; color:var(--dim); letter-spacing:1px; }
+.base-note input { width:54px; background:var(--bg); border:1px solid var(--border); color:var(--accent); font-family:inherit; font-size:12px; text-align:center; border-radius:3px; padding:4px; }
+.btn { background:var(--bg2); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:11px; padding:7px 14px; border-radius:4px; cursor:pointer; letter-spacing:1px; }
+.btn:hover { border-color:var(--accent); color:var(--accent); }
+.btn.del:hover { border-color:var(--err); color:var(--err); }
+/* teclado */
+.keyboard { display:flex; gap:2px; flex-wrap:wrap; }
+.key { width:26px; height:64px; background:var(--bg3); border:1px solid var(--border); border-radius:0 0 4px 4px; cursor:pointer; font-size:8px; color:var(--dim); text-align:center; padding-top:46px; transition:background .06s; }
+.key.black { background:#0a0a12; }
+.key.on { background:var(--accent); color:#000; }
+.key:hover { border-color:var(--accent); }
+/* misc */
+.actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.btn-primary { background:var(--accent); border:none; color:var(--bg); font-family:inherit; font-size:13px; font-weight:bold; padding:12px 24px; border-radius:4px; cursor:pointer; letter-spacing:3px; }
+.btn-primary:hover { background:#00ffb4; }
+.hint { font-size:10px; color:var(--dim); margin-top:6px; line-height:1.5; }
+.kbd { display:inline-block; background:var(--bg); border:1px solid var(--border); border-radius:3px; padding:1px 5px; font-size:10px; color:var(--accent); }
+.log { background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:8px 12px; height:120px; overflow-y:auto; font-size:11px; line-height:1.6; white-space:pre-wrap; }
+.log-info { color:var(--dim); } .log-ok { color:var(--accent); } .log-warn { color:var(--warn); } .log-err { color:var(--err); }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-mark">◈</span>
+    <span class="logo-title">PERCUSYNTH</span>
+    <span class="logo-sub">MIDI SAMPLER</span>
+  </div>
+  <div id="status"><span class="live-dot" id="live-dot"></span>desconectado</div>
+</header>
+
+<!-- ENTRADA MIDI -->
+<section>
+  <div class="section-title">ENTRADA MIDI (USB)</div>
+  <div class="midi-row">
+    <button id="midi-init">▶ HABILITAR WEB MIDI</button>
+    <label>INPUT:</label>
+    <select id="midi-in"><option>—</option></select>
+    <button id="midi-refresh">↻ REFRESCAR</button>
+    <button id="panic">PÁNICO</button>
+  </div>
+  <div class="hint">Chrome/Edge. Conecta tu controlador MIDI, habilita Web MIDI y elige el puerto. Las notas tocan el sample; los CC mueven los pots. Sin hardware: usa el teclado de abajo.</div>
+</section>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="inst">INSTRUMENTO</button>
+  <button class="tab-btn" data-tab="fw">FIRMWARE (.ino)</button>
+</div>
+
+<!-- TAB INSTRUMENTO -->
+<div class="tab-body active" id="tab-inst">
+
+  <section>
+    <div class="section-title">4 POTENCIÓMETROS</div>
+    <div class="knob-row" id="knob-row"></div>
+    <div class="hint"><span class="kbd">VOL</span> y <span class="kbd">CUTOFF</span> en vivo; <span class="kbd">ATTACK</span>/<span class="kbd">DECAY</span> afectan notas nuevas. También responden a CC MIDI. velocity → ganancia.</div>
+  </section>
+
+  <section>
+    <div class="section-title">SAMPLE — uno solo (ej. una campana)</div>
+    <div class="sample-card" id="sample-card">
+      <canvas id="wave" width="600" height="90"></canvas>
+      <div class="sample-controls">
+        <span class="sample-name" id="sample-name">— sin sample —</span>
+        <div class="base-note">
+          <label>NOTA BASE</label>
+          <input type="number" id="base-note" min="0" max="127" value="60">
+          <span id="base-note-name" style="font-size:9px;color:var(--dim)">C4</span>
+        </div>
+        <button class="btn" id="load-btn">📁 CARGAR</button>
+        <button class="btn" id="audition-btn">▶ probar</button>
+        <button class="btn del" id="clear-btn">✕</button>
+        <input type="file" id="file" accept="audio/*" hidden>
+      </div>
+    </div>
+    <div class="hint">El sample suena a velocidad normal en la <b>nota base</b>; las demás notas lo transponen. Sin sample, un seno afinado a la nota (para probar de inmediato).</div>
+  </section>
+
+  <section>
+    <div class="section-title">TECLADO DE PRUEBA (sin hardware)</div>
+    <div class="keyboard" id="keyboard"></div>
+    <div class="hint">Click = nota. También teclas <span class="kbd">A S D F G H J K</span> (blancas) y <span class="kbd">W E T Y U</span> (negras) del PC.</div>
+  </section>
+
+  <section>
+    <div class="section-title">LOG</div>
+    <div id="log" class="log"></div>
+  </section>
+</div>
+
+<!-- TAB FIRMWARE -->
+<div class="tab-body" id="tab-fw">
+  <section>
+    <div class="section-title">GENERAR FIRMWARE — sampler MIDI de 1 sample (ESP32-S3)</div>
+    <div class="actions">
+      <button id="generate-btn" class="btn-primary">⬇ DESCARGAR .INO</button>
+      <span id="total-size" style="font-size:11px;color:var(--dim);">sin sample</span>
+    </div>
+    <div class="hint">
+      Hornea el sample (PROGMEM) en un firmware que reproduce esa nota según el MIDI que entre.
+      4 pots físicos: <b>POT0=volumen · POT1=attack · POT2=decay · POT3=cutoff</b> (ADC 1/2/8/10).<br>
+      Arduino IDE → ESP32-S3 → USB Mode = "USB-OTG (TinyUSB)" → Flash Mode <b>DIO</b> → Upload. Monitor 115200.
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const SAMPLE_RATE = 44100;
+const MAX_SECS    = 3;
+const NOTE_NAMES  = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+// CC MIDI → parámetro
+const CC = { VOL: 7, ATTACK: 73, DECAY: 72, CUTOFF: 74 };
+
+// 4 parámetros / pots (orden = POT0..POT3 del hardware)
+const PARAMS = [
+  { id:'vol',    label:'VOLUMEN', cc:CC.VOL,    min:0.0,  max:1.0,   def:0.7,   live:true,  fmt:v=>Math.round(v*100)+'%' },
+  { id:'attack', label:'ATTACK',  cc:CC.ATTACK, min:0.0,  max:0.2,   def:0.005, live:false, fmt:v=>(v*1000).toFixed(0)+' ms' },
+  { id:'decay',  label:'DECAY',   cc:CC.DECAY,  min:0.05, max:2.0,   def:0.6,   live:false, fmt:v=>v.toFixed(2)+' s' },
+  { id:'cutoff', label:'CUTOFF',  cc:CC.CUTOFF, min:200,  max:18000, def:14000, live:true,  fmt:v=>v<1000?Math.round(v)+' Hz':(v/1000).toFixed(1)+' kHz', log:true },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+const params = {};
+PARAMS.forEach(p => params[p.id] = p.def);
+const knobs = {};
+
+// UN solo sample
+const sample = { name:null, audioBuffer:null, int16Data:null, root:60 };
+
+let audioCtx = null, masterGain = null;
+const activeVoices = new Map();   // note -> voice
+let midiAccess = null, midiIn = null;
+const heldKeys = new Set();
+
+// ============================================================
+// AUDIO
+// ============================================================
+function getCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = params.vol;
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function midiToFreq(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function noteName(n)   { return NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1); }
+
+function noteOn(note, velocity) {
+  const ctx = getCtx(), t = ctx.currentTime;
+  const vel = Math.max(0, Math.min(1, velocity));
+  if (activeVoices.has(note)) releaseVoice(note, 0.004);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(params.cutoff, t);
+  filter.Q.value = 0.7;
+
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.linearRampToValueAtTime(vel, t + Math.max(0.001, params.attack));   // ATTACK
+  env.connect(filter);
+  filter.connect(masterGain);
+
+  let source;
+  if (sample.audioBuffer) {
+    source = ctx.createBufferSource();
+    source.buffer = sample.audioBuffer;
+    source.playbackRate.setValueAtTime(Math.pow(2, (note - sample.root) / 12), t);  // transpone por la nota
+  } else {
+    source = ctx.createOscillator();
+    source.type = 'sine';
+    source.frequency.setValueAtTime(midiToFreq(note), t);
+  }
+  source.connect(env);
+  source.start(t);
+
+  const voice = { note, source, env, filter };
+  activeVoices.set(note, voice);
+  source.onended = () => {
+    if (activeVoices.get(note) === voice) activeVoices.delete(note);
+    try { env.disconnect(); filter.disconnect(); } catch (e) {}
+  };
+  highlightKey(note, true);
+}
+function releaseVoice(note, relOverride) {
+  const voice = activeVoices.get(note); if (!voice) return;
+  const ctx = getCtx(), t = ctx.currentTime;
+  const rel = (relOverride != null) ? relOverride : params.decay;
+  const g = voice.env.gain;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(Math.max(g.value, 0.0001), t);
+  g.linearRampToValueAtTime(0.0001, t + rel);
+  try { voice.source.stop(t + rel + 0.02); } catch (e) {}
+  highlightKey(note, false);
+}
+function noteOff(note) { releaseVoice(note); }
+function allNotesOff() { for (const n of Array.from(activeVoices.keys())) releaseVoice(n, 0.01); }
+
+function applyParam(id, value) {
+  params[id] = value;
+  if (id === 'vol' && masterGain) masterGain.gain.setTargetAtTime(value, getCtx().currentTime, 0.01);
+  if (id === 'cutoff') {
+    const t = getCtx().currentTime;
+    for (const v of activeVoices.values()) v.filter.frequency.setTargetAtTime(value, t, 0.01);
+  }
+}
+
+// ============================================================
+// KNOB WIDGET
+// ============================================================
+class Knob {
+  constructor(spec) {
+    this.spec = spec; this.value = spec.def;
+    const el = document.createElement('div');
+    el.className = 'knob';
+    el.innerHTML = `<canvas width="64" height="64"></canvas><div class="k-label">${spec.label}</div><div class="k-val"></div><div class="k-cc">CC ${spec.cc}</div>`;
+    this.el = el; this.canvas = el.querySelector('canvas'); this.valEl = el.querySelector('.k-val');
+    this.color = '#00e5a0'; this._wire(); this.draw();
+  }
+  norm(v){ const s=this.spec; return s.log ? Math.log(v/s.min)/Math.log(s.max/s.min) : (v-s.min)/(s.max-s.min); }
+  fromNorm(n){ const s=this.spec; n=Math.max(0,Math.min(1,n)); return s.log ? s.min*Math.pow(s.max/s.min,n) : s.min+n*(s.max-s.min); }
+  set(v, fire=true){ this.value=Math.max(this.spec.min,Math.min(this.spec.max,v)); this.valEl.textContent=this.spec.fmt(this.value); this.draw(); if(fire) applyParam(this.spec.id,this.value); }
+  draw(){
+    const c=this.canvas.getContext('2d'), cx=32, cy=32, r=24;
+    c.clearRect(0,0,64,64);
+    const a0=Math.PI*0.75, a1=Math.PI*2.25, n=this.norm(this.value), a=a0+(a1-a0)*Math.max(0,Math.min(1,n));
+    c.lineWidth=5; c.lineCap='round'; c.strokeStyle='#2e2e44'; c.beginPath(); c.arc(cx,cy,r,a0,a1); c.stroke();
+    c.strokeStyle=this.color; c.beginPath(); c.arc(cx,cy,r,a0,a); c.stroke();
+    c.lineWidth=2; c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx+Math.cos(a)*(r-3), cy+Math.sin(a)*(r-3)); c.stroke();
+    c.fillStyle='#161621'; c.beginPath(); c.arc(cx,cy,13,0,Math.PI*2); c.fill();
+  }
+  _wire(){
+    let dragging=false, lastY=0;
+    const onMove=e=>{ if(!dragging)return; const y=(e.touches?e.touches[0].clientY:e.clientY); const dn=(lastY-y)/160; lastY=y; this.set(this.fromNorm(this.norm(this.value)+dn)); e.preventDefault(); };
+    const onUp=()=>{ dragging=false; window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',onUp); };
+    this.canvas.addEventListener('mousedown',e=>{ dragging=true; lastY=e.clientY; window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp); });
+    this.canvas.addEventListener('touchstart',e=>{ dragging=true; lastY=e.touches[0].clientY; },{passive:false});
+    this.canvas.addEventListener('touchmove',onMove,{passive:false});
+    this.canvas.addEventListener('touchend',()=>dragging=false);
+    this.canvas.addEventListener('wheel',e=>{ this.set(this.fromNorm(this.norm(this.value)-Math.sign(e.deltaY)*0.03)); e.preventDefault(); },{passive:false});
+  }
+}
+function buildKnobs(){
+  const row=document.getElementById('knob-row');
+  PARAMS.forEach(spec=>{ const k=new Knob(spec); knobs[spec.id]=k; row.appendChild(k.el); k.set(spec.def,false); });
+}
+
+// ============================================================
+// WEB MIDI
+// ============================================================
+async function initMidi(){
+  if(!navigator.requestMIDIAccess){ log('Web MIDI no soportado. Usa Chrome/Edge.','err'); return; }
+  try { midiAccess=await navigator.requestMIDIAccess({sysex:false}); midiAccess.onstatechange=refreshMidi; refreshMidi(); log('Web MIDI inicializado.','ok'); }
+  catch(e){ log('Web MIDI denegado: '+e.message,'err'); }
+}
+function refreshMidi(){
+  if(!midiAccess) return;
+  const sel=document.getElementById('midi-in'), prev=sel.value;
+  sel.innerHTML='<option value="">— elige puerto —</option>';
+  let auto=null;
+  for(const [id,p] of midiAccess.inputs){ const o=document.createElement('option'); o.value=id; o.textContent=p.name; sel.appendChild(o); if(/keyboard|midi|key|controller|usb/i.test(p.name)&&!auto) auto=id; }
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+  else if(auto){ sel.value=auto; connectInput(auto); }
+}
+function connectInput(id){
+  if(midiIn) midiIn.onmidimessage=null;
+  midiIn=id?midiAccess.inputs.get(id):null;
+  if(midiIn){ midiIn.onmidimessage=onMidiMessage; setStatus('escuchando '+midiIn.name,true); log('Entrada MIDI: '+midiIn.name,'ok'); }
+  else setStatus('sin entrada',false);
+}
+function onMidiMessage(ev){
+  const [s,d1,d2]=ev.data, status=s&0xF0;
+  if(status===0x90 && d2>0) noteOn(d1,d2/127);
+  else if(status===0x80 || (status===0x90 && d2===0)) noteOff(d1);
+  else if(status===0xB0) handleCC(d1,d2);
+  const dot=document.getElementById('live-dot');
+  if(dot){ dot.style.boxShadow='0 0 8px var(--warn)'; setTimeout(()=>dot.style.boxShadow='',60); }
+}
+function handleCC(cc,val){
+  const spec=PARAMS.find(p=>p.cc===cc); if(!spec) return;
+  const k=knobs[spec.id]; k.set(k.fromNorm(val/127));
+}
+
+// ============================================================
+// SAMPLE (uno)
+// ============================================================
+function setupSampleCard(){
+  const card=document.getElementById('sample-card');
+  document.getElementById('load-btn').addEventListener('click',()=>document.getElementById('file').click());
+  document.getElementById('file').addEventListener('change',async e=>{ if(e.target.files[0]) await loadFile(e.target.files[0]); e.target.value=''; });
+  document.getElementById('clear-btn').addEventListener('click',()=>{ sample.name=null; sample.audioBuffer=null; sample.int16Data=null; renderSample(); updateSize(); });
+  document.getElementById('audition-btn').addEventListener('click',()=>{ noteOn(sample.root,0.9); setTimeout(()=>noteOff(sample.root),500); });
+  document.getElementById('base-note').addEventListener('change',e=>{ sample.root=Math.max(0,Math.min(127,+e.target.value||0)); document.getElementById('base-note-name').textContent=noteName(sample.root); });
+  document.getElementById('wave').addEventListener('click',()=>{ noteOn(sample.root,0.9); setTimeout(()=>noteOff(sample.root),500); });
+  card.addEventListener('dragover',e=>{ e.preventDefault(); card.style.borderColor='var(--accent)'; });
+  card.addEventListener('dragleave',()=>{ card.style.borderColor=''; });
+  card.addEventListener('drop',async e=>{ e.preventDefault(); card.style.borderColor=''; if(e.dataTransfer.files[0]) await loadFile(e.dataTransfer.files[0]); });
+  renderSample();
+}
+async function loadFile(file){
+  log(`Cargando ${file.name} ...`);
+  try {
+    const ctx=getCtx();
+    const raw=await ctx.decodeAudioData(await file.arrayBuffer());
+    const { audioBuffer, int16Data }=await processBuffer(raw);
+    sample.name=file.name.replace(/\.[^.]+$/,''); sample.audioBuffer=audioBuffer; sample.int16Data=int16Data;
+    renderSample(); updateSize();
+    log(`OK: "${file.name}" → ${(int16Data.length*2/1024).toFixed(1)} KB @ ${SAMPLE_RATE} Hz`,'ok');
+  } catch(e){ log('Error: '+e.message,'err'); }
+}
+async function processBuffer(buf){
+  const maxSamples=Math.ceil(Math.min(buf.duration,MAX_SECS)*SAMPLE_RATE);
+  const off=new OfflineAudioContext(1,maxSamples,SAMPLE_RATE);
+  const src=off.createBufferSource(); src.buffer=buf; src.connect(off.destination); src.start(0);
+  const rendered=await off.startRendering();
+  const data=rendered.getChannelData(0);
+  let peak=0; for(const v of data){ const a=Math.abs(v); if(a>peak) peak=a; }
+  const g=peak>0?0.97/peak:1;
+  const audioBuffer=new AudioBuffer({numberOfChannels:1,length:data.length,sampleRate:SAMPLE_RATE});
+  const ch=audioBuffer.getChannelData(0);
+  const int16Data=new Int16Array(data.length);
+  for(let i=0;i<data.length;i++){ const v=data[i]*g; ch[i]=v; int16Data[i]=Math.round(Math.max(-32768,Math.min(32767,v*32767))); }
+  return { audioBuffer, int16Data };
+}
+function renderSample(){
+  const card=document.getElementById('sample-card');
+  document.getElementById('sample-name').textContent=sample.name??'— sin sample —';
+  card.classList.toggle('loaded',!!sample.int16Data);
+  document.getElementById('base-note-name').textContent=noteName(sample.root);
+  drawWaveform();
+}
+function drawWaveform(){
+  const canvas=document.getElementById('wave'); const c=canvas.getContext('2d'); const W=canvas.width=canvas.clientWidth||600, H=canvas.height;
+  c.fillStyle='#0d0d14'; c.fillRect(0,0,W,H);
+  const data=sample.int16Data;
+  if(!data){ c.fillStyle='#2a2a3c'; c.font='11px Courier New'; c.textAlign='center'; c.fillText('arrastra un audio aquí o usa CARGAR', W/2, H/2+4); return; }
+  const step=data.length/W;
+  c.strokeStyle='#00e5a0'; c.lineWidth=1; c.beginPath();
+  for(let x=0;x<W;x++){ let mn=0,mx=0; const i0=Math.floor(x*step), i1=Math.min(Math.floor((x+1)*step),data.length); for(let j=i0;j<i1;j++){ const v=data[j]/32768; if(v<mn)mn=v; if(v>mx)mx=v; } c.moveTo(x+0.5,H/2-mx*(H/2-3)); c.lineTo(x+0.5,H/2-mn*(H/2-3)); }
+  c.stroke();
+  c.fillStyle='#00e5a0aa'; c.font='9px Courier New'; c.textAlign='right';
+  c.fillText(`${(data.length/SAMPLE_RATE).toFixed(2)}s · ${(data.length*2/1024).toFixed(0)}KB`, W-6, H-6);
+}
+function updateSize(){
+  document.getElementById('total-size').textContent = sample.int16Data ? `${(sample.int16Data.length*2/1024).toFixed(1)} KB` : 'sin sample';
+}
+
+// ============================================================
+// TECLADO
+// ============================================================
+const KB_LOW=48, KB_HIGH=72, BLACK=new Set([1,3,6,8,10]);
+function buildKeyboard(){
+  const kb=document.getElementById('keyboard'); kb.innerHTML='';
+  for(let n=KB_LOW;n<=KB_HIGH;n++){
+    const key=document.createElement('div');
+    key.className='key'+(BLACK.has(n%12)?' black':''); key.id=`key-${n}`; key.textContent=(n%12===0)?noteName(n):'';
+    key.addEventListener('mousedown',e=>{ e.preventDefault(); noteOn(n,0.9); });
+    key.addEventListener('mouseup',()=>noteOff(n));
+    key.addEventListener('mouseleave',()=>noteOff(n));
+    kb.appendChild(key);
+  }
+}
+function highlightKey(n,on){ const k=document.getElementById(`key-${n}`); if(k) k.classList.toggle('on',on); }
+const PC_KEYS={ a:60,w:61,s:62,e:63,d:64,f:65,t:66,g:67,y:68,h:69,u:70,j:71,k:72 };
+document.addEventListener('keydown',e=>{ const n=PC_KEYS[e.key.toLowerCase()]; if(n!=null && !heldKeys.has(e.key)){ heldKeys.add(e.key); noteOn(n,0.9); } });
+document.addEventListener('keyup',e=>{ const n=PC_KEYS[e.key.toLowerCase()]; if(n!=null){ heldKeys.delete(e.key); noteOff(n); } });
+
+// ============================================================
+// LOG / STATUS
+// ============================================================
+function log(msg,type='info'){ const el=document.getElementById('log'); const d=document.createElement('div'); d.className=`log-${type}`; d.textContent=`> ${msg}`; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+function setStatus(s,live){ document.getElementById('status').innerHTML=`<span class="live-dot ${live?'on':''}" id="live-dot"></span>${s}`; }
+
+// ============================================================
+// FIRMWARE (.ino) — 1 sample, 4 pots
+// ============================================================
+function int16ToC(arr,name){
+  const PL=16, out=[];
+  out.push(`// ${name}: ${arr.length} samples (${(arr.length*2/1024).toFixed(1)} KB, ${(arr.length/SAMPLE_RATE).toFixed(3)} s)`);
+  out.push(`const int16_t ${name}[] PROGMEM = {`);
+  for(let i=0;i<arr.length;i+=PL) out.push('  '+Array.from(arr.slice(i,i+PL)).join(', ')+(i+PL<arr.length?',':''));
+  out.push('};');
+  out.push(`const uint32_t ${name}_LEN = ${arr.length}UL;`);
+  return out.join('\n');
+}
+function generateFirmware(){
+  const tpl=document.getElementById('firmware-tpl').textContent;
+  const block = sample.int16Data
+    ? `// "${sample.name}" (nota base ${noteName(sample.root)})\n`+int16ToC(sample.int16Data,'SMP')
+    : `// sin sample\nconst int16_t SMP[] PROGMEM = {0};\nconst uint32_t SMP_LEN = 0UL;`;
+  return tpl
+    .replace('// __SAMPLE_DATA__', block)
+    .replace(/const uint8_t\s+SMP_ROOT\s*=\s*\d+\s*;/, `const uint8_t SMP_ROOT = ${sample.root};`);
+}
+function downloadFirmware(){
+  try {
+    const code=generateFirmware();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([code],{type:'text/plain'})); a.download='midi_sampler.ino'; a.click(); URL.revokeObjectURL(a.href);
+    log(`Firmware generado (${(code.length/1024).toFixed(1)} KB) → midi_sampler.ino`,'ok');
+  } catch(e){ log('Error: '+e.message,'err'); }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+document.addEventListener('DOMContentLoaded',()=>{
+  buildKnobs(); setupSampleCard(); buildKeyboard(); updateSize();
+  document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-body').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); document.getElementById('tab-'+b.dataset.tab).classList.add('active');
+    if(b.dataset.tab==='inst') drawWaveform();
+  }));
+  document.getElementById('midi-init').addEventListener('click',initMidi);
+  document.getElementById('midi-refresh').addEventListener('click',refreshMidi);
+  document.getElementById('midi-in').addEventListener('change',e=>connectInput(e.target.value));
+  document.getElementById('panic').addEventListener('click',allNotesOff);
+  document.getElementById('generate-btn').addEventListener('click',downloadFirmware);
+  window.addEventListener('resize',drawWaveform);
+  log('PercuSynth MIDI Sampler (1 sample · 4 pots) listo.','ok');
+  log('Carga un sample (ej. campana), define su nota base, y tócalo por MIDI o con el teclado.');
+});
+</script>
+
+<!-- FIRMWARE TEMPLATE (1 sample, 4 pots). __SAMPLE_DATA__ y SMP_ROOT se reemplazan. -->
+<script type="text/plain" id="firmware-tpl">// ================================================================
+// PercuSynth — MIDI Sampler (1 sample)
+// ================================================================
+// HARDWARE ......... ESP32-S3 + PCM5102 (I2S) + 4 pots + USB MIDI
+// ----------------------------------------------------------------
+// ARDUINO IDE SETTINGS
+//   Board ........... ESP32S3 Dev Module
+//   USB Mode ........ USB-OTG (TinyUSB)
+//   Flash Mode ...... DIO        (¡importante para el audio I2S!)
+//   Monitor ......... 115200 baud
+// ----------------------------------------------------------------
+// LIBRERÍAS: ESP32 Arduino core (driver/i2s_std.h) · USB.h · USBMIDI.h
+// ----------------------------------------------------------------
+// DESCRIPCIÓN
+//   Reproduce UN sample (p. ej. una campana) según la nota MIDI que
+//   entra por USB: a velocidad normal en la nota base, transpuesto
+//   por resampling (interpolación lineal) en las demás. Si no hay
+//   sample, usa un seno afinado. Generado por tools/midi_sampler.
+// ----------------------------------------------------------------
+// FUNCIONAMIENTO — 4 potenciómetros
+//   POT0 = volumen   POT1 = attack   POT2 = decay/release   POT3 = cutoff LPF
+//   velocity MIDI → ganancia de la voz.
+// ================================================================
+#include <Arduino.h>
+#include "driver/i2s_std.h"
+#include "USB.h"
+#include "USBMIDI.h"
+#include <math.h>
+
+USBMIDI MIDI;
+
+// ================================================================
+// SAMPLE DATA (horneado desde la webapp)
+// ================================================================
+// __SAMPLE_DATA__
+
+const uint8_t SMP_ROOT = 60;   // nota base (MIDI) a la que el sample suena normal
+
+// ================================================================
+// CONSTANTES & PINOUT
+// ================================================================
+#define SAMPLE_RATE  44100
+#define BUF_SAMPLES  128
+#define NUM_VOICES   8
+#define PIN_I2S_LRCK 39
+#define PIN_I2S_DIN  40
+#define PIN_I2S_BCK  41
+const uint8_t POT_PINS[4] = { 1, 2, 8, 10 };   // vol, attack, decay, cutoff (ADC 1/2/8/10)
+
+float g_masterVol = 0.7f;     // 0..1
+float g_attackS   = 0.005f;   // s
+float g_decayS    = 0.6f;     // s (release)
+float g_cutoff    = 14000.0f; // Hz
+
+// ================================================================
+// VOZ: sample resampleado (o seno) + envolvente AR
+// ================================================================
+enum EnvStage { ENV_OFF, ENV_ATTACK, ENV_SUSTAIN, ENV_RELEASE };
+struct Voice {
+  float    pos;     // índice de lectura (sample) o fase (osc)
+  float    ratio;   // incremento por sample
+  float    freq;    // Hz (solo cuando no hay sample)
+  float    vel;     // 0..1
+  float    env;     // nivel de envolvente
+  uint8_t  stage;
+  uint8_t  note;
+  bool     active;
+  bool     useOsc;  // true = seno fallback
+};
+Voice voices[NUM_VOICES];
+
+float midiToFreq(uint8_t n){ return 440.0f * powf(2.0f, ((float)n - 69.0f) / 12.0f); }
+
+void noteOn(uint8_t note, uint8_t vel){
+  int v = -1;
+  for (int i=0;i<NUM_VOICES;i++) if(!voices[i].active){ v=i; break; }
+  if (v<0){ float mx=-1; for(int i=0;i<NUM_VOICES;i++){ if(voices[i].env>mx){ mx=voices[i].env; v=i; } } }
+  voices[v].vel    = vel/127.0f;
+  voices[v].env    = 0.0f;
+  voices[v].stage  = ENV_ATTACK;
+  voices[v].note   = note;
+  voices[v].pos    = 0.0f;
+  voices[v].active = true;
+  if (SMP_LEN > 0){
+    voices[v].useOsc = false;
+    voices[v].ratio  = powf(2.0f, ((float)note - (float)SMP_ROOT) / 12.0f);
+  } else {
+    voices[v].useOsc = true;
+    voices[v].freq   = midiToFreq(note);
+  }
+}
+void noteOff(uint8_t note){
+  for (int i=0;i<NUM_VOICES;i++)
+    if (voices[i].active && voices[i].note==note && voices[i].stage!=ENV_RELEASE)
+      voices[i].stage = ENV_RELEASE;
+}
+
+// ================================================================
+// FILTRO PASA-BAJOS DE UN POLO
+// ================================================================
+float lp_z=0.0f, lp_a=1.0f;
+void computeLPF(float cutoff){
+  if (cutoff<50.0f) cutoff=50.0f;
+  if (cutoff>SAMPLE_RATE*0.45f) cutoff=SAMPLE_RATE*0.45f;
+  float rc=1.0f/(2.0f*(float)M_PI*cutoff), dt=1.0f/SAMPLE_RATE;
+  lp_a = dt/(rc+dt);
+}
+inline float applyLPF(float x){ lp_z += lp_a*(x-lp_z); return lp_z; }
+
+// ================================================================
+// I2S (PCM5102)
+// ================================================================
+i2s_chan_handle_t tx_handle;
+void initI2S(){
+  i2s_chan_config_t cc = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+  i2s_new_channel(&cc, &tx_handle, NULL);
+  i2s_std_config_t sc = {
+    .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+    .gpio_cfg = { .mclk=I2S_GPIO_UNUSED, .bclk=(gpio_num_t)PIN_I2S_BCK, .ws=(gpio_num_t)PIN_I2S_LRCK, .dout=(gpio_num_t)PIN_I2S_DIN, .din=I2S_GPIO_UNUSED }
+  };
+  i2s_channel_init_std_mode(tx_handle, &sc);
+  i2s_channel_enable(tx_handle);
+}
+int readPot(uint8_t pin){ int s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return s>>3; }
+
+// ================================================================
+// MIDI IN (USB)
+// ================================================================
+void handleMidiByte(uint8_t b1, uint8_t b2, uint8_t b3){
+  uint8_t status=b1&0xF0;
+  if (status==0x90 && b3>0) noteOn(b2,b3);
+  else if (status==0x80 || (status==0x90 && b3==0)) noteOff(b2);
+  else if (status==0xB0){
+    float n=b3/127.0f;
+    switch(b2){
+      case 7:  g_masterVol=n; break;
+      case 73: g_attackS=n*0.2f; break;
+      case 72: g_decayS=0.05f+n*1.95f; break;
+      case 74: g_cutoff=200.0f+n*n*17800.0f; computeLPF(g_cutoff); break;
+    }
+  }
+}
+void pollMidi(){ uint8_t pkt[4]; while(tud_midi_n_packet_read(0,pkt)) handleMidiByte(pkt[1],pkt[2],pkt[3]); }
+
+// ================================================================
+// SETUP / LOOP
+// ================================================================
+void setup(){
+  Serial.begin(115200); delay(100);
+  Serial.println("PercuSynth — MIDI Sampler (1 sample) boot...");
+  analogReadResolution(12);
+  for (int i=0;i<NUM_VOICES;i++) voices[i].active=false;
+  initI2S(); computeLPF(g_cutoff);
+  MIDI.begin(); USB.begin();
+  Serial.println("Listo. POT0=vol POT1=attack POT2=decay POT3=cutoff");
+}
+
+void loop(){
+  pollMidi();
+  static int lp[4]={-9999,-9999,-9999,-9999};
+  for (int i=0;i<4;i++){
+    int p=readPot(POT_PINS[i]);
+    if (abs(p-lp[i])>20){
+      lp[i]=p; float n=p/4095.0f;
+      switch(i){
+        case 0: g_masterVol=n; break;
+        case 1: g_attackS=n*0.2f; break;
+        case 2: g_decayS=0.05f+n*1.95f; break;
+        case 3: g_cutoff=200.0f+n*n*17800.0f; computeLPF(g_cutoff); break;
+      }
+    }
+  }
+  float attInc=1.0f/fmaxf(1.0f, g_attackS*SAMPLE_RATE);
+  float relInc=1.0f/fmaxf(1.0f, g_decayS *SAMPLE_RATE);
+
+  static int16_t buf[BUF_SAMPLES*2];
+  for (int s=0;s<BUF_SAMPLES;s++){
+    float mix=0.0f;
+    for (int i=0;i<NUM_VOICES;i++){
+      if (!voices[i].active) continue;
+      switch (voices[i].stage){
+        case ENV_ATTACK:  voices[i].env+=attInc; if(voices[i].env>=1.0f){ voices[i].env=1.0f; voices[i].stage=ENV_SUSTAIN; } break;
+        case ENV_RELEASE: voices[i].env-=relInc; if(voices[i].env<=0.0f){ voices[i].env=0.0f; voices[i].active=false; continue; } break;
+        default: break;
+      }
+      float sig;
+      if (!voices[i].useOsc){
+        uint32_t pos=(uint32_t)voices[i].pos;
+        float frac=voices[i].pos-(float)pos;
+        float s0=(float)SMP[pos];
+        float s1=(pos+1<SMP_LEN)?(float)SMP[pos+1]:0.0f;
+        sig=(s0+frac*(s1-s0))/32768.0f;           // interpolación lineal
+        voices[i].pos += voices[i].ratio;
+        if ((uint32_t)voices[i].pos>=SMP_LEN){ voices[i].active=false; continue; }
+      } else {
+        voices[i].pos += voices[i].freq/SAMPLE_RATE;
+        if (voices[i].pos>=1.0f) voices[i].pos-=1.0f;
+        sig=sinf(2.0f*(float)M_PI*voices[i].pos);
+      }
+      mix += sig * voices[i].env * voices[i].vel;
+    }
+    mix = applyLPF(mix) * g_masterVol * 0.5f;
+    if (mix> 1.0f) mix= 1.0f;
+    if (mix<-1.0f) mix=-1.0f;
+    int16_t out=(int16_t)(mix*32767.0f);
+    buf[s*2]=out; buf[s*2+1]=out;
+  }
+  size_t written;
+  i2s_channel_write(tx_handle, buf, sizeof(buf), &written, portMAX_DELAY);
+}
+</script>
+</body>
+</html>

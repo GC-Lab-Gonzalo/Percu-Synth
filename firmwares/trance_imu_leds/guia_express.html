@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Guía express — trance_imu_leds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a; --bg2:#121218; --bg3:#1a1a22;
+    --cyan:#00d4ff; --violet:#7c3aed; --orange:#ff6b35;
+    --txt:#e8e8ef; --muted:#9a9aab; --line:#2a2a36;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page{ size:A4; margin:0; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--txt);
+    font-family:'Inter',system-ui,Segoe UI,Arial,sans-serif; font-size:10px; line-height:1.46; }
+  body{ background:var(--bg); padding:10mm 11mm; min-height:297mm; }
+  code,.mono{ font-family:'JetBrains Mono',ui-monospace,Consolas,monospace; }
+
+  .head{ border-left:5px solid var(--cyan); padding:2px 0 4px 12px; margin-bottom:11px; }
+  .head h1{ margin:0; font-size:23px; font-weight:800; letter-spacing:-.3px;
+    background:linear-gradient(90deg,var(--cyan),var(--violet) 60%,var(--orange));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .head .sub{ color:var(--muted); font-size:10.5px; margin-top:3px; }
+  .brand{ color:var(--cyan); font-weight:700; letter-spacing:.5px; }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .card{ background:var(--bg2); border:1px solid var(--line); border-radius:9px;
+    padding:9px 12px; break-inside:avoid; }
+  .card.full{ grid-column:1 / -1; }
+
+  h2{ font-size:12.5px; margin:0 0 8px; display:flex; align-items:center; gap:7px; font-weight:800; }
+  h2 .n{ display:inline-flex; align-items:center; justify-content:center; width:19px; height:19px;
+    border-radius:6px; font-size:11px; font-weight:800; color:#0a0a0a; }
+  .c-cyan{ background:var(--cyan); } .c-violet{ background:var(--violet); color:#fff; }
+  .c-orange{ background:var(--orange); } .c-txt{ color:var(--cyan); }
+
+  ol,ul{ margin:4px 0 0; padding-left:17px; } li{ margin:3px 0; }
+  b{ color:#fff; } .key{ color:var(--cyan); font-weight:700; } .mut{ color:var(--muted); }
+
+  table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:9.6px; }
+  th,td{ text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; font-size:8.8px; text-transform:uppercase; letter-spacing:.4px; }
+  tr:last-child td{ border-bottom:none; }
+  td .mono{ color:var(--cyan); }
+
+  .chip{ display:inline-block; padding:1px 8px; border-radius:20px; font-weight:700; font-size:9px;
+    color:#0a0a0a; }
+  .ch-cyan{ background:var(--cyan); } .ch-violet{ background:var(--violet); color:#fff; }
+  .ch-orange{ background:var(--orange); }
+
+  .led{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:1px;
+    vertical-align:middle; box-shadow:0 0 5px currentColor; }
+
+  .foot{ margin-top:10px; padding-top:7px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:8.8px; display:flex; justify-content:space-between; }
+  .pill{ display:inline-block; background:var(--bg3); border:1px solid var(--line); color:var(--cyan);
+    border-radius:6px; padding:1px 7px; font-weight:700; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <h1>Guía express · trance_imu_leds</h1>
+    <div class="sub"><span class="brand">GC LAB CHILE</span> — PercuSynth · Secuenciador de trance polifónico con visualizador en los 6 LEDs de la placa</div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1 -->
+    <div class="card full">
+      <h2><span class="n c-cyan">1</span> Arrancar en 30 segundos</h2>
+      <table>
+        <tr>
+          <td style="border:none;width:50%">
+            <span class="key">BTN1</span> → Play. Suena la secuencia y los LEDs se mueven.<br>
+            <span class="key">POT3</span> → tempo (40–300 BPM).<br>
+            <span class="key">POT4</span> → cola/decay (súbelo para textura densa).
+          </td>
+          <td style="border:none;width:50%">
+            <b>Mueve el equipo en el aire</b> → el IMU barre el filtro y cambia el color.<br>
+            <span class="key">BTN2</span> escala · <span class="key">BTN3</span> patrón · <span class="key">BTN5</span> octava.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 2 -->
+    <div class="card full">
+      <h2><span class="n c-txt" style="background:var(--bg3)">2</span> Los 3 paneles <span class="mut" style="font-weight:400; font-size:10px">— el color del LED te dice dónde estás</span></h2>
+      <table>
+        <tr><th>Panel</th><th>Cómo entrar</th><th>Color LEDs</th><th>Para qué</th></tr>
+        <tr><td><b>A</b> normal</td><td class="mut">al encender</td><td><span class="chip ch-cyan">CIAN</span></td><td>tocar · tempo · escala · patrón · octava</td></tr>
+        <tr><td><b>B</b> notas</td><td><span class="mono">BTN1 + BTN5</span> juntos</td><td><span class="chip ch-violet">VIOLETA</span></td><td>cambiar tonalidad y armar el acorde</td></tr>
+        <tr><td><b>C</b> timbre</td><td><span class="mono">BTN2 + BTN4</span> juntos</td><td><span class="chip ch-orange">NARANJA</span></td><td>forma de onda · capas · detune · drive</td></tr>
+      </table>
+      <div class="mut" style="margin-top:6px">El mismo combo te devuelve al Panel A (un flash lo confirma). Al cambiar de panel los pots quedan <b style="color:#fff">congelados</b>: cada uno retoma el control sólo cuando lo <b style="color:#fff">mueves</b>.</div>
+    </div>
+
+    <!-- 4A -->
+    <div class="card">
+      <h2><span class="n c-cyan">3</span> Panel A <span class="chip ch-cyan" style="margin-left:auto">tocar</span></h2>
+      <table>
+        <tr><td><span class="key">BTN1</span></td><td>Play / Stop</td></tr>
+        <tr><td><span class="key">BTN2</span></td><td>Escala (Mayor·Menor·Armónica·Árabe·Lidia·Frigia)</td></tr>
+        <tr><td><span class="key">BTN3</span></td><td>Patrón (16)</td></tr>
+        <tr><td><span class="key">BTN4</span></td><td>Largo de secuencia (4→8→16)</td></tr>
+        <tr><td><span class="key">BTN5</span></td><td>Octava (-1→0→+1→+2)</td></tr>
+        <tr><td><span class="key">POTs</span></td><td>1 Ataque · 2 Volumen · 3 Tempo · 4 Decay</td></tr>
+      </table>
+    </div>
+
+    <!-- 4B -->
+    <div class="card">
+      <h2><span class="n c-violet">B</span> Panel B <span class="chip ch-violet" style="margin-left:auto">tonalidad</span></h2>
+      <table>
+        <tr><td><span class="key">Botones</span></td><td>BTN1 F#(+7) · BTN2 C#(+2) · BTN3 B/tónica · BTN4 D#(+4) · BTN5 G#(+9)</td></tr>
+        <tr><td><span class="key">POT1–4</span></td><td>grado de escala (0–7) de cada una de las 4 voces del acorde</td></tr>
+      </table>
+      <div class="mut" style="margin-top:6px">La nota y el acorde <b style="color:#fff">persisten</b> al volver al Panel A.</div>
+    </div>
+
+    <!-- 4C -->
+    <div class="card full">
+      <h2><span class="n c-orange">C</span> Panel C <span class="chip ch-orange" style="margin-left:auto">timbre</span></h2>
+      <table>
+        <tr>
+          <td style="border:none;width:50%">
+            <span class="key">BTN1</span> Forma de onda (Sierra→Cuadrada→Triangular)<br>
+            <span class="key">BTN2</span> Octava arriba on/off<br>
+            <span class="key">BTN3</span> Unison (lead mono) / Poly (acorde)
+          </td>
+          <td style="border:none;width:50%">
+            <span class="key">BTN4</span> Quinta (power-chord) on/off<br>
+            <span class="key">BTN5</span> Sub-osc (−1 octava) on/off<br>
+            <span class="key">POTs</span> 1 Detune · 2 Drive · 3 Piso cutoff · 4 Resonancia
+          </td>
+        </tr>
+      </table>
+      <div class="mut" style="margin-top:2px">Todo el timbre <b style="color:#fff">persiste</b> al volver al Panel A.</div>
+    </div>
+
+    <!-- 5 -->
+    <div class="card">
+      <h2><span class="n c-cyan">4</span> Qué muestran los 6 LEDs
+        <span style="margin-left:auto">
+          <span class="led" style="color:var(--cyan)">●</span>
+          <span class="led" style="color:#33ddff">●</span>
+          <span class="led" style="color:var(--violet)">●</span>
+          <span class="led" style="color:#a060f5">●</span>
+          <span class="led" style="color:var(--orange)">●</span>
+          <span class="led" style="color:#ffd0b0">●</span>
+        </span>
+      </h2>
+      <ul>
+        <li><b>Color</b> = panel (cian/violeta/naranja) + el filtro del IMU lo desplaza al moverte.</li>
+        <li><b>Barra</b> (cuántos encienden) = energía polifónica: más acorde/cola → más llena.</li>
+        <li><b>Destello</b> = cada beat; el downbeat (1·5·9·13) pega más fuerte.</li>
+        <li><b>Detenido</b> = respiración lenta en el color del panel.</li>
+      </ul>
+    </div>
+
+    <!-- 6 + 7 -->
+    <div class="card">
+      <h2><span class="n c-cyan">5</span> IMU <span class="mut" style="font-weight:400;font-size:10px">(en los 3 paneles)</span></h2>
+      <ul style="margin-bottom:8px">
+        <li>Eje <b class="key">X</b> → frecuencia de corte (cutoff) del filtro.</li>
+        <li>Eje <b class="key">Y</b> → resonancia (Q).</li>
+      </ul>
+      <h2 style="margin-top:6px"><span class="n c-orange">6</span> Si algo falla</h2>
+      <table>
+        <tr><td>Glitches de audio</td><td>sube <span class="mono">LED_REFRESH_MS</span></td></tr>
+        <tr><td>Colores raros</td><td><span class="mono">COLOR_ORDER</span> GRB→RGB</td></tr>
+        <tr><td>Brillo</td><td><span class="mono">LED_BRIGHT</span> (0–255, def 50)</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <span>PercuSynth · <span class="brand">GC Lab Chile</span> · firmware <span class="pill">trance_imu_leds</span></span>
+    <span>ESP32-S3 · I2S→PCM5102 44.1 kHz · 16 voces · WS2812 ×6</span>
+  </div>
+
+</body>
+</html>

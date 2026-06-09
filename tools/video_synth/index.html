@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="es">
+<!--
+=================================================================================
+ PERCUSYNTH — VIDEO + AUDIO SYNTH (web) — GC Lab Chile
+=================================================================================
+ Licencia: MIT License (https://opensource.org/licenses/MIT)
+=================================================================================
+ Manipula un video (imagen Y su propio audio) en tiempo real con la PercuSynth.
+ El audio es el ORIGINAL del video, procesado con efectos. Minimalista: cada
+ control hace una cosa obvia en imagen y en sonido.
+
+ CONEXION (Web Serial, 115200 baud), 50 Hz:
+   RECIBE: pot1,pot2,pot3,pot4,btn1,btn2,btn3,btn4,btn5,piezo,imu
+   ENVIA:  L:l1,l2,l3,l4   (play / slow-mo / caleido / strobe)
+
+ MAPEO FIJO:
+   POT1 -> Velocidad video + PITCH del audio
+   POT2 -> Mosaico/pixelado + CRUSH del audio
+   POT3 -> Glitch RGB (aberracion) + DISTORSION del audio
+   POT4 -> Lo-fi (scanlines/desat) + FILTRO (lowpass) del audio
+   IMU  -> Warp + ECO (delay) del audio
+   PIEZO-> Golpe = flash visual
+   BTN1 play/stop (audio+video)  BTN2 escena (paleta+tono)  BTN3 slow-mo (+octava abajo)
+   BTN4 caleidoscopio x2/x3/x4... (+resonancia)  BTN5 strobe (+tremolo)
+=================================================================================
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth · AV Synth</title>
+<style>
+  :root{ --cian:#00d4ff; --violeta:#7c3aed; --naranja:#ff6b35; --bg:#0a0a0a;
+    --line:#23262f; --txt:#c9ced8; --txt2:#7b8190; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+  canvas{display:block;max-width:100%;max-height:100%;box-shadow:0 0 60px #000}
+  #drop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;transition:.2s;z-index:5}
+  #drop.hide{opacity:0;visibility:hidden}
+  #drop h1{font-size:24px;margin:0 0 6px;font-weight:800;letter-spacing:.5px;
+    background:linear-gradient(90deg,var(--cian),var(--violeta),var(--naranja));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #drop p{margin:0 0 14px;color:var(--txt2);font-size:13px}
+  #drop .box{pointer-events:auto;border:1.5px dashed var(--line);border-radius:16px;padding:38px 52px;text-align:center;background:#0d0f14cc}
+  #stage.dragover #drop .box{border-color:var(--cian);background:#0d1620cc}
+  .btn{font-family:inherit;font-size:13px;border:1px solid var(--line);background:#161922;
+    color:var(--txt);padding:9px 15px;border-radius:9px;cursor:pointer;transition:.15s;font-weight:600}
+  .btn:hover{border-color:var(--cian);color:#fff}
+  .btn.primary{background:linear-gradient(135deg,var(--cian),var(--violeta));border:none;color:#02060a}
+  .btn.serial-on{border-color:#36d27a;color:#36d27a}
+  #topbar{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;align-items:center;
+    padding:10px 12px;z-index:20;pointer-events:none;background:linear-gradient(#000a,transparent)}
+  #topbar>*{pointer-events:auto}
+  #topbar .sp{flex:1}
+  #title{font-weight:800;font-size:13px;letter-spacing:.5px;color:#fff;opacity:.85}
+  #title b{color:var(--cian)}
+  .pill{font-size:11px;color:var(--txt2);padding:5px 9px;border:1px solid var(--line);
+    border-radius:20px;font-family:'JetBrains Mono',monospace;background:#0d0f14aa}
+  .pill .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#444;margin-right:5px;vertical-align:middle}
+  .pill.live .dot{background:#36d27a;box-shadow:0 0 8px #36d27a}
+  #panel{position:absolute;top:0;right:0;height:100%;width:312px;background:#0c0e13f2;
+    border-left:1px solid var(--line);backdrop-filter:blur(8px);z-index:15;display:flex;flex-direction:column;transition:transform .25s}
+  #panel.hide{transform:translateX(100%)}
+  .head{padding:46px 14px 12px;border-bottom:1px solid var(--line)}
+  .head .row{display:flex;gap:8px;flex-wrap:wrap}
+  #scroll{overflow-y:auto;flex:1;padding:12px 14px 30px}
+  #scroll::-webkit-scrollbar{width:8px}#scroll::-webkit-scrollbar-thumb{background:#222630;border-radius:8px}
+  .gt{font-size:10.5px;text-transform:uppercase;letter-spacing:1.4px;color:var(--txt2);margin:18px 0 8px;font-weight:700}
+  .gt:first-child{margin-top:0}
+  .leg{display:grid;grid-template-columns:48px 1fr;gap:6px 9px;align-items:center;font-size:11px}
+  .leg .k{font-family:'JetBrains Mono',monospace;font-size:10px;color:#02060a;text-align:center;border-radius:5px;padding:4px 0;font-weight:700;background:var(--cian)}
+  .leg .k.i{background:var(--violeta);color:#fff}
+  .leg .d{color:var(--txt)}
+  .pot{margin:9px 0}
+  .pot .l{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+  .pot .l b{color:var(--txt)} .pot .l span{color:var(--cian);font-family:'JetBrains Mono',monospace}
+  input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;background:#1c1f28;outline:none;margin:0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--cian);cursor:pointer;border:2px solid #0a0a0a;box-shadow:0 0 0 1px var(--cian)}
+  .pads{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+  .pad{font-size:10px;font-weight:700;text-align:center;padding:9px 0;border:1px solid var(--line);
+    border-radius:8px;background:#13161d;color:var(--txt2);cursor:pointer;font-family:'JetBrains Mono',monospace;user-select:none}
+  .pad:hover{border-color:var(--cian)}
+  .pad.act{border-color:var(--naranja);color:var(--naranja);background:#1a130b}
+  .pad small{display:block;font-size:8px;color:var(--txt2);font-weight:600;margin-top:2px}
+  #meters{display:flex;gap:10px;margin-top:10px}
+  .meter{flex:1}
+  .meter .mt{font-size:9px;color:var(--txt2);letter-spacing:.5px;margin-bottom:3px;font-family:'JetBrains Mono',monospace}
+  .meter .bar{height:5px;background:#1a1d25;border-radius:4px;overflow:hidden}
+  .meter .bar i{display:block;height:100%;width:0;border-radius:4px;transition:width .05s linear}
+  .meter.g .bar i{background:linear-gradient(90deg,var(--naranja),#ffd27a)}
+  .meter.a .bar i{background:linear-gradient(90deg,var(--violeta),var(--cian))}
+  .meter.m .bar i{background:linear-gradient(90deg,#8a6,#dca)}
+  #rxmon{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.4;
+    color:var(--txt2);background:#0d0f14;border:1px solid var(--line);border-radius:6px;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #rxmon.ok{color:#36d27a;border-color:#1c3a2a}
+  #rxmon.warn{color:var(--naranja);border-color:#3a2a18;white-space:normal}
+  .hint{font-size:10.5px;color:var(--txt2);line-height:1.5;margin:10px 0 0}
+  kbd{font-family:'JetBrains Mono',monospace;font-size:10px;background:#15181f;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <div id="drop"><div class="box">
+      <h1>PercuSynth · AV Synth</h1>
+      <p>Arrastra un video o ábrelo. Imagen y su audio, en tiempo real.</p>
+      <button class="btn primary" id="openBtn">Abrir video…</button>
+      <p style="margin:14px 0 0;font-size:11px">Conecta con <kbd>C</kbd> · panel <kbd>H</kbd></p>
+    </div></div>
+  </div>
+
+  <div id="topbar">
+    <span id="title"><b>◆</b> AV SYNTH</span>
+    <span class="sp"></span>
+    <span class="pill" id="pState"><span class="dot"></span>STOP</span>
+    <span class="pill" id="pSerial"><span class="dot"></span>serial</span>
+    <span class="pill" id="pFps">— fps</span>
+    <button class="btn" id="panelBtn">☰</button>
+  </div>
+
+  <div id="panel">
+    <div class="head">
+      <div class="row">
+        <button class="btn primary" id="open2">Abrir video</button>
+        <button class="btn" id="serialBtn">⚡ Conectar</button>
+        <button class="btn" id="fwBtn">⬇ Firmware</button>
+      </div>
+      <div id="meters">
+        <div class="meter g"><div class="mt">GOLPE</div><div class="bar"><i id="mG"></i></div></div>
+        <div class="meter a"><div class="mt">AUDIO</div><div class="bar"><i id="mA"></i></div></div>
+        <div class="meter m"><div class="mt" id="mIt">IMU</div><div class="bar"><i id="mI"></i></div></div>
+      </div>
+      <div id="rxmon">Serial: sin conectar</div>
+    </div>
+    <div id="scroll">
+      <p class="gt">Mapa de la PercuSynth</p>
+      <div class="leg">
+        <span class="k">POT1</span><span class="d">Velocidad video + pitch del audio</span>
+        <span class="k">POT2</span><span class="d">Mosaico + vibrato (mod. frecuencia)</span>
+        <span class="k">POT3</span><span class="d">Glitch RGB + chorus (modulación)</span>
+        <span class="k">POT4</span><span class="d">Lo-fi + filtro (lowpass) del audio</span>
+        <span class="k i">IMU</span><span class="d">Warp + eco (delay) del audio</span>
+        <span class="k i">PIEZO</span><span class="d">Golpe → flash</span>
+      </div>
+
+      <p class="gt">Prueba sin hardware</p>
+      <div id="pots"></div>
+      <div class="pads" id="pads"></div>
+
+      <p class="hint">Botones: <b>1</b> play/stop · <b>2</b> escena (paleta + auto-wah) ·
+        <b>3</b> multi-pantalla (+ring mod) · <b>4</b> caleido (+flanger) · <b>5</b> strobe (+tremolo). Teclas
+        <kbd>SPACE</kbd> play · <kbd>O</kbd> abrir · <kbd>C</kbd> conectar · <kbd>H</kbd> panel.</p>
+    </div>
+  </div>
+
+  <input type="file" id="file" accept="video/*">
+  <video id="vid" playsinline crossorigin="anonymous" style="display:none"></video>
+
+<!-- =========================================================================== -->
+<script type="text/plain" id="firmwareSrc">
+// ==============================================================================================================================================
+// PERCU-SYNTH — VIDEO+AUDIO SYNTH CONTROLLER — GC Lab Chile
+// ==============================================================================================================================================
+// Licencia SW: MIT  |  HW: CERN-OHL-P  |  REPO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE: ESP32-S3 | POTs ADC1/2/8/10 | BTN 42/44/45/47/0 | PIEZOS ADC4..7 | IMU SDA21/SCL38 | LED WS2812 pin46
+// IDE: ESP32S3 Dev Module | USB CDC On Boot: ENABLED | Flash Mode: DIO
+// *** La PercuSynth tiene DOS USB-C: flashea por el del chip UART, pero conecta la webapp al USB NATIVO del ESP32-S3 ***
+// PROTOCOLO (115200, 50Hz): ENVIA pot1,pot2,pot3,pot4,btn1,btn2,btn3,btn4,btn5,piezo,imu   RECIBE L:l1,l2,l3,l4
+// ==============================================================================================================================================
+
+#include <Arduino.h>
+
+#define USAR_LED_FEEDBACK 1
+#if USAR_LED_FEEDBACK
+  #include <FastLED.h>
+  #define LED_PIN 46
+  #define NUM_LEDS 16        // <-- AJUSTA al largo de tu tira (>= LED_OFFSET+4)
+  #define LED_OFFSET 6
+  CRGB leds[NUM_LEDS];
+#endif
+
+#define USAR_IMU 1
+#if USAR_IMU
+  #include <Wire.h>          // IMU por I2C crudo (sin libreria externa) — como test_imu
+  #define IMU_SDA 21
+  #define IMU_SCL 38
+  uint8_t imuAddr = 0x68;
+  bool imuOk = false;
+#endif
+
+const int POT_PIN[4]   = {1, 2, 8, 10};
+const int BTN_PIN[5]   = {44, 42, 0, 45, 47};   // orden fisico BTN1..BTN5 (ver CLAUDE.md / drum_machine_basic)
+const int PIEZO_PIN[4] = {4, 5, 6, 7};
+
+const unsigned long INTERVALO = 20;
+unsigned long tEnvio = 0;
+int pkMax = 0, pkMin = 4095;
+float emaImu = 0;
+String rx = "";
+
+int leerPot(int pin){ uint32_t s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return (int)(s>>3); }
+
+#if USAR_IMU
+bool imuPing(uint8_t a){ Wire.beginTransmission(a); return Wire.endTransmission()==0; }
+void imuInit(){
+  Wire.begin(IMU_SDA, IMU_SCL); Wire.setClock(400000);
+  if(imuPing(0x68)){ imuAddr=0x68; imuOk=true; }
+  else if(imuPing(0x69)){ imuAddr=0x69; imuOk=true; }     // AD0 en alto
+  if(imuOk){ Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); } // despertar
+}
+float accelMag(){
+  if(!imuOk) return 0;
+  Wire.beginTransmission(imuAddr); Wire.write(0x3B); Wire.endTransmission(false);
+  Wire.requestFrom((int)imuAddr, 6, (int)true);
+  if(Wire.available() < 6) return 0;
+  int16_t ax=(Wire.read()<<8)|Wire.read();
+  int16_t ay=(Wire.read()<<8)|Wire.read();
+  int16_t az=(Wire.read()<<8)|Wire.read();
+  float x=ax/16384.0f, y=ay/16384.0f, z=az/16384.0f-1.0f;   // resta 1g: 0 en reposo, sube al inclinar
+  return sqrt(x*x+y*y+z*z);
+}
+#endif
+
+void aplicarLeds(String d){
+#if USAR_LED_FEEDBACK
+  int v[4]={0,0,0,0}, idx=0, ini=0;
+  for(int i=0;i<=(int)d.length() && idx<4;i++){
+    if(i==(int)d.length() || d[i]==','){ v[idx++]=d.substring(ini,i).toInt(); ini=i+1; } }
+  CRGB col[4]={CRGB(0,200,80),CRGB(120,60,255),CRGB(0,180,220),CRGB(255,120,0)};
+  for(int i=0;i<4;i++) leds[LED_OFFSET+i]= v[i]? col[i] : CRGB::Black;
+  FastLED.show();
+#endif
+}
+
+void setup(){
+  Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial.setTxTimeoutMs(0);
+#endif
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  for(int i=0;i<5;i++) pinMode(BTN_PIN[i], INPUT_PULLUP);
+#if USAR_IMU
+  imuInit();
+  Serial.println(imuOk ? "=IMU OK (0x68/0x69)" : "=IMU NO DETECTADO - revisa SDA21/SCL38/3V3/GND");
+#endif
+#if USAR_LED_FEEDBACK
+  FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS); FastLED.setBrightness(60); FastLED.clear(true);
+  for(int k=0;k<3;k++){ leds[LED_OFFSET]=CRGB(0,180,220); FastLED.show(); delay(120);
+                        leds[LED_OFFSET]=CRGB::Black;     FastLED.show(); delay(120); }
+#endif
+}
+
+void loop(){
+  unsigned long ahora = millis();
+  for(int i=0;i<4;i++){ int v=analogRead(PIEZO_PIN[i]); if(v>pkMax)pkMax=v; if(v<pkMin)pkMin=v; }
+  if(ahora - tEnvio >= INTERVALO){
+    tEnvio = ahora;
+    int p0=leerPot(POT_PIN[0]), p1=leerPot(POT_PIN[1]), p2=leerPot(POT_PIN[2]), p3=leerPot(POT_PIN[3]);
+    int b0=!digitalRead(BTN_PIN[0]), b1=!digitalRead(BTN_PIN[1]), b2=!digitalRead(BTN_PIN[2]),
+        b3=!digitalRead(BTN_PIN[3]), b4=!digitalRead(BTN_PIN[4]);
+    int piezo = constrain(pkMax - pkMin, 0, 4095); pkMax=0; pkMin=4095;
+    int imu;
+#if USAR_IMU
+    if(imuOk){ float t=accelMag(); int raw=constrain((int)(t*4095.0),0,4095); emaImu=0.25f*raw+0.75f*emaImu; imu=(int)emaImu; }
+    else imu=2048;
+#else
+    imu=2048;
+#endif
+    Serial.print(p0); Serial.print(','); Serial.print(p1); Serial.print(','); Serial.print(p2); Serial.print(',');
+    Serial.print(p3); Serial.print(','); Serial.print(b0); Serial.print(','); Serial.print(b1); Serial.print(',');
+    Serial.print(b2); Serial.print(','); Serial.print(b3); Serial.print(','); Serial.print(b4); Serial.print(',');
+    Serial.print(piezo); Serial.print(','); Serial.println(imu);
+  }
+  while(Serial.available()){
+    char c=Serial.read();
+    if(c=='\n'){ if(rx.startsWith("L:")) aplicarLeds(rx.substring(2)); rx=""; }
+    else if(c!='\r'){ if(rx.length()<24) rx+=c; }
+  }
+}
+</script>
+
+<script>
+"use strict";
+//=================================================================================
+// WebGL — render directo (sin feedback)
+//=================================================================================
+const canvas=document.getElementById('gl');
+const gl=canvas.getContext('webgl',{antialias:false});
+if(!gl) alert('Tu navegador no soporta WebGL.');
+
+const VERT=`attribute vec2 a_pos; varying vec2 v_uv;
+void main(){ v_uv=a_pos*0.5+0.5; gl_Position=vec4(a_pos,0.,1.); }`;
+const FRAG=`precision highp float;
+varying vec2 v_uv; uniform sampler2D u_video; uniform vec2 u_res; uniform float u_time;
+uniform float u_sat,u_rgb,u_displace,u_scanline,u_punch,u_pixelate,u_kaleido,u_strobe,u_zoom,u_tile; uniform int u_palette;
+vec3 hsv2rgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-min(q.w,q.y),e=1e-10;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
+vec3 jet(float t){return vec3(clamp(1.5-abs(4.*t-3.),0.,1.),clamp(1.5-abs(4.*t-2.),0.,1.),clamp(1.5-abs(4.*t-1.),0.,1.));}
+vec3 paleta(vec3 c,int p){ float g=dot(c,vec3(.299,.587,.114));
+  if(p==0)return c; if(p==1)return jet(g); if(p==2)return hsv2rgb(vec3(g,1.,1.));
+  if(p==3)return vec3(0.,g,0.); if(p==4)return vec3(g);
+  vec3 a=vec3(0.,.83,1.),b=vec3(.49,.23,.93); return mix(vec3(.02,.02,.05),mix(a,b,g),g); }
+void main(){
+  vec2 uv=v_uv;
+  if(u_tile>1.5){ uv=fract(uv*u_tile); }                 // multiplicador de pantallas (NxN)
+  if(u_kaleido>0.5){ vec2 p=uv-0.5; float a=atan(p.y,p.x),r=length(p);
+    float seg=6.2831853/u_kaleido; a=mod(a,seg); a=abs(a-seg*0.5); uv=vec2(cos(a),sin(a))*r+0.5; }
+  if(u_pixelate>0.5){ uv=(floor(uv*u_pixelate)+0.5)/u_pixelate; }
+  uv=(uv-0.5)/(1.0+u_zoom)+0.5;                 // IMU: zoom
+  uv=(uv-0.5)*(1.0-u_punch*0.14)+0.5;
+  uv+=vec2(sin(uv.y*11.0+u_time*2.0)*u_displace, cos(uv.x*11.0+u_time*2.6)*u_displace);  // IMU: warp
+  vec2 sh=vec2(u_rgb+u_punch*0.03,0.);
+  vec3 col;
+  col.r=texture2D(u_video,clamp(uv+sh,0.001,0.999)).r;
+  col.g=texture2D(u_video,clamp(uv,0.001,0.999)).g;
+  col.b=texture2D(u_video,clamp(uv-sh,0.001,0.999)).b;
+  col=paleta(col,u_palette);
+  vec3 hsv=rgb2hsv(col); hsv.y=clamp(hsv.y*u_sat,0.,1.); col=hsv2rgb(hsv);
+  col*=(1.0+u_punch*1.2);
+  col*=u_strobe;
+  col*=1.0-u_scanline*0.6*(0.5+0.5*sin(v_uv.y*u_res.y*3.14159));
+  gl_FragColor=vec4(clamp(col,0.,1.),1.0);
+}`;
+function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+  if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(o));return o;}
+const pFx=gl.createProgram(); gl.attachShader(pFx,sh(gl.VERTEX_SHADER,VERT));
+gl.attachShader(pFx,sh(gl.FRAGMENT_SHADER,FRAG)); gl.linkProgram(pFx);
+if(!gl.getProgramParameter(pFx,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(pFx));
+const quad=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const aPos=gl.getAttribLocation(pFx,'a_pos'); gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+const U={}; ['u_video','u_res','u_time','u_sat','u_rgb','u_displace','u_scanline','u_punch',
+  'u_pixelate','u_kaleido','u_strobe','u_zoom','u_tile','u_palette'].forEach(n=>U[n]=gl.getUniformLocation(pFx,n));
+const vidTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,vidTex);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+
+//=================================================================================
+// Estado
+//=================================================================================
+const FX={ sat:1, rgb:0, displace:0, zoom:0, scanline:0, pixelate:0, kaleido:0, tile:1, palette:0, speed:1 };
+const A ={ vibrato:0, chorus:0, cut01:1, echo:0 };
+const ST={ playing:false, strobe:false };
+let punch=0, piezoRaw=0, imuRaw=0;
+const kaleSteps=[0,2,4,6,8,12]; let kaleIdx=0, kaleLevel=0;
+const tileSteps=[1,2,3,4]; let tileIdx=0;
+
+function applyPots(p){
+  FX.speed = 0.3 + p[0]*2.2;
+  FX.pixelate = p[1]<0.04 ? 0 : Math.round(170 - p[1]*158);   // más pot = más mosaico
+  A.vibrato = p[1];                                           // POT2 → vibrato (FM)
+  FX.rgb = p[2]*0.06;  A.chorus = p[2];                       // POT3 → chorus
+  FX.scanline = p[3];  FX.sat = 1 - p[3]*0.85;  A.cut01 = 1 - p[3];
+  for(let i=0;i<4;i++) if(potSliders[i]) potSliders[i].value=p[i];
+}
+function applyIMU(t){ imuRaw=t; FX.displace=t*0.13; FX.zoom=t*0.45; A.echo=t;
+  const sl=document.getElementById('imuSlider'); if(sl) sl.value=t;
+  const v=document.getElementById('imuVal'); if(v) v.textContent=t.toFixed(2); }
+function btnAction(i){
+  if(i===0) togglePlay();
+  else if(i===1){ FX.palette=(FX.palette+1)%6; }   // escena: paleta (video) + auto-wah (audio, en updateAudio)
+  else if(i===2){ tileIdx=(tileIdx+1)%tileSteps.length; FX.tile=tileSteps[tileIdx]; }
+  else if(i===3){ kaleIdx=(kaleIdx+1)%kaleSteps.length; kaleLevel=kaleSteps[kaleIdx]; FX.kaleido=kaleLevel; }
+  else if(i===4){ ST.strobe=!ST.strobe; }
+  refreshPads();
+}
+
+//=================================================================================
+// AUDIO — el audio ORIGINAL del video, procesado
+//   mes -> wah -> vibrato -> chorus -> flanger -> filtro -> tremolo -> ringmod -> (seco+eco) -> salida
+//=================================================================================
+let actx=null,mes,filt,trem,lfo,lfoDepth,ring,ringOsc,ringDepth,
+    wah,wahLfo,wahDepth,vibDepth,chorusWet,flangerWet,flangerFb,flangerLfo,
+    delay,fbk,echoWet,master,ana,anaBuf,audioBuilt=false;
+
+// Cada ESCENA (BTN2) suena distinta: g=boost, rate=velocidad barrido, freq=centro
+const SCENE_WAH=[ {g:0,rate:0,freq:800}, {g:12,rate:1.5,freq:450}, {g:13,rate:4,freq:900},
+                  {g:14,rate:7.5,freq:1500}, {g:11,rate:0.6,freq:300}, {g:14,rate:11,freq:2200} ];
+// Cada MULTIPLICADOR (BTN3) un tono de ring mod distinto (por nivel de tile)
+const RING_FREQ=[0,0,150,400,900];
+// Cada nivel de CALEIDO (BTN4) un flanger distinto (feedback y velocidad)
+const FL_FB  =[0,0.35,0.5,0.64,0.78,0.9];
+const FL_RATE=[0.1,0.25,0.45,0.7,1.1,1.7];
+
+// delay modulado (chorus / flanger): {in,out,wet,fb,lfo}
+function modDelay(baseT,rate,depth,fb){
+  const inN=actx.createGain(), out=actx.createGain(), dry=actx.createGain(), wetG=actx.createGain();
+  dry.gain.value=1; wetG.gain.value=0;
+  const d=actx.createDelay(0.1); d.delayTime.value=baseT;
+  const g=actx.createGain(); g.gain.value=fb;
+  const l=actx.createOscillator(); l.frequency.value=rate;
+  const ld=actx.createGain(); ld.gain.value=depth;
+  l.connect(ld); ld.connect(d.delayTime); l.start();
+  inN.connect(dry); dry.connect(out);
+  inN.connect(d); d.connect(g); g.connect(d); d.connect(wetG); wetG.connect(out);
+  return {in:inN,out,wet:wetG,fb:g,lfo:l};
+}
+// vibrato (modulación de frecuencia): 100% húmedo, profundidad variable
+function makeVibrato(rate){
+  const inN=actx.createGain(), out=actx.createGain();
+  const d=actx.createDelay(0.05); d.delayTime.value=0.015;
+  const l=actx.createOscillator(); l.frequency.value=rate;
+  const depth=actx.createGain(); depth.gain.value=0;
+  l.connect(depth); depth.connect(d.delayTime); l.start();
+  inN.connect(d); d.connect(out);
+  return {in:inN,out,depth};
+}
+function buildAudio(){
+  if(audioBuilt) return;
+  try{
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    mes=actx.createMediaElementSource(vid);
+    // auto-wah (BTN2 escena) — peaking que barre, plano si gain=0
+    wah=actx.createBiquadFilter(); wah.type='peaking'; wah.frequency.value=800; wah.Q.value=3; wah.gain.value=0;
+    wahLfo=actx.createOscillator(); wahLfo.frequency.value=3.5;
+    wahDepth=actx.createGain(); wahDepth.gain.value=0;
+    wahLfo.connect(wahDepth); wahDepth.connect(wah.frequency); wahLfo.start();
+    // vibrato / FM (POT2)
+    const vib=makeVibrato(6); vibDepth=vib.depth;
+    // chorus (POT3) + flanger (BTN4 caleido)
+    const chorus=modDelay(0.025,0.8,0.004,0.0); chorusWet=chorus.wet;
+    const flanger=modDelay(0.004,0.3,0.0022,0.5); flangerWet=flanger.wet; flangerFb=flanger.fb; flangerLfo=flanger.lfo;
+    // filtro lowpass (POT4)
+    filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=18000; filt.Q.value=1;
+    // tremolo (BTN5)
+    trem=actx.createGain(); trem.gain.value=1;
+    lfo=actx.createOscillator(); lfo.type='sine'; lfo.frequency.value=11; lfoDepth=actx.createGain(); lfoDepth.gain.value=0;
+    lfo.connect(lfoDepth); lfoDepth.connect(trem.gain); lfo.start();
+    // ring mod (BTN3 multiplicador)
+    ring=actx.createGain(); ring.gain.value=1;
+    ringOsc=actx.createOscillator(); ringOsc.type='sine'; ringOsc.frequency.value=200; ringDepth=actx.createGain(); ringDepth.gain.value=0;
+    ringOsc.connect(ringDepth); ringDepth.connect(ring.gain); ringOsc.start();
+    // eco (IMU)
+    master=actx.createGain(); master.gain.value=1;
+    delay=actx.createDelay(1.0); delay.delayTime.value=0.28; fbk=actx.createGain(); fbk.gain.value=0.4; echoWet=actx.createGain(); echoWet.gain.value=0;
+    ana=actx.createAnalyser(); ana.fftSize=256; anaBuf=new Float32Array(ana.fftSize);
+    // serie:
+    mes.connect(wah); wah.connect(vib.in); vib.out.connect(chorus.in); chorus.out.connect(flanger.in); flanger.out.connect(filt);
+    filt.connect(trem); trem.connect(ring);
+    ring.connect(master);                                                       // seco
+    ring.connect(delay); delay.connect(fbk); fbk.connect(delay); delay.connect(echoWet); echoWet.connect(master); // eco
+    master.connect(ana); ana.connect(actx.destination);
+    audioBuilt=true;
+  }catch(e){ console.warn('audio',e); }
+}
+function ensureAudio(){ buildAudio(); if(actx && actx.state==='suspended') actx.resume(); }
+function updateAudio(){
+  if(!audioBuilt) return;
+  vibDepth.gain.value = A.vibrato*0.004;                // POT2 → vibrato (modulación de frecuencia)
+  chorusWet.gain.value = A.chorus*0.7;                  // POT3 → chorus
+  filt.frequency.value = 120*Math.pow(140, A.cut01);    // POT4 → lowpass
+  echoWet.gain.value = A.echo*0.75;                     // IMU → eco
+  // BTN2 escena: cada paleta = un auto-wah distinto
+  const w=SCENE_WAH[FX.palette]||SCENE_WAH[0];
+  wah.gain.value=w.g; wah.frequency.value=w.freq; wahLfo.frequency.value=Math.max(0.01,w.rate);
+  wahDepth.gain.value=(w.g>0 && w.rate>0)?700:0;
+  // BTN3 multiplicador: cada nivel = un tono de ring mod distinto
+  if(FX.tile>1){ ringOsc.frequency.value=RING_FREQ[FX.tile]||300; ring.gain.value=0.25; ringDepth.gain.value=0.85; }
+  else { ring.gain.value=1; ringDepth.gain.value=0; }
+  // BTN4 caleido: cada nivel = un flanger distinto
+  if(FX.kaleido>0){ flangerWet.gain.value=0.6; flangerFb.gain.value=FL_FB[kaleIdx]; flangerLfo.frequency.value=FL_RATE[kaleIdx]; }
+  else flangerWet.gain.value=0;
+  // BTN5 strobe: tremolo
+  lfoDepth.gain.value = ST.strobe?0.5:0; trem.gain.value = ST.strobe?0.5:1.0;
+}
+function audioLevel(){ if(!audioBuilt)return 0; ana.getFloatTimeDomainData(anaBuf);
+  let s=0; for(let i=0;i<anaBuf.length;i++)s+=anaBuf[i]*anaBuf[i]; return Math.min(1,Math.sqrt(s/anaBuf.length)*2.2); }
+addEventListener('pointerdown',ensureAudio); addEventListener('keydown',ensureAudio);
+
+//=================================================================================
+// Layout
+//=================================================================================
+const vid=document.getElementById('vid');
+let vidReady=false,lastFit=[0,0];
+function fit(){ if(!vidReady)return;
+  const ar=vid.videoWidth/vid.videoHeight; let W=innerWidth,H=innerHeight,cw,ch;
+  if(W/H>ar){ch=H;cw=Math.round(H*ar);}else{cw=W;ch=Math.round(W/ar);}
+  cw=Math.max(2,cw);ch=Math.max(2,ch);
+  if(cw===lastFit[0]&&ch===lastFit[1])return; lastFit=[cw,ch];
+  canvas.width=cw;canvas.height=ch;gl.viewport(0,0,cw,ch); }
+addEventListener('resize',fit);
+
+//=================================================================================
+// Golpe (piezo) -> punch
+//=================================================================================
+let envVal=0; const ATT=1-Math.exp(-1/(60*0.005));
+function envFollow(n){ const r=1-Math.exp(-1/(60*0.25));
+  if(n>envVal)envVal+=ATT*(n-envVal); else envVal+=r*(n-envVal); return Math.max(0,Math.min(1,envVal)); }
+
+//=================================================================================
+// Web Serial
+//=================================================================================
+let port=null,reader=null,writer=null,serialOn=false,prevBtn=[0,0,0,0,0];
+const decd=new TextDecoder(),encd=new TextEncoder(); let serBuf='';
+let rxCount=0,rxLast='',rxLastT=0,rxPrev=0;
+async function toggleSerial(){
+  if(serialOn){ await closeSerial(); return; }
+  if(!('serial' in navigator)){ alert('Web Serial no disponible (usa Chrome/Edge).'); return; }
+  try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200});
+    writer=port.writable.getWriter(); serialOn=true; rxCount=0;rxPrev=0;rxLast='';rxLastT=0;
+    serialBtn.classList.add('serial-on'); serialBtn.textContent='⚡ Conectado';
+    pSerial.classList.add('live'); pSerial.lastChild.textContent='PercuSynth'; readLoop();
+  }catch(e){ console.warn(e); }
+}
+async function closeSerial(){
+  serialOn=false;
+  try{ if(reader){await reader.cancel();reader.releaseLock();} }catch(e){}
+  try{ if(writer) writer.releaseLock(); }catch(e){}
+  try{ if(port) await port.close(); }catch(e){}
+  port=reader=writer=null;
+  serialBtn.classList.remove('serial-on'); serialBtn.textContent='⚡ Conectar';
+  pSerial.classList.remove('live'); pSerial.lastChild.textContent='serial';
+}
+async function readLoop(){
+  reader=port.readable.getReader();
+  try{ while(serialOn){ const {value,done}=await reader.read(); if(done)break;
+    serBuf+=decd.decode(value); let nl;
+    while((nl=serBuf.indexOf('\n'))>=0){ const line=serBuf.slice(0,nl).trim(); serBuf=serBuf.slice(nl+1);
+      if(line){ rxCount++; rxLast=line; rxLastT=performance.now(); if(rxCount<=5)console.log('RX:',line);
+        if(line[0]!=='=') parseSerial(line); } }
+  } }catch(e){ console.warn('serial',e); } finally{ try{reader.releaseLock();}catch(e){} }
+}
+function parseSerial(line){
+  const v=line.split(',').map(Number); if(v.length<6 || v.some(isNaN)) return;
+  applyPots([v[0]/4095,v[1]/4095,v[2]/4095,v[3]/4095]);
+  let bN,piezo,imu;
+  if(v.length>=11){ bN=5; piezo=v[9]; imu=v[10]; } else { bN=4; piezo=v[8]; imu=v[9]; }
+  for(let i=0;i<bN;i++){ const b=v[4+i]?1:0; if(b&&!prevBtn[i])btnAction(i); prevBtn[i]=b; }
+  if(piezo!=null&&!isNaN(piezo)) piezoRaw=Math.min(1,piezo/4095);
+  if(imu!=null&&!isNaN(imu)) applyIMU(imu/4095);
+}
+let lastLed=0;
+function sendLEDs(){ if(!serialOn||!writer)return; const now=performance.now(); if(now-lastLed<60)return; lastLed=now;
+  const l=[ST.playing?1:0, FX.tile>1?1:0, FX.kaleido>0.5?1:0, ST.strobe?1:0];
+  try{ writer.write(encd.encode('L:'+l.join(',')+'\n')); }catch(e){} }
+
+//=================================================================================
+// Acciones / carga
+//=================================================================================
+function togglePlay(){ ST.playing=!ST.playing; ensureAudio(); if(!vidReady)return;
+  if(ST.playing) vid.play().catch(()=>{}); else vid.pause(); updatePills(); refreshPads(); }
+function loadVideo(f){
+  const url=(typeof f==='string')?f:URL.createObjectURL(f);
+  vid.src=url; vid.loop=true; vid.muted=false;
+  vid.addEventListener('loadeddata',()=>{ vidReady=true; fit();
+    document.getElementById('drop').classList.add('hide');
+    ST.playing=true; ensureAudio(); vid.play().catch(()=>{}); updatePills(); refreshPads(); },{once:true});
+}
+document.getElementById('file').addEventListener('change',e=>{ if(e.target.files[0])loadVideo(e.target.files[0]); });
+function pick(){ document.getElementById('file').click(); }
+['openBtn','open2'].forEach(id=>document.getElementById(id).addEventListener('click',pick));
+const stage=document.getElementById('stage');
+stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('dragover');});
+stage.addEventListener('dragleave',()=>stage.classList.remove('dragover'));
+stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('dragover');
+  const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('video'))loadVideo(f);});
+
+//=================================================================================
+// UI
+//=================================================================================
+const potNames=['POT1 · velocidad/pitch','POT2 · mosaico/vibrato','POT3 · glitch/chorus','POT4 · lo-fi/filtro'];
+const potSliders=[];
+(function(){
+  const cont=document.getElementById('pots');
+  for(let i=0;i<4;i++){
+    const row=document.createElement('div'); row.className='pot';
+    row.innerHTML=`<div class="l"><b>${potNames[i]}</b><span></span></div>`;
+    const inp=document.createElement('input'); inp.type='range'; inp.min=0;inp.max=1;inp.step=.001; inp.value=(i===0?0.4:0.05);
+    inp.addEventListener('input',()=>{ applyPots(potSliders.map(s=>parseFloat(s.value))); row.querySelector('span').textContent=parseFloat(inp.value).toFixed(2); });
+    row.appendChild(inp); cont.appendChild(row); potSliders.push(inp); row.querySelector('span').textContent=parseFloat(inp.value).toFixed(2);
+  }
+  const row=document.createElement('div'); row.className='pot';
+  row.innerHTML=`<div class="l"><b>IMU · warp/eco</b><span id="imuVal">0.50</span></div>`;
+  const inp=document.createElement('input'); inp.type='range'; inp.id='imuSlider'; inp.min=0;inp.max=1;inp.step=.001; inp.value=0.5;
+  inp.addEventListener('input',()=>{ applyIMU(parseFloat(inp.value)); });
+  row.appendChild(inp); cont.appendChild(row);
+  applyPots([0.4,0.05,0.05,0.05]); applyIMU(0.5);
+})();
+const padDefs=[['B1','play'],['B2','escena'],['B3','mult'],['B4','caleido'],['B5','strobe']];
+(function(){ const cont=document.getElementById('pads');
+  padDefs.forEach((d,i)=>{ const el=document.createElement('div'); el.className='pad'; el.dataset.i=i;
+    el.innerHTML=d[0]+'<small>'+d[1]+'</small>'; el.addEventListener('click',()=>btnAction(i)); cont.appendChild(el); }); })();
+function refreshPads(){ const p=document.querySelectorAll('#pads .pad');
+  if(p[0])p[0].classList.toggle('act',ST.playing);
+  if(p[2]){ p[2].classList.toggle('act',FX.tile>1); const s=p[2].querySelector('small'); if(s) s.textContent=FX.tile>1?('x'+FX.tile):'mult'; }
+  if(p[3])p[3].classList.toggle('act',FX.kaleido>0.5);
+  if(p[4])p[4].classList.toggle('act',ST.strobe);
+  if(p[3]){ const s=p[3].querySelector('small'); if(s) s.textContent = kaleLevel? ('x'+kaleLevel) : 'caleido'; }
+}
+
+const pState=document.getElementById('pState'),pSerial=document.getElementById('pSerial'),
+      pFps=document.getElementById('pFps'),serialBtn=document.getElementById('serialBtn');
+function updatePills(){ pState.lastChild.textContent=ST.playing?'PLAY':'STOP'; pState.classList.toggle('live',ST.playing); }
+serialBtn.addEventListener('click',toggleSerial);
+document.getElementById('fwBtn').addEventListener('click',()=>{
+  const src=document.getElementById('firmwareSrc').textContent.replace(/^\s*\n/,'');
+  const blob=new Blob([src],{type:'text/plain'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='video_synth_control_percusynth.ino';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); });
+document.getElementById('panelBtn').addEventListener('click',()=>document.getElementById('panel').classList.toggle('hide'));
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();btnAction(0);} else if(k==='2')btnAction(1); else if(k==='3')btnAction(2);
+  else if(k==='4')btnAction(3); else if(k==='5')btnAction(4); else if(k==='o')pick();
+  else if(k==='c')toggleSerial(); else if(k==='h')document.getElementById('panel').classList.toggle('hide'); });
+
+setInterval(()=>{ const m=document.getElementById('rxmon'); if(!m)return;
+  if(!serialOn){ m.textContent='Serial: sin conectar'; m.className=''; return; }
+  const now=performance.now(); const rate=(rxCount-rxPrev)*2; rxPrev=rxCount;
+  if(rxCount>0 && now-rxLastT<1500){ m.className='ok'; m.textContent='RX '+rate+'/s · '+rxLast.slice(0,40); }
+  else { m.className='warn'; m.textContent='Conectado pero SIN datos. La PercuSynth tiene 2 puertos USB-C: usa el USB NATIVO del ESP32-S3, no el de programación. Y flashea con "USB CDC On Boot: Enabled".'; }
+},500);
+
+//=================================================================================
+// Render
+//=================================================================================
+let fpsT=performance.now(),fpsN=0,t0=performance.now();
+function render(){
+  requestAnimationFrame(render);
+  if(!vidReady) return; fit();
+  if(ST.playing) vid.playbackRate=Math.max(0.1,Math.min(4, FX.speed));
+
+  punch=envFollow(piezoRaw); piezoRaw*=0.6;
+  updateAudio();
+  const strobe = ST.strobe ? (0.25+0.75*(0.5+0.5*Math.sin((performance.now()-t0)/1000*2*Math.PI*11))) : 1.0;
+
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.bindTexture(gl.TEXTURE_2D,vidTex);
+  if(vid.readyState>=2){ try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,vid);}catch(e){} }
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+
+  document.getElementById('mG').style.width=(punch*100)+'%';
+  document.getElementById('mA').style.width=(audioLevel()*100)+'%';
+  document.getElementById('mI').style.width=(imuRaw*100)+'%';
+  document.getElementById('mIt').textContent='IMU '+Math.round(imuRaw*100);
+
+  gl.viewport(0,0,canvas.width,canvas.height); gl.useProgram(pFx);
+  gl.bindBuffer(gl.ARRAY_BUFFER,quad); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,vidTex); gl.uniform1i(U.u_video,0);
+  gl.uniform2f(U.u_res,canvas.width,canvas.height);
+  gl.uniform1f(U.u_time,(performance.now()-t0)/1000);
+  gl.uniform1f(U.u_sat,FX.sat); gl.uniform1f(U.u_rgb,FX.rgb); gl.uniform1f(U.u_displace,FX.displace);
+  gl.uniform1f(U.u_scanline,FX.scanline); gl.uniform1f(U.u_punch,punch);
+  gl.uniform1f(U.u_pixelate,FX.pixelate); gl.uniform1f(U.u_kaleido,FX.kaleido); gl.uniform1f(U.u_strobe,strobe);
+  gl.uniform1f(U.u_zoom,FX.zoom); gl.uniform1f(U.u_tile,FX.tile);
+  gl.uniform1i(U.u_palette,Math.round(FX.palette));
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+  sendLEDs();
+  fpsN++; const now=performance.now();
+  if(now-fpsT>=500){ pFps.textContent=Math.round(fpsN*1000/(now-fpsT))+' fps'; fpsN=0;fpsT=now; }
+}
+updatePills(); refreshPads(); render();
+</script>
+</body>
+</html>

@@ -8,23 +8,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 percusynth/
 ├── firmwares/                      # Hand-written Arduino sketches
 │   ├── drum_machine_basic/         #   16-step drum machine + real-time synth
-│   ├── MIDI_Drum/                  #   MIDI controller (buttons + piezos + IMU)
 │   ├── synth_basico/               #   5-voice polyphonic synth
-│   ├── test_leds/                  #   WS2812 strip test (6 animation modes)
+│   ├── trance_imu/                 #   Polyphonic trance sequencer (IMU → filter)
+│   ├── trance_imu_leds/            #   trance_imu + 6 on-board SMD LEDs as visualizer
+│   ├── impact_chimes/              #   Floor-impact chimes (accelerometer triggers scale notes)
+│   ├── seismic_drone/              #   Deep drones from ground vibration (±2g)
+│   ├── MIDI_Drum/                  #   MIDI controller (buttons + piezos + IMU)
 │   ├── drum_midi_leds/             #   Drum MIDI + cinematic LED show
-│   ├── step_sequencer_midi/        #   Sample sequencer + MIDI Clock Master
-│   └── dub_siren/                  #   Dub siren (in development — PLAN.md only)
+│   ├── trance_midi_leds/           #   Mono melodic trance over MIDI + 20×20 matrix show
+│   ├── matrix_midi_anyma/          #   20×20 matrix electro sequencer + MIDI Clock Master + 2D visual engine
+│   ├── dub_siren/                  #   Dub siren (in development — PLAN.md only)
+│   ├── test_leds/                  #   WS2812 strip test (6 animation modes)
+│   ├── test_imu/                   #   IMU test over Serial Monitor
+│   ├── test_imu_led/               #   IMU test without USB → output on LEDs
+│   └── test_imu_sound/             #   IMU test without USB → output via DAC sound
 ├── tools/                          # Standalone webapps (Chrome/Edge)
 │   ├── percu_control/              #   Universal panel + browser-side firmware flashing
 │   ├── sample_loader/              #   Generates .ino with embedded one-shot samples
 │   ├── loop_loader/                #   Generates .ino with loops + hits
-│   ├── step_sequencer_loader/      #   Generates .ino + live Web MIDI remote
+│   ├── step_sequencer_loader/      #   Generates sample-sequencer .ino + live Web MIDI remote
 │   ├── dub_siren_generator/        #   Generates dub siren .ino with embedded samples
+│   ├── midi_sampler/               #   MIDI-USB sampler: live Web Audio instrument + generates .ino
+│   ├── video_synth/                #   Audiovisual video synth driven over Web Serial
 │   └── loops/bpm_mono_44100/       #   BPM-aware loop editor
+├── videogame/
+│   └── cyber_flight/               # NEON STRIKE: cyberpunk first-person shooter (Web Serial)
 ├── samples/                        # Auto-generated firmware examples from the loaders
+├── Hardware/                       # Schematic, PCB and gerbers of the circuit
 ├── Imagenes/                       # 3D renders and pinout diagrams
-└── Documentos/                     # Technical report
+└── Documentos/                     # Technical report (PDF)
 ```
+
+A single master context document for AIs lives at the repo root: `PROMPT_PARA_LA_IA.md` (+ `.pdf`).
 
 Each subdirectory of `firmwares/` and `tools/` has its own `README.md` (or `PLAN.md` for work-in-progress).
 
@@ -35,12 +50,17 @@ PercuSynth is an embedded electronic percussion synthesizer project by GC Lab Ch
 ### Hand-written firmwares (under `firmwares/`)
 
 - **drum_machine_basic** — 16-step sequencer drum machine with real-time synthesis (no samples)
-- **MIDI_Drum** — Hardware MIDI USB controller using piezo sensors, buttons, and IMU (MPU6050); velocity-by-IMU-motion for button hits
 - **synth_basico** — 5-voice polyphonic synthesizer with waveform morphing (sine → square → saw)
-- **test_leds** — FastLED WS2812 strip test with 6 animation modes
+- **trance_imu** — Polyphonic trance sequencer ported from Proto-Synth v2 to I2S 44.1 kHz/16-bit; each step fires a 4-voice chord over a 16-voice pool; PolyBLEP saw + resonant biquad LPF driven live by the IMU (X → cutoff, Y → resonance). No LEDs/Serial (all CPU to audio)
+- **trance_imu_leds** — Same as trance_imu but uses the 6 on-board SMD WS2812 LEDs as a visualizer (poly VU + beat flash + filter-driven color)
+- **impact_chimes** — Floor-impact instrument: accelerometer detects hits on the floor → triggers scale notes (chimes); one scale per button, pots = synthesis
+- **seismic_drone** — Deep ambient sibling of impact_chimes: MPU6050 at ±2g senses ground vibration → epic drone (detuned stereo saw + sub, breathing resonant filter)
+- **MIDI_Drum** — Hardware MIDI USB controller using piezo sensors, buttons, and IMU (MPU6050); velocity-by-IMU-motion for button hits
 - **drum_midi_leds** — Drum machine MIDI controller with cinematic full-strip LED effects (one effect per drum type, additive mixing, 8-event pool)
-- **step_sequencer_midi** — 6-track × 16-step sample sequencer; PercuSynth becomes the **MIDI Clock Master**; webapp can edit pattern live via Web MIDI without re-flashing
+- **trance_midi_leds** — Same sequencer engine as trance_imu but **monophonic & melodic**: one note per step over USB MIDI (true mono), IMU → MIDI CC (CC74/CC71), plus a "fiesta electrónica" show on the 20×20 matrix
+- **matrix_midi_anyma** — Anyma-style electro audiovisual machine for the 20×20 WS2812 matrix: internal 16-step sequencer (4 patterns) sends drums (ch10) + bass (ch1) over USB MIDI, acts as **MIDI Clock Master**, and drives a 2D visual engine (5 scenes: NEXUS/TUNNEL/SPECTRUM/STORM/GRID) reacting to both the internal sequencer and incoming MIDI notes. No audio (visual + MIDI controller only)
 - **dub_siren** — Work-in-progress dub siren firmware (`.ino` generated by `tools/dub_siren_generator/`)
+- **test_leds / test_imu / test_imu_led / test_imu_sound** — Minimal hardware-diagnostic sketches (LED strip; IMU over Serial; IMU shown on LEDs; IMU rendered as sound). The IMU tests without USB avoid CDC-induced resets
 
 ### Tool-generated firmwares (under `samples/`)
 
@@ -49,6 +69,13 @@ These `.ino` files are **artifacts** produced by the webapps in `tools/` — not
 ### Webapps (under `tools/`)
 
 All are standalone HTML files (no build step). Pattern: drop audio files in the browser → app generates a `.ino` → user flashes it via Arduino IDE. Exception: `percu_control` flashes a pre-built `firmware.bin` via ESP Web Tools, and `step_sequencer_loader` also acts as a **live Web MIDI remote** for the running PercuSynth.
+
+- **midi_sampler** — Reads a USB MIDI controller via **Web MIDI** and plays **one** loaded sample (e.g. a bell) as a live **Web Audio** instrument, pitched by the incoming MIDI note relative to a configurable base note (per-voice: linear-interp resampling, AR envelope, one-pole LPF; velocity→gain; sine fallback when no sample is loaded). **4 on-screen knobs (= the 4 hardware pots, ADC 1/2/8/10)** for volume/attack/decay/cutoff, also movable via MIDI CC (7/73/72/74). Testable with no hardware (on-screen keyboard + PC keys). A second tab **generates the `.ino`** that turns the PercuSynth itself into a 1-sample MIDI-USB sampler with the same synthesis mapped to the 4 pots.
+- **video_synth** — Single-page webapp that imports a video and synthesizes it into image **and** sound in real time, driven by the PercuSynth over **Web Serial** (or the PC mic). Minimalist: each control does one obvious thing.
+
+### Game (under `videogame/`)
+
+- **cyber_flight** — **NEON STRIKE**, a cyberpunk first-person flight-shooter game (not a generator). Reads the PercuSynth over **Web Serial** (`p0..p3,b1..b5,imuX,imuY` @ 50 Hz): the **two IMU axes** steer a center-locked reticle, **BTN5** fires from the right edge, **BTN1** fires from the left edge, **BTN2+BTN4 together** drop a screen-clearing bomb. Canvas-2D synthwave city with Web Audio SFX and a wave/score/multiplier system. Ships its own firmware (`neon_strike_control_percusynth.ino`, embedded download — sends X **and** Y accel). Fully playable with **mouse+keyboard** when no hardware is connected.
 
 ## Build & Flash
 
@@ -124,16 +151,6 @@ All audio firmwares follow the same pattern: a `setup()` that initializes hardwa
 - Per-drum effect: `fxKick` (shockwave), `fxSnare` (flash + sparks), `fxHihat` (alternating-direction cyan bolt), `fxCrash` (supernova fading to rainbow)
 - Background ambient: sinusoidal hue wave with warm orange pulse on strong beats
 - Step indicator: comet trail moving across the strip in sync with the 16-step sequencer
-
-### step_sequencer_midi
-- Sample player + 6-track × 16-step sequencer + global FX (HPF/LPF biquad, pitch, bitcrush, stutter, reverse, soft limiter)
-- **MIDI Clock Master** — emits 0xF8 24 PPQ, 0xFA/0xFC start/stop on USB MIDI
-- Bidirectional Web MIDI protocol with `tools/step_sequencer_loader/`:
-  - Channel 16 NoteOn → edit pattern cells / mute / transport
-  - Channel 16 CC → set BPM/swing/pitch/FX in real time
-  - PercuSynth echoes pot changes back to the webapp (sliders stay in sync)
-- Local pots use hysteresis (`abs(p - lp) > 20`) so they don't fight the webapp
-- Sample data placeholders (`TRK_*_LEN = 0`) → regenerate from the webapp with real samples before use
 
 ### dub_siren *(in development)*
 - See `firmwares/dub_siren/PLAN.md` for full architecture

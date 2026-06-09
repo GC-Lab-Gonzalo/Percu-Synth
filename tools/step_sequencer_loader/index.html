@@ -4,256 +4,419 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PercuSynth — Step Sequencer (Live)</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg:      #0d0d14;
-  --bg2:     #161621;
-  --bg3:     #1e1e2c;
-  --bg4:     #24243a;
-  --border:  #2e2e44;
-  --accent:  #00e5a0;
-  --accent2: #7c5cff;
-  --warn:    #ffcc44;
-  --err:     #ff5555;
-  --text:    #d0d0e8;
-  --dim:     #5a5a80;
+:root{
+  --wood-1:#5a3520;--wood-2:#3d2114;--wood-3:#2a160c;
+  --silk:#e8e2cf;--silk-d:#8a8470;--silk-f:#5a5440;
+  --cyan:#5dd7ff;--violet:#b58aff;--amber:#ffaa44;--mint:#5fffc4;
+  --red:#ff5a4a;--led:#4dd0a0;
+  --pcb:#0c0e09;
+  /* aliases legados (los usa el JS / markup viejo) */
+  --bg:#0a0b06;--bg2:rgba(0,0,0,.2);--bg3:#15170f;--bg4:#1c1f14;
+  --border:rgba(232,226,207,.14);--accent:var(--mint);--accent2:var(--violet);
+  --warn:var(--amber);--err:var(--red);--text:var(--silk);--dim:var(--silk-d);
 }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Courier New', monospace;
-  min-height: 100vh;
-  padding: 14px;
-  font-size: 13px;
+html,body{
+  height:100%;width:100%;overflow:hidden;
+  font-family:'Space Mono',monospace;color:var(--silk);font-size:13px;
+  background:
+    repeating-linear-gradient(92deg,
+      rgba(0,0,0,0) 0px,rgba(0,0,0,.07) 1px,rgba(0,0,0,0) 3px,rgba(255,180,120,.03) 5px,rgba(0,0,0,0) 9px),
+    repeating-linear-gradient(88deg,
+      rgba(0,0,0,0) 0px,rgba(0,0,0,.18) .5px,rgba(0,0,0,0) 7px),
+    linear-gradient(180deg,var(--wood-1) 0%,var(--wood-2) 50%,var(--wood-3) 100%);
 }
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 18px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 14px;
-  background: var(--bg2);
-}
-.logo-title { font-size: 17px; font-weight: bold; letter-spacing: 5px; color: var(--accent); }
-.logo-sub   { font-size: 10px; color: var(--dim); letter-spacing: 3px; margin-left: 8px; }
-#status     { font-size: 11px; color: var(--dim); }
-.live-dot   { display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--err);margin-right:6px; }
-.live-dot.on{ background:var(--accent); box-shadow:0 0 6px var(--accent); }
+body{ padding:clamp(8px,1.4vmin,16px);display:flex;justify-content:center; }
 
-section {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+/* ════════ PCB BOARD ════════ */
+.pcb{
+  flex:1;width:100%;max-width:1400px;min-height:0;
+  display:flex;flex-direction:column;gap:clamp(7px,1.1vmin,12px);
+  position:relative;
+  padding:clamp(12px,2vmin,22px);border-radius:8px;
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(40,80,55,.10) 0px,rgba(40,80,55,.10) 1px,rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    repeating-linear-gradient(-45deg,
+      rgba(40,80,55,.08) 0px,rgba(40,80,55,.08) 1px,rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    radial-gradient(ellipse at 30% 0%,rgba(40,90,60,.10),transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(60,40,30,.18),transparent 60%),
+    linear-gradient(180deg,#101108 0%,#070806 50%,#0a0b07 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.04),
+    inset 0 0 0 2px rgba(0,0,0,.6),
+    0 8px 40px rgba(0,0,0,.6);
 }
-.section-title {
-  font-size: 9px;
-  letter-spacing: 4px;
-  color: var(--dim);
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+.pcb::after{                       /* tornillos en las 4 esquinas */
+  content:'';position:absolute;inset:0;pointer-events:none;border-radius:8px;
+  background:
+    radial-gradient(circle at 16px 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at 16px calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px);
 }
 
-/* MIDI panel */
-.midi-row {
-  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+/* ════════ HEADER ════════ */
+.header{
+  flex:0 0 auto;
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;
+  padding:8px 16px;
+  background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.15));
+  border:1px solid rgba(232,226,207,.1);border-radius:5px;
 }
-.midi-row label { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
-.midi-row select, .midi-row button {
-  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 4px;
-  letter-spacing: 1px; cursor: pointer;
+.brand{display:flex;align-items:center;gap:14px}
+.brand-logo{
+  width:clamp(40px,5vmin,58px);height:clamp(40px,5vmin,58px);
+  background:url('../percu_control/assets/gclab-logo.png') center/contain no-repeat;
+  filter:brightness(1.25) drop-shadow(0 0 8px rgba(232,226,207,.28));flex-shrink:0;
 }
-.midi-row button:hover { border-color: var(--accent); color: var(--accent); }
-.midi-row select { min-width: 200px; }
+.logo-title{
+  font-family:'Orbitron',sans-serif;font-weight:900;
+  font-size:clamp(18px,2.4vmin,28px);letter-spacing:4px;color:var(--silk);
+  text-shadow:0 0 12px rgba(232,226,207,.18);
+}
+.logo-sub{
+  display:block;font-family:'Space Mono',monospace;
+  font-size:clamp(8px,1vmin,11px);letter-spacing:5px;color:var(--silk-d);margin-top:5px;
+}
+#status{
+  justify-self:end;display:flex;align-items:center;gap:8px;
+  font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1.5px;
+  color:var(--silk-d);text-transform:uppercase;
+}
+.live-dot{
+  display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#1a1a1a;box-shadow:inset 0 0 0 1px rgba(0,0,0,.8),0 0 0 1px rgba(232,226,207,.12);
+}
+.live-dot.on{ background:var(--led);box-shadow:0 0 8px var(--led),0 0 16px rgba(77,208,160,.4); }
 
-/* Transport */
-.transport { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.transport button {
-  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  font-family: inherit; font-size: 12px; padding: 8px 16px; border-radius: 4px;
-  cursor: pointer; letter-spacing: 2px;
+/* ════════ MODULE (section) ════════ */
+section{
+  position:relative;padding:18px 14px 12px;
+  border:1px solid rgba(232,226,207,.13);border-radius:5px;
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.03),transparent 70%),
+    linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.08));
 }
-.transport button:hover { border-color: var(--accent); color: var(--accent); }
-.transport button.playing { background: var(--accent); color: var(--bg); }
-.transport label { font-size: 11px; color: var(--dim); letter-spacing: 2px; }
 
-/* Grid */
-.grid-wrapper { overflow-x: auto; }
-table.grid { border-collapse: separate; border-spacing: 3px; margin: 0 auto; }
-table.grid th.step-num {
-  width: 28px; height: 18px; font-size: 9px; color: var(--dim);
-  text-align: center; font-weight: normal;
-}
-table.grid th.step-num.beat    { color: var(--accent); }
-table.grid th.step-num.current { color: var(--warn); font-weight: bold; }
-table.grid td.track-label {
-  width: 150px; padding-right: 8px; text-align: right;
-  font-size: 11px; color: var(--dim); letter-spacing: 1px;
-}
-table.grid td.track-label .name { color: var(--text); cursor: pointer; }
-table.grid td.track-label .name.muted { color: var(--err); text-decoration: line-through; }
-table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
-.cell {
-  width: 28px; height: 28px; background: var(--bg3);
-  border: 1px solid var(--border); border-radius: 3px; cursor: pointer;
-  transition: background 0.08s, border-color 0.08s;
-}
-.cell.beat { background: var(--bg4); }
-.cell:hover { border-color: var(--accent); }
-.cell.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.cell.current-step { outline: 2px solid var(--warn); outline-offset: -2px; }
+/* ════════ STAGE + LAYOUT (single screen, no scroll) ════════ */
+.stage{ flex:1 1 auto;min-height:0;position:relative; }
+.tab-body{ display:none;height:100%; }
+.tab-body.active{ display:flex; }
+#tab-seq{ flex-direction:column;gap:clamp(7px,1.1vmin,12px); }
+#tab-samples{ flex-direction:column;gap:clamp(7px,1.1vmin,12px);overflow-y:auto;padding-right:4px; }
+.seq-grid{ flex:1 1 auto;min-height:0;display:flex;flex-direction:column; }
+.seq-grid .grid-wrapper{ flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center; }
+.seq-fx{ flex:0 0 auto; }
 
-/* FX panel */
-.fx-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
+/* slim toolbar (tabs + transport) */
+.toolbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:8px 12px;
+  border:1px solid rgba(232,226,207,.13);border-radius:5px;
+  background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.08));
 }
-.fx-card {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 10px 12px;
+.toolbar .sep{ width:1px;align-self:stretch;background:rgba(232,226,207,.12); }
+/* slim midi strip */
+.midibar{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:7px 12px;
+  border:1px solid rgba(232,226,207,.13);border-radius:5px;
+  background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.08));
 }
-.fx-card label {
-  display: block; font-size: 9px; color: var(--dim);
-  letter-spacing: 2px; margin-bottom: 4px;
+.midibar .mlbl{
+  font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;
+  color:var(--silk-d);text-transform:uppercase;
 }
-.fx-card .val { font-size: 13px; color: var(--accent); font-weight: bold; }
-.fx-card input[type=range] { width: 100%; margin-top: 6px; }
-.fx-card button.tog {
-  width: 100%; background: var(--bg2); border: 1px solid var(--border);
-  color: var(--text); font-family: inherit; padding: 6px;
-  border-radius: 3px; cursor: pointer; letter-spacing: 2px; font-size: 11px;
+.midibar select{ min-width:150px;max-width:230px; }
+.midibar label{ font-size:9px;color:var(--silk-f);letter-spacing:1px; }
+.section-title{
+  position:absolute;top:-9px;left:14px;padding:0 10px;
+  font-family:'Orbitron',sans-serif;font-weight:800;
+  font-size:10px;letter-spacing:4px;color:var(--silk);
+  background:var(--pcb);display:flex;align-items:center;gap:8px;
 }
-.fx-card button.tog.on { background: var(--warn); color: var(--bg); border-color: var(--warn); }
+.section-title::before{
+  content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 6px var(--cyan),0 0 12px rgba(93,215,255,.4);
+}
 
-/* Tracks (sample upload) */
-.tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
-.track-card {
-  background: var(--bg3); border: 2px solid var(--border);
-  border-radius: 8px; padding: 12px;
+/* ════════ BUTTONS (genéricos) ════════ */
+select,
+.midi-row button,.transport button,.btn-secondary,.tabs button,
+.track-card button.btn,.fx-card button.tog{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;
+  background:linear-gradient(180deg,#181a14,#0a0c08);color:var(--silk);
+  border:1px solid rgba(232,226,207,.18);border-radius:3px;
+  padding:7px 14px;cursor:pointer;text-transform:uppercase;outline:none;transition:all .15s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.6);
 }
-.track-card .track-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.track-card .track-head input.name-in {
-  background: transparent; border: none; color: var(--accent);
-  font-family: inherit; font-size: 13px; font-weight: bold;
-  letter-spacing: 2px; width: 100px;
+.midi-row button:hover,.transport button:hover,.btn-secondary:hover,
+.tabs button:hover,.track-card button.btn:hover{
+  border-color:var(--cyan);color:var(--cyan);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 10px rgba(93,215,255,.25);
 }
-.track-card .track-head input.name-in:focus { outline: 1px solid var(--accent); }
-.track-card canvas {
-  width: 100%; height: 50px; background: var(--bg);
-  border-radius: 3px; margin: 6px 0; display: block;
-}
-.track-card .controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.track-card button.btn {
-  background: var(--bg2); border: 1px solid var(--border); color: var(--text);
-  font-family: inherit; font-size: 10px; padding: 5px 10px;
-  border-radius: 3px; cursor: pointer; letter-spacing: 1px;
-}
-.track-card button.btn:hover { border-color: var(--accent); color: var(--accent); }
-.track-card button.btn.del:hover { border-color: var(--err); color: var(--err); }
-.track-card input[type=file] { display: none; }
-.track-card .size-info { font-size: 9px; color: var(--dim); margin-top: 4px; }
+select{padding:6px 10px;text-transform:none;cursor:pointer;}
+.midi-row select{ min-width:200px; }
 
-.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.btn-primary {
-  background: var(--accent); border: none; color: var(--bg);
-  font-family: inherit; font-size: 13px; font-weight: bold;
-  padding: 12px 24px; border-radius: 4px; cursor: pointer; letter-spacing: 3px;
-}
-.btn-primary:hover { background: #00ffb4; }
-.btn-secondary {
-  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  font-family: inherit; font-size: 12px; padding: 10px 18px;
-  border-radius: 4px; cursor: pointer; letter-spacing: 2px;
-}
-.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+/* ════════ MIDI panel ════════ */
+.midi-row{ display:flex;gap:10px;align-items:center;flex-wrap:wrap; }
+.midi-row label{ font-size:10px;color:var(--silk-d);letter-spacing:2px;text-transform:uppercase; }
+#midi-init{ border-color:rgba(95,255,196,.5);color:var(--mint);font-weight:700; }
+#midi-connect{ border-color:rgba(93,215,255,.5);color:var(--cyan);font-weight:700; }
 
-.log {
-  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
-  padding: 8px 12px; height: 110px; overflow-y: auto;
-  font-size: 11px; color: var(--dim); white-space: pre-wrap;
+/* ════════ Transport ════════ */
+.transport{ display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
+.transport label{ font-size:11px;color:var(--silk-d);letter-spacing:2px; }
+.transport button.playing{
+  background:linear-gradient(180deg,rgba(95,255,196,.22),rgba(95,255,196,.06));
+  border-color:var(--mint);color:var(--mint);text-shadow:0 0 6px var(--mint);
+  box-shadow:inset 0 0 10px rgba(95,255,196,.25);
 }
-.hint { font-size: 10px; color: var(--dim); margin-top: 6px; }
-.kbd  { display: inline-block; background: var(--bg); border: 1px solid var(--border);
-        border-radius: 3px; padding: 1px 5px; font-size: 10px; color: var(--accent); }
-.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
-.tabs button {
-  background: var(--bg2); border: 1px solid var(--border); color: var(--dim);
-  padding: 6px 14px; font-family: inherit; cursor: pointer;
-  letter-spacing: 2px; border-radius: 4px 4px 0 0; font-size: 11px;
+
+/* ════════ TABS (como chips) ════════ */
+.tabs{ display:flex;gap:6px; }
+.tabs button{ flex:0 0 auto;letter-spacing:2px;padding:7px 16px; }
+.tabs button.active{
+  background:linear-gradient(180deg,rgba(93,215,255,.2),rgba(93,215,255,.06));
+  border-color:var(--cyan);color:var(--cyan);text-shadow:0 0 6px var(--cyan);
+  box-shadow:inset 0 0 10px rgba(93,215,255,.25);
 }
-.tabs button.active { background: var(--bg3); color: var(--accent); border-bottom-color: var(--bg3); }
-.tab-body { display: none; }
-.tab-body.active { display: block; }
+
+/* ════════ Grid (PCB pads) ════════ */
+.grid-wrapper{ overflow:auto; padding:4px 0;width:100%; }
+table.grid{ border-collapse:separate;border-spacing:clamp(3px,0.5vw,7px);margin:0 auto; }
+table.grid th.step-num{
+  width:clamp(30px,3.6vw,52px);height:18px;font-size:10px;color:var(--silk-f);
+  font-family:'Space Mono',monospace;text-align:center;font-weight:normal;
+}
+table.grid th.step-num.beat{ color:var(--cyan); }
+table.grid th.step-num.current{ color:var(--amber);font-weight:bold; }
+table.grid td.track-label{
+  width:clamp(110px,11vw,180px);padding-right:10px;text-align:right;
+  font-size:11px;color:var(--silk-d);letter-spacing:1px;
+}
+table.grid td.track-label .name{
+  color:var(--silk);cursor:pointer;font-family:'Orbitron',sans-serif;
+  font-weight:800;font-size:11px;letter-spacing:2px;
+}
+table.grid td.track-label .name.muted{ color:var(--red);text-decoration:line-through;opacity:.7; }
+table.grid td.track-label .note{ color:var(--silk-f);font-size:9px; }
+.cell{
+  width:clamp(30px,3.6vw,52px);height:clamp(30px,3.6vw,52px);
+  border-radius:50%;cursor:pointer;
+  background:radial-gradient(circle at 38% 35%,#1a1d12,#0a0b07);
+  border:1px solid rgba(232,226,207,.16);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.6);
+  transition:all .08s;
+}
+.cell.beat{ border-color:rgba(93,215,255,.3); }
+.cell:hover{ border-color:var(--cyan); }
+.cell.on{
+  background:radial-gradient(circle at 40% 35%,#bfffe6,var(--mint) 60%,#0c8c63);
+  border-color:var(--mint);box-shadow:0 0 8px var(--mint),0 0 14px rgba(95,255,196,.5);
+}
+.cell.current-step{ outline:2px solid var(--amber);outline-offset:1px;box-shadow:0 0 8px rgba(255,170,68,.5); }
+
+/* ════════ FX panel ════════ */
+.fx-grid{ display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:7px; }
+.fx-card{
+  background:linear-gradient(180deg,#15170f,#0a0b07);
+  border:1px solid rgba(232,226,207,.14);border-radius:4px;padding:8px 9px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.fx-card label{
+  display:flex;justify-content:space-between;align-items:baseline;
+  font-size:9px;color:var(--silk-d);letter-spacing:2px;text-transform:uppercase;
+}
+.fx-card .val{
+  font-family:'Space Mono',monospace;font-size:13px;color:var(--amber);font-weight:700;
+  text-shadow:0 0 5px rgba(255,170,68,.4);
+}
+.fx-card button.tog{ width:100%;margin-top:8px; }
+.fx-card button.tog.on{
+  background:linear-gradient(180deg,rgba(255,170,68,.22),rgba(255,170,68,.06));
+  border-color:var(--amber);color:var(--amber);text-shadow:0 0 6px var(--amber);
+  box-shadow:inset 0 0 10px rgba(255,170,68,.25);
+}
+
+/* range sliders */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;margin-top:10px;
+  background:linear-gradient(90deg,var(--cyan),rgba(93,215,255,.15));
+  border-radius:2px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 38% 35%,#e8f7ff,var(--cyan));
+  border:1px solid rgba(0,0,0,.5);box-shadow:0 0 8px rgba(93,215,255,.6);cursor:ns-resize;
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.5);
+  background:var(--cyan);box-shadow:0 0 8px rgba(93,215,255,.6);cursor:ns-resize;
+}
+
+/* ════════ Tracks (sample upload) ════════ */
+.tracks{ display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px; }
+.track-card{
+  background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.06));
+  border:1px solid rgba(232,226,207,.14);border-radius:5px;padding:12px;
+}
+.track-card .track-head{ display:flex;justify-content:space-between;align-items:center;margin-bottom:8px; }
+.track-card .track-head input.name-in{
+  background:transparent;border:none;color:var(--cyan);
+  font-family:'Orbitron',sans-serif;font-size:13px;font-weight:800;
+  letter-spacing:2px;width:110px;
+}
+.track-card .track-head input.name-in:focus{ outline:1px solid var(--cyan); }
+.track-card canvas{
+  width:100%;height:50px;background:#0a0b06;border:1px solid rgba(232,226,207,.08);
+  border-radius:3px;margin:6px 0;display:block;
+}
+.track-card .controls{ display:flex;gap:6px;align-items:center;flex-wrap:wrap; }
+.track-card button.btn{ font-size:10px;padding:5px 10px; }
+.track-card button.btn.del:hover{ border-color:var(--red);color:var(--red);box-shadow:0 0 10px rgba(255,90,74,.25); }
+.track-card button.btn.rec{ border-color:rgba(255,90,74,.4);color:var(--red); }
+.track-card button.btn.rec:hover{ border-color:var(--red);box-shadow:0 0 10px rgba(255,90,74,.3); }
+.track-card button.btn.rec.recording{
+  background:linear-gradient(180deg,rgba(255,90,74,.3),rgba(255,90,74,.1));
+  border-color:var(--red);color:#fff;animation:recblink .8s steps(1) infinite;
+}
+@keyframes recblink{ 0%,100%{box-shadow:0 0 10px rgba(255,90,74,.7)} 50%{box-shadow:0 0 2px rgba(255,90,74,.3)} }
+.track-card input[type=file]{ display:none; }
+.track-card .size-info{ font-size:9px;color:var(--silk-f);margin-top:6px; }
+
+/* ════════ Generate firmware ════════ */
+.actions{ display:flex;gap:10px;flex-wrap:wrap;align-items:center; }
+.btn-primary{
+  font-family:'Orbitron',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;
+  background:linear-gradient(180deg,#0f3a4a,#082230);color:var(--cyan);
+  border:1px solid rgba(93,215,255,.5);border-radius:3px;
+  padding:13px 26px;cursor:pointer;text-transform:uppercase;transition:all .15s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.6);
+}
+.btn-primary:hover{ background:linear-gradient(180deg,#11546b,#0a2f40);box-shadow:0 0 16px rgba(93,215,255,.4); }
+.btn-secondary{ border-color:rgba(255,170,68,.45);color:var(--amber); }
+
+.hint{ font-size:10px;color:var(--silk-f);margin-top:6px;line-height:1.5; }
+.kbd{
+  display:inline-block;background:#15170f;border:1px solid rgba(232,226,207,.18);
+  border-radius:3px;padding:1px 6px;font-size:10px;color:var(--cyan);
+}
+
+/* ════════ TRIM MODAL ════════ */
+.modal-bg{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;padding:24px;
+}
+.modal-bg.open{ display:flex; }
+.modal{
+  width:min(760px,95vw);
+  background:linear-gradient(180deg,#141509,#080906);
+  border:1px solid rgba(232,226,207,.22);border-radius:6px;padding:20px 22px;
+  box-shadow:0 25px 70px rgba(0,0,0,.85),inset 0 0 0 1px rgba(0,0,0,.5);
+}
+.modal-h{ display:flex;justify-content:space-between;align-items:center;margin-bottom:14px; }
+.modal-h h3{
+  font-family:'Orbitron',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:3px;color:var(--silk);display:flex;align-items:center;gap:10px;
+}
+.modal-h h3::before{ content:'';width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan); }
+.modal-close{ cursor:pointer;background:none;border:none;color:var(--silk-f);font-size:18px;line-height:1;padding:2px 6px; }
+.modal-close:hover{ color:var(--silk); }
+#trim-canvas{
+  width:100%;height:180px;background:#0a0b06;display:block;cursor:ew-resize;
+  border:1px solid rgba(232,226,207,.12);border-radius:4px;
+  box-shadow:inset 0 0 22px rgba(0,0,0,.8);touch-action:none;
+}
+.trim-hint{ font-size:9px;color:var(--silk-f);letter-spacing:1px;margin:6px 2px 0;text-align:center; }
+.trim-readout{
+  display:flex;gap:24px;justify-content:center;margin:12px 0;
+  font-family:'Space Mono',monospace;font-size:11px;color:var(--silk-d);letter-spacing:1px;
+}
+.trim-readout .l{ font-size:8px;letter-spacing:1.5px; }
+.trim-readout b{ color:var(--amber);font-weight:700;text-shadow:0 0 5px rgba(255,170,68,.4); }
+.trim-actions{ display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+.modal .btn{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;
+  background:linear-gradient(180deg,#181a14,#0a0c08);color:var(--silk);
+  border:1px solid rgba(232,226,207,.18);border-radius:3px;padding:8px 14px;
+  cursor:pointer;text-transform:uppercase;transition:all .15s;
+}
+.modal .btn:hover{ border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 10px rgba(93,215,255,.25); }
+
+/* scrollbars */
+::-webkit-scrollbar{ width:8px;height:8px; }
+::-webkit-scrollbar-thumb{ background:rgba(232,226,207,.12);border-radius:4px; }
+::-webkit-scrollbar-track{ background:transparent; }
 </style>
 </head>
 <body>
 
+<div class="pcb">
+
 <div class="header">
-  <div>
-    <span class="logo-title">PERCUSYNTH</span>
-    <span class="logo-sub">STEP SEQUENCER · LIVE</span>
+  <div class="brand">
+    <div class="brand-logo"></div>
+    <div>
+      <span class="logo-title">PERCUSYNTH</span>
+      <span class="logo-sub">STEP SEQUENCER · LIVE</span>
+    </div>
   </div>
+  <div></div>
   <div id="status"><span class="live-dot" id="live-dot"></span>desconectado</div>
 </div>
 
-<!-- ============ MIDI CONNECTION ============ -->
-<section>
-  <div class="section-title">CONEXIÓN MIDI</div>
-  <div class="midi-row">
-    <button id="midi-init">▶ HABILITAR WEB MIDI</button>
-    <label>INPUT:</label>
-    <select id="midi-in"><option>—</option></select>
-    <label>OUTPUT:</label>
-    <select id="midi-out"><option>—</option></select>
-    <button id="midi-connect">CONECTAR</button>
-    <button id="midi-sync-push">↑ PUSH PATRÓN</button>
-  </div>
-  <div class="hint">Requiere Chrome/Edge. Al conectar, el patrón local se envía al PercuSynth y empiezas a recibir el clock + step actual.</div>
-</section>
-
-<!-- ============ TABS ============ -->
-<div class="tabs">
-  <button class="tab-btn active" data-tab="seq">SECUENCIADOR</button>
-  <button class="tab-btn" data-tab="samples">SAMPLES & FIRMWARE</button>
+<!-- ============ MIDI STRIP ============ -->
+<div class="midibar midi-row">
+  <span class="mlbl">MIDI</span>
+  <button id="midi-init">▶ HABILITAR</button>
+  <label>IN</label>
+  <select id="midi-in"><option>—</option></select>
+  <label>OUT</label>
+  <select id="midi-out"><option>—</option></select>
+  <button id="midi-connect">CONECTAR</button>
+  <button id="midi-sync-push">↑ PUSH PATRÓN</button>
 </div>
 
-<!-- ============ TAB: SEQUENCER ============ -->
+<!-- ============ TOOLBAR: tabs + transport ============ -->
+<div class="toolbar">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="seq">SECUENCIADOR</button>
+    <button class="tab-btn" data-tab="samples">SAMPLES & FIRMWARE</button>
+  </div>
+  <div class="sep"></div>
+  <div class="transport">
+    <button id="play-btn">▶ PLAY</button>
+    <button id="stop-btn">■ STOP</button>
+    <button id="reset-btn">⟲ RESET</button>
+    <button id="clear-btn">CLEAR</button>
+    <button id="example-btn">EJEMPLO</button>
+    <button id="random-btn">RANDOM</button>
+    <span style="font-size:11px;color:var(--silk-d);letter-spacing:1px;">STEP <span id="cur-step" style="color:var(--amber);font-weight:700;">—</span>/16</span>
+  </div>
+</div>
+
+<!-- ============ STAGE ============ -->
+<div class="stage">
+
+<!-- ---------- TAB: SEQUENCER ---------- -->
 <div class="tab-body active" id="tab-seq">
 
-  <!-- Transport -->
-  <section>
-    <div class="section-title">TRANSPORT</div>
-    <div class="transport">
-      <button id="play-btn">▶ PLAY</button>
-      <button id="stop-btn">■ STOP</button>
-      <button id="reset-btn">⟲ RESET</button>
-      <button id="clear-btn">CLEAR PATRÓN</button>
-      <button id="example-btn">EJEMPLO ROCK</button>
-      <button id="random-btn">RANDOMIZE</button>
-      <span style="font-size:11px;color:var(--dim);">step <span id="cur-step" style="color:var(--warn)">—</span> / 16</span>
-    </div>
-    <div class="hint">PLAY/STOP envían 0xFA/0xFC al PercuSynth → engancha al DAW también.</div>
-  </section>
-
   <!-- Pattern Grid -->
-  <section>
-    <div class="section-title">PATRÓN — 6×16</div>
+  <section class="seq-grid">
+    <div class="section-title">PATRÓN · 6×16 — <span class="kbd">click</span> on/off · <span class="kbd">click nombre</span> mute</div>
     <div class="grid-wrapper">
       <table class="grid" id="grid"></table>
     </div>
-    <div class="hint">Click = on/off (envía al PercuSynth en vivo). <span class="kbd">click en nombre</span> = mute/unmute.</div>
   </section>
 
   <!-- FX Panel -->
-  <section>
-    <div class="section-title">SÍNTESIS &amp; FX — CC ch16</div>
+  <section class="seq-fx">
+    <div class="section-title">SÍNTESIS &amp; FX — monitor en vivo (CC ch16)</div>
     <div class="fx-grid">
       <div class="fx-card"><label>BPM <span class="val" id="bpm-val">120</span></label>
         <input type="range" id="bpm" min="40" max="200" value="120"></div>
@@ -267,23 +430,21 @@ table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
         <input type="range" id="lpf" min="0" max="127" value="76"></div>
       <div class="fx-card"><label>VOL <span class="val" id="vol-val">60%</span></label>
         <input type="range" id="vol" min="0" max="127" value="76"></div>
-      <div class="fx-card"><label>BITCRUSH <span class="val" id="crush-val">0%</span></label>
-        <input type="range" id="crush" min="0" max="127" value="0"></div>
-      <div class="fx-card"><label>STUTTER</label>
-        <button class="tog" id="stutter">OFF</button></div>
+      <div class="fx-card"><label>DELAY <span class="val" id="delay-val">off</span></label>
+        <input type="range" id="delay" min="0" max="127" value="0"></div>
+      <div class="fx-card"><label>FILL</label>
+        <button class="tog" id="fill">OFF</button></div>
+      <div class="fx-card"><label>BEAT REP</label>
+        <button class="tog" id="beatrep">OFF</button></div>
       <div class="fx-card"><label>REVERSE</label>
         <button class="tog" id="reverse">OFF</button></div>
+      <div class="fx-card"><label>DROP</label>
+        <button class="tog" id="drop">OFF</button></div>
     </div>
-  </section>
-
-  <!-- Log -->
-  <section>
-    <div class="section-title">LOG</div>
-    <div id="log" class="log"></div>
   </section>
 </div>
 
-<!-- ============ TAB: SAMPLES & FIRMWARE ============ -->
+<!-- ---------- TAB: SAMPLES & FIRMWARE ---------- -->
 <div class="tab-body" id="tab-samples">
   <section>
     <div class="section-title">SAMPLES (carga MP3/WAV/OGG por pista)</div>
@@ -299,8 +460,37 @@ table.grid td.track-label .note { color: var(--dim); font-size: 9px; }
       <input id="import-pattern-input" type="file" accept=".json" style="display:none;">
       <span id="total-size" style="font-size:11px;color:var(--dim);"></span>
     </div>
-    <div class="hint">Arduino IDE → board ESP32-S3 → Tools/USB Mode = "USB-OTG (TinyUSB)" → Upload.</div>
+    <div class="hint">⚠ <b>Arduino IDE → Tools:</b> &nbsp;Board <span class="kbd">ESP32S3 Dev Module</span> · USB Mode <span class="kbd">USB-OTG (TinyUSB)</span> · USB CDC On Boot <span class="kbd">Disabled</span> · Flash Mode <span class="kbd">DIO</span> (NO OPI) → Upload.</div>
   </section>
+</div>
+
+</div><!-- /.stage -->
+
+</div><!-- /.pcb -->
+
+<!-- ============ TRIM MODAL ============ -->
+<div class="modal-bg" id="trim-modal">
+  <div class="modal">
+    <div class="modal-h">
+      <h3>RECORTAR SAMPLE <span id="trim-title" style="color:var(--cyan)"></span></h3>
+      <button class="modal-close" id="trim-close">✕</button>
+    </div>
+    <canvas id="trim-canvas"></canvas>
+    <div class="trim-hint">Arrastra las manijas <span style="color:var(--cyan)">◄ inicio</span> y <span style="color:var(--amber)">fin ►</span> para dejar solo la parte útil.</div>
+    <div class="trim-readout">
+      <span><span class="l">INICIO</span> <b id="trim-a">0.00s</b></span>
+      <span><span class="l">FIN</span> <b id="trim-b">0.00s</b></span>
+      <span><span class="l">DURACIÓN</span> <b id="trim-len">0.00s</b></span>
+    </div>
+    <div class="trim-actions">
+      <button class="btn" id="trim-auto">AUTO SILENCIO</button>
+      <button class="btn" id="trim-preview">▶ ESCUCHAR</button>
+      <button class="btn" id="trim-reset">RESET</button>
+      <span style="flex:1"></span>
+      <button class="btn-secondary" id="trim-cancel">CANCELAR</button>
+      <button class="btn-primary" id="trim-apply">✂ APLICAR</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -318,7 +508,7 @@ const REMOTE_CH  = 15;            // ch16 (0-based)
 // CC numbers (deben coincidir con el firmware)
 const CC = {
   BPM: 20, SWING: 21, PITCH: 22, HPF: 23, VOL: 24, LPF: 25,
-  CRUSH: 26, STUTTER: 27, REVERSE: 28,
+  DELAY: 26, FILL: 27, REVERSE: 28, BEATREP: 29, DROP: 30,
 };
 const REMOTE_NOTES = {
   MUTE_BASE: 96,    // 96..101 = mute T0..T5
@@ -349,8 +539,8 @@ let midiIn  = null;
 let midiOut = null;
 let isLive  = false;
 
-let bpm = 120, swing = 0, pitch = 64, hpf = 0, lpf = 76, vol = 76, crush = 0;
-let stutterOn = false, reverseOn = false;
+let bpm = 120, swing = 0, pitch = 64, hpf = 0, lpf = 76, vol = 76, delayv = 0;
+let fillOn = false, beatrepOn = false, reverseOn = false, dropOn = false;
 
 let audioCtx     = null;
 let audioBuffers = new Array(NUM_TRACKS).fill(null);
@@ -437,6 +627,7 @@ function onMidiMessage(ev) {
   if (status === 0x90 && chan === REMOTE_CH) {                  // step feedback
     const note = d[1];
     if (note >= REMOTE_NOTES.STEP_FEEDBACK_BASE && note < REMOTE_NOTES.STEP_FEEDBACK_BASE + NUM_STEPS) {
+      stopLocalClock();   // el hardware manda el step → apaga el reloj local
       highlightStep(note - REMOTE_NOTES.STEP_FEEDBACK_BASE);
     }
   }
@@ -494,9 +685,11 @@ function pushAllFx() {
   sendCC(CC.HPF,    hpf);
   sendCC(CC.VOL,    vol);
   sendCC(CC.LPF,    lpf);
-  sendCC(CC.CRUSH,  crush);
-  sendCC(CC.STUTTER, stutterOn ? 127 : 0);
+  sendCC(CC.DELAY,   delayv);
+  sendCC(CC.FILL,    fillOn    ? 127 : 0);
   sendCC(CC.REVERSE, reverseOn ? 127 : 0);
+  sendCC(CC.BEATREP, beatrepOn ? 127 : 0);
+  sendCC(CC.DROP,    dropOn    ? 127 : 0);
 }
 
 // Pots locales del PercuSynth → mover sliders sin echo back
@@ -508,10 +701,16 @@ function applyIncomingCC(cc, v) {
     case CC.HPF:   hpf   = v; document.getElementById('hpf').value   = v; updateFxLabel('hpf', v); break;
     case CC.VOL:   vol   = v; document.getElementById('vol').value   = v; updateFxLabel('vol', v); break;
     case CC.LPF:   lpf   = v; document.getElementById('lpf').value   = v; updateFxLabel('lpf', v); break;
-    case CC.CRUSH: crush = v; document.getElementById('crush').value = v; updateFxLabel('crush', v); break;
-    case CC.STUTTER: stutterOn = (v >= 64); document.getElementById('stutter').classList.toggle('on', stutterOn); document.getElementById('stutter').textContent = stutterOn?'ON':'OFF'; break;
-    case CC.REVERSE: reverseOn = (v >= 64); document.getElementById('reverse').classList.toggle('on', reverseOn); document.getElementById('reverse').textContent = reverseOn?'ON':'OFF'; break;
+    case CC.DELAY: delayv = v; document.getElementById('delay').value = v; updateFxLabel('delay', v); break;
+    case CC.FILL:    setTog('fill',    fillOn    = (v >= 64)); break;
+    case CC.REVERSE: setTog('reverse', reverseOn = (v >= 64)); break;
+    case CC.BEATREP: setTog('beatrep', beatrepOn = (v >= 64)); break;
+    case CC.DROP:    setTog('drop',    dropOn    = (v >= 64)); break;
   }
+}
+function setTog(id, on) {
+  const el = document.getElementById(id); if (!el) return;
+  el.classList.toggle('on', on); el.textContent = on ? 'ON' : 'OFF';
 }
 
 // ============================================================
@@ -527,7 +726,7 @@ function updateFxLabel(id, v) {
     case 'hpf':   { const f = 20 + (v/127)*(v/127)*3980; el.textContent = (f<1000?Math.round(f)+'Hz':(f/1000).toFixed(1)+'kHz'); break; }
     case 'lpf':   { const f = 200 + (v/127)*19800; el.textContent = (f<1000?Math.round(f)+'Hz':(f/1000).toFixed(1)+'kHz'); break; }
     case 'vol':   el.textContent = Math.round(v/127*100)+'%'; break;
-    case 'crush': el.textContent = Math.round(v/127*100)+'%'; break;
+    case 'delay': el.textContent = v === 0 ? 'off' : Math.round(v/127*100)+'%'; break;
   }
 }
 
@@ -592,16 +791,34 @@ function updatePlayBtn() {
 }
 
 // ============================================================
+// LOCAL CLOCK — anima los pasos en la app aunque no haya hardware.
+// Si el PercuSynth está conectado, su feedback MIDI (highlightStep desde
+// onMidiMessage) toma el control y este reloj se apaga solo.
+// ============================================================
+let localTimer = null;
+function localStepMs() { return Math.max(20, (60000 / bpm) / 4); }  // semicorcheas
+function startLocalClock() {
+  stopLocalClock();
+  currentStep = -1;
+  localTimer = setInterval(() => {
+    currentStep = (currentStep + 1) % NUM_STEPS;
+    highlightStep(currentStep);
+  }, localStepMs());
+}
+function stopLocalClock() { if (localTimer) { clearInterval(localTimer); localTimer = null; } }
+function restartLocalClockIfRunning() { if (localTimer) startLocalClock(); }
+
+// ============================================================
 // SAMPLES (mismo flujo que antes — para regenerar firmware)
 // ============================================================
 function getCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate: SR });
   return audioCtx;
 }
-async function loadFile(idx, file) {
-  setStatus('decodificando ' + file.name + '...');
+async function loadFile(idx, file) { await ingestAudio(idx, await file.arrayBuffer(), file.name); }
+async function ingestAudio(idx, ab, name) {
+  setStatus('decodificando ' + name + '...');
   try {
-    const ab    = await file.arrayBuffer();
     const ctx   = getCtx();
     const raw   = await ctx.decodeAudioData(ab.slice(0));
     const L     = raw.length;
@@ -628,14 +845,152 @@ async function loadFile(idx, file) {
     for (let i = 0; i < N; i++) i16[i] = Math.round(Math.max(-32768, Math.min(32767, mono[i] * g * 32767)));
     tracks[idx].int16Data = i16;
     tracks[idx].duration  = N / SR;
-    tracks[idx].filename  = file.name;
-    const pb = ctx.createBuffer(1, N, SR);
-    pb.getChannelData(0).set(mono.map(v => v * g));
+    tracks[idx].filename  = name;
+    const norm = mono.map(v => v * g);
+    const pb = ctx.createBuffer(2, N, SR);          // dual-mono → suena en L y R
+    pb.getChannelData(0).set(norm); pb.getChannelData(1).set(norm);
     audioBuffers[idx] = pb;
     renderTrackCard(idx); updateTotalSize();
-    log(`✓ T${idx} "${file.name}" → ${(N/SR).toFixed(2)}s`);
+    log(`✓ T${idx} "${name}" → ${(N/SR).toFixed(2)}s`);
   } catch (e) { log(`✗ ${e.message}`); }
   setStatus(isLive ? 'live' : 'listo');
+}
+
+// ============================================================
+// REC — graba un sample desde el micrófono del PC (Web Audio)
+// ============================================================
+let mediaStream = null, mediaRec = null, recChunks = [], recTrack = -1, recTimeout = null;
+async function toggleRec(idx) {
+  if (mediaRec && mediaRec.state === 'recording') { mediaRec.stop(); return; }   // segundo click = stop
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Tu navegador no soporta grabación de micrófono.'); return;
+  }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false } });
+  } catch (e) { alert('No se pudo acceder al micrófono: ' + e.message); return; }
+  recChunks = []; recTrack = idx;
+  mediaRec = new MediaRecorder(mediaStream);
+  mediaRec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  mediaRec.onstop = async () => {
+    if (recTimeout) { clearTimeout(recTimeout); recTimeout = null; }
+    const blob = new Blob(recChunks, { type: mediaRec.mimeType || 'audio/webm' });
+    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    updateRecBtn(recTrack, false);
+    await ingestAudio(recTrack, await blob.arrayBuffer(), 'mic_T' + recTrack + '.webm');
+  };
+  mediaRec.start();
+  updateRecBtn(idx, true);
+  setStatus('● grabando T' + idx + '... (8s máx)');
+  recTimeout = setTimeout(() => { if (mediaRec && mediaRec.state === 'recording') mediaRec.stop(); }, 8000); // tope de seguridad
+}
+function updateRecBtn(idx, recording) {
+  const b = document.querySelector(`#track-${idx} .rec`);
+  if (!b) return;
+  b.classList.toggle('recording', recording);
+  b.textContent = recording ? '■ STOP' : '● REC';
+}
+
+// ============================================================
+// TRIM — recorte in/out del sample con manijas arrastrables
+// ============================================================
+let trimIdx = -1, trimData = null, trimA = 0, trimB = 0, trimDrag = null;
+function openTrim(i) {
+  if (!tracks[i].int16Data || tracks[i].int16Data.length === 0) { alert('Esa pista no tiene sample. Carga o graba uno primero.'); return; }
+  trimIdx = i; trimData = tracks[i].int16Data; trimA = 0; trimB = trimData.length;
+  document.getElementById('trim-title').textContent = '· ' + tracks[i].name;
+  document.getElementById('trim-modal').classList.add('open');
+  requestAnimationFrame(() => { drawTrim(); updateTrimReadout(); });
+}
+function closeTrim() {
+  document.getElementById('trim-modal').classList.remove('open');
+  trimIdx = -1; trimData = null; trimDrag = null;
+}
+function updateTrimReadout() {
+  document.getElementById('trim-a').textContent   = (trimA / SR).toFixed(2) + 's';
+  document.getElementById('trim-b').textContent   = (trimB / SR).toFixed(2) + 's';
+  document.getElementById('trim-len').textContent = ((trimB - trimA) / SR).toFixed(2) + 's';
+}
+function drawTrim() {
+  const cv = document.getElementById('trim-canvas');
+  const w = cv.width = cv.clientWidth, h = cv.height = cv.clientHeight;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0a0b06'; ctx.fillRect(0, 0, w, h);
+  if (!trimData) return;
+  const N = trimData.length, step = Math.max(1, Math.floor(N / w));
+  const xa = trimA / N * w, xb = trimB / N * w;
+  for (let x = 0; x < w; x++) {
+    let mn = 32767, mx = -32768;
+    for (let i = x * step; i < Math.min((x + 1) * step, N); i++) { if (trimData[i] < mn) mn = trimData[i]; if (trimData[i] > mx) mx = trimData[i]; }
+    ctx.strokeStyle = (x >= xa && x <= xb) ? '#5fffc4' : 'rgba(90,84,64,.45)';
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, h / 2 - (mx / 32768) * (h / 2 - 6));
+    ctx.lineTo(x + 0.5, h / 2 - (mn / 32768) * (h / 2 - 6));
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.55)';
+  ctx.fillRect(0, 0, xa, h); ctx.fillRect(xb, 0, w - xb, h);   // zonas recortadas
+  drawTrimHandle(ctx, xa, h, '#5dd7ff');                        // inicio
+  drawTrimHandle(ctx, xb, h, '#ffaa44');                        // fin
+}
+function drawTrimHandle(ctx, x, h, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  ctx.fillStyle = color; ctx.fillRect(x - 3, 0, 6, 11); ctx.fillRect(x - 3, h - 11, 6, 11);
+  ctx.lineWidth = 1;
+}
+function trimEventX(e) {
+  const cv = document.getElementById('trim-canvas'), r = cv.getBoundingClientRect();
+  const cx = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+  return { x: cx - r.left, w: cv.clientWidth };
+}
+function trimPointerDown(e) {
+  if (trimIdx < 0) return;
+  const { x, w } = trimEventX(e), N = trimData.length;
+  trimDrag = (Math.abs(x - trimA / N * w) <= Math.abs(x - trimB / N * w)) ? 'a' : 'b';
+  trimMove(e);
+}
+function trimMove(e) {
+  if (!trimDrag || trimIdx < 0) return;
+  const { x, w } = trimEventX(e);
+  const idx = Math.max(0, Math.min(trimData.length, Math.round(x / w * trimData.length)));
+  if (trimDrag === 'a') trimA = Math.min(idx, trimB - 1);
+  else                  trimB = Math.max(idx, trimA + 1);
+  drawTrim(); updateTrimReadout();
+  if (e.cancelable) e.preventDefault();
+}
+function trimUp() { trimDrag = null; }
+function autoTrimSilence() {
+  if (!trimData) return;
+  const N = trimData.length, thr = 0.02 * 32768;     // 2% de fondo de escala
+  let a = 0, b = N - 1;
+  while (a < N && Math.abs(trimData[a]) < thr) a++;
+  while (b > a && Math.abs(trimData[b]) < thr) b--;
+  const pad = Math.round(SR * 0.005);                // 5 ms de respiro
+  trimA = Math.max(0, a - pad);
+  trimB = Math.min(N, b + pad + 1);
+  if (trimB <= trimA) { trimA = 0; trimB = N; }      // todo silencio → no recortar
+  drawTrim(); updateTrimReadout();
+}
+function previewTrim() {
+  if (!trimData) return;
+  const len = trimB - trimA; if (len < 1) return;
+  const ctx = getCtx(), pb = ctx.createBuffer(2, len, SR);
+  const c0 = pb.getChannelData(0), c1 = pb.getChannelData(1);
+  for (let k = 0; k < len; k++) { const v = trimData[trimA + k] / 32768; c0[k] = v; c1[k] = v; }
+  const src = ctx.createBufferSource(); src.buffer = pb; src.connect(ctx.destination); src.start();
+}
+function applyTrim() {
+  if (trimIdx < 0 || !trimData) return;
+  const i = trimIdx, sliced = trimData.slice(trimA, trimB);
+  tracks[i].int16Data = sliced;
+  tracks[i].duration  = sliced.length / SR;
+  const ctx = getCtx(), pb = ctx.createBuffer(2, sliced.length, SR);
+  const c0 = pb.getChannelData(0), c1 = pb.getChannelData(1);
+  for (let k = 0; k < sliced.length; k++) { const v = sliced[k] / 32768; c0[k] = v; c1[k] = v; }
+  audioBuffers[i] = pb;
+  renderTrackCard(i); updateTotalSize();
+  log(`✂ T${i} recortado → ${(sliced.length / SR).toFixed(2)}s`);
+  closeTrim();
 }
 function clearTrack(idx) {
   tracks[idx].int16Data = null;
@@ -647,12 +1002,12 @@ function drawWaveform(canvas, i16) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width = canvas.clientWidth;
   const h = canvas.height = canvas.clientHeight;
-  ctx.fillStyle = '#0d0d14'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = '#0a0b06'; ctx.fillRect(0,0,w,h);
   if (!i16 || i16.length === 0) {
-    ctx.fillStyle = '#5a5a80'; ctx.font = '10px Courier New';
+    ctx.fillStyle = '#5a5440'; ctx.font = "10px 'Space Mono', monospace";
     ctx.fillText('— sin sample —', 8, h/2+3); return;
   }
-  ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.strokeStyle = '#5fffc4'; ctx.lineWidth = 1; ctx.beginPath();
   const step = Math.max(1, Math.floor(i16.length / w));
   for (let x = 0; x < w; x++) {
     let mn = 32767, mx = -32768;
@@ -689,6 +1044,8 @@ function renderTracks() {
       <div class="size-info">— sin sample —</div>
       <div class="controls">
         <button class="btn load-btn" data-trk="${i}">📁 CARGAR</button>
+        <button class="btn rec"      data-trk="${i}">● REC</button>
+        <button class="btn trim"     data-trk="${i}">✂</button>
         <button class="btn audition" data-trk="${i}">▶</button>
         <button class="btn del"      data-trk="${i}">✕</button>
         <input type="file" accept="audio/*" data-trk="${i}">
@@ -705,6 +1062,8 @@ function renderTracks() {
     if (e.target.files[0]) loadFile(+e.target.dataset.trk, e.target.files[0]);
     e.target.value = '';
   }));
+  c.querySelectorAll('.rec').forEach(b => b.addEventListener('click', e => toggleRec(+e.currentTarget.dataset.trk)));
+  c.querySelectorAll('.trim').forEach(b => b.addEventListener('click', e => openTrim(+e.currentTarget.dataset.trk)));
   c.querySelectorAll('.del').forEach(b => b.addEventListener('click', e => clearTrack(+e.target.dataset.trk)));
   c.querySelectorAll('.audition').forEach(b => b.addEventListener('click', e => {
     const i = +e.target.dataset.trk;
@@ -767,7 +1126,8 @@ function downloadFirmware() {
 // IMPORT/EXPORT
 // ============================================================
 function exportJson() {
-  const data = { bpm, swing, pitch, hpf, vol, lpf, crush, stutterOn, reverseOn,
+  const data = { bpm, swing, pitch, hpf, vol, lpf, delay: delayv,
+                 fillOn, beatrepOn, reverseOn, dropOn,
                  tracks: tracks.map(t => ({ name:t.name, note:t.note, mute:t.mute })),
                  pattern };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -780,14 +1140,18 @@ function importJson(file) {
   r.onload = e => {
     try {
       const d = JSON.parse(e.target.result);
-      if (typeof d.bpm === 'number')   { bpm = d.bpm; document.getElementById('bpm').value = bpm; updateFxLabel('bpm', bpm); }
-      if (typeof d.swing === 'number') { swing = d.swing; document.getElementById('swing').value = swing; updateFxLabel('swing', swing); }
-      ['pitch','hpf','vol','lpf','crush'].forEach(k => {
-        if (typeof d[k] === 'number') {
-          eval(k+' = d.'+k);
-          document.getElementById(k).value = d[k]; updateFxLabel(k, d[k]);
-        }
-      });
+      const setSlider = (id, val, setter) => { setter(val); const el = document.getElementById(id); if (el) el.value = val; updateFxLabel(id, val); };
+      if (typeof d.bpm   === 'number') setSlider('bpm',   d.bpm,   v => bpm    = v);
+      if (typeof d.swing === 'number') setSlider('swing', d.swing, v => swing  = v);
+      if (typeof d.pitch === 'number') setSlider('pitch', d.pitch, v => pitch  = v);
+      if (typeof d.hpf   === 'number') setSlider('hpf',   d.hpf,   v => hpf    = v);
+      if (typeof d.lpf   === 'number') setSlider('lpf',   d.lpf,   v => lpf    = v);
+      if (typeof d.vol   === 'number') setSlider('vol',   d.vol,   v => vol    = v);
+      if (typeof d.delay === 'number') setSlider('delay', d.delay, v => delayv = v);
+      if (typeof d.fillOn    === 'boolean') { fillOn    = d.fillOn;    setTog('fill',    fillOn); }
+      if (typeof d.beatrepOn === 'boolean') { beatrepOn = d.beatrepOn; setTog('beatrep', beatrepOn); }
+      if (typeof d.reverseOn === 'boolean') { reverseOn = d.reverseOn; setTog('reverse', reverseOn); }
+      if (typeof d.dropOn    === 'boolean') { dropOn    = d.dropOn;    setTog('drop',    dropOn); }
       if (d.tracks) d.tracks.forEach((t,i) => {
         if (i<NUM_TRACKS) { tracks[i].name=t.name||tracks[i].name; tracks[i].note=t.note??tracks[i].note; tracks[i].mute=!!t.mute; }
       });
@@ -820,9 +1184,14 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('midi-sync-push').addEventListener('click', pushFullPattern);
 
   // Transport
-  document.getElementById('play-btn').addEventListener('click', () => { playing ? sendStop() : sendPlay(); playing = !playing; updatePlayBtn(); });
-  document.getElementById('stop-btn').addEventListener('click', () => { sendStop(); playing = false; updatePlayBtn(); highlightStep(-1); });
-  document.getElementById('reset-btn').addEventListener('click', () => { sendReset(); highlightStep(0); });
+  document.getElementById('play-btn').addEventListener('click', () => {
+    playing ? sendStop() : sendPlay();
+    playing = !playing; updatePlayBtn();
+    if (playing) { if (!isLive) startLocalClock(); }   // sin hardware → anima local; con hardware → manda su feedback
+    else { stopLocalClock(); highlightStep(-1); }
+  });
+  document.getElementById('stop-btn').addEventListener('click', () => { sendStop(); playing = false; updatePlayBtn(); stopLocalClock(); highlightStep(-1); });
+  document.getElementById('reset-btn').addEventListener('click', () => { sendReset(); currentStep = 0; restartLocalClockIfRunning(); highlightStep(0); });
   document.getElementById('clear-btn').addEventListener('click', () => {
     for (let t=0; t<NUM_TRACKS; t++) for (let s=0; s<NUM_STEPS; s++) { pattern[t][s] = 0; sendCell(t, s, 0); }
     renderGrid(); log('patrón limpio');
@@ -849,38 +1218,52 @@ window.addEventListener('DOMContentLoaded', () => {
     renderGrid(); log('patrón random');
   });
 
-  // FX sliders
-  const wire = (id, ccNum, getValueFn) => {
-    const el = document.getElementById(id);
-    el.addEventListener('input', e => {
+  // FX sliders — el setter actualiza la variable real (let), no window[]
+  const wire = (id, ccNum, setter, getValueFn) => {
+    document.getElementById(id).addEventListener('input', e => {
       const v = +e.target.value;
-      window[id === 'bpm' ? 'bpm' : id] = v;       // simple binding
+      setter(v);
       updateFxLabel(id, v);
       sendCC(ccNum, getValueFn ? getValueFn(v) : v);
     });
   };
-  wire('bpm',   CC.BPM,   v => Math.round((v - 40) / 160 * 127));
-  wire('swing', CC.SWING);
-  wire('pitch', CC.PITCH);
-  wire('hpf',   CC.HPF);
-  wire('lpf',   CC.LPF);
-  wire('vol',   CC.VOL);
-  wire('crush', CC.CRUSH);
+  wire('bpm',   CC.BPM,   v => { bpm = v; }, v => Math.round((v - 40) / 160 * 127));
+  wire('swing', CC.SWING, v => { swing  = v; });
+  wire('pitch', CC.PITCH, v => { pitch  = v; });
+  wire('hpf',   CC.HPF,   v => { hpf    = v; });
+  wire('lpf',   CC.LPF,   v => { lpf    = v; });
+  wire('vol',   CC.VOL,   v => { vol    = v; });
+  wire('delay', CC.DELAY, v => { delayv = v; });
+  document.getElementById('bpm').addEventListener('input', restartLocalClockIfRunning);  // reanima el reloj local al nuevo tempo
   updateFxLabel('bpm', bpm); updateFxLabel('swing', swing); updateFxLabel('pitch', pitch);
-  updateFxLabel('hpf', hpf); updateFxLabel('lpf', lpf); updateFxLabel('vol', vol); updateFxLabel('crush', crush);
+  updateFxLabel('hpf', hpf); updateFxLabel('lpf', lpf); updateFxLabel('vol', vol); updateFxLabel('delay', delayv);
 
-  document.getElementById('stutter').addEventListener('click', () => {
-    stutterOn = !stutterOn;
-    document.getElementById('stutter').classList.toggle('on', stutterOn);
-    document.getElementById('stutter').textContent = stutterOn ? 'ON' : 'OFF';
-    sendCC(CC.STUTTER, stutterOn ? 127 : 0);
-  });
-  document.getElementById('reverse').addEventListener('click', () => {
-    reverseOn = !reverseOn;
-    document.getElementById('reverse').classList.toggle('on', reverseOn);
-    document.getElementById('reverse').textContent = reverseOn ? 'ON' : 'OFF';
-    sendCC(CC.REVERSE, reverseOn ? 127 : 0);
-  });
+  // Toggles (momentáneos desde la app = latch on/off)
+  const wireTog = (id, ccNum, get, set) => {
+    document.getElementById(id).addEventListener('click', () => {
+      set(!get()); setTog(id, get()); sendCC(ccNum, get() ? 127 : 0);
+    });
+  };
+  wireTog('fill',    CC.FILL,    () => fillOn,    v => fillOn = v);
+  wireTog('beatrep', CC.BEATREP, () => beatrepOn, v => beatrepOn = v);
+  wireTog('reverse', CC.REVERSE, () => reverseOn, v => reverseOn = v);
+  wireTog('drop',    CC.DROP,    () => dropOn,    v => dropOn = v);
+
+  // Trim modal
+  const tc = document.getElementById('trim-canvas');
+  tc.addEventListener('mousedown', trimPointerDown);
+  tc.addEventListener('touchstart', trimPointerDown, { passive:false });
+  window.addEventListener('mousemove', trimMove);
+  window.addEventListener('touchmove', trimMove, { passive:false });
+  window.addEventListener('mouseup', trimUp);
+  window.addEventListener('touchend', trimUp);
+  document.getElementById('trim-auto').addEventListener('click', autoTrimSilence);
+  document.getElementById('trim-preview').addEventListener('click', previewTrim);
+  document.getElementById('trim-reset').addEventListener('click', () => { trimA = 0; trimB = trimData ? trimData.length : 0; drawTrim(); updateTrimReadout(); });
+  document.getElementById('trim-apply').addEventListener('click', applyTrim);
+  document.getElementById('trim-cancel').addEventListener('click', closeTrim);
+  document.getElementById('trim-close').addEventListener('click', closeTrim);
+  document.getElementById('trim-modal').addEventListener('mousedown', e => { if (e.target.id === 'trim-modal') closeTrim(); });
 
   document.getElementById('generate-btn').addEventListener('click', downloadFirmware);
   document.getElementById('export-pattern').addEventListener('click', exportJson);
@@ -896,8 +1279,21 @@ window.addEventListener('DOMContentLoaded', () => {
 
 <!-- Firmware template (embedded). __SAMPLE_DATA__ y __PATTERN_ROWS__ se reemplazan al generar. -->
 <script type="text/plain" id="firmware-tpl">// ================================================================
-// PercuSynth — Sample Sequencer + Realtime Remote
+// PercuSynth — Sample Sequencer + Realtime Remote (MIDI Clock Master)
 // Generado por tools/step_sequencer_loader (live)
+// ================================================================
+// HARDWARE
+//   ESP32-S3 + PCM5102 (I2S) — placa PercuSynth
+// ----------------------------------------------------------------
+// ⚠ ARDUINO IDE SETTINGS (OBLIGATORIO — si no, no enumera MIDI / no suena)
+//   • Board:                 ESP32S3 Dev Module
+//   • USB Mode:              USB-OTG (TinyUSB)      ← para que aparezca como MIDI
+//   • USB CDC On Boot:       Disabled              ← libera el USB para MIDI puro
+//   • Flash Mode:            DIO                    ← NO uses OPI o el audio I2S falla
+//   • Upload Mode:           UART0 / Hardware CDC
+// ----------------------------------------------------------------
+// LIBRERÍAS REQUERIDAS
+//   ESP32 Arduino core (driver/i2s_std.h), USB.h, USBMIDI.h
 // ================================================================
 #include <Arduino.h>
 #include "driver/i2s_std.h"
@@ -970,8 +1366,14 @@ static float hpf_b0=1,hpf_b1=0,hpf_b2=0,hpf_a1=0,hpf_a2=0;
 static float lpf_x1=0,lpf_x2=0,lpf_y1=0,lpf_y2=0;
 static float lpf_b0=1,lpf_b1=0,lpf_b2=0,lpf_a1=0,lpf_a2=0;
 float fx_hpfFreq=20.0f, fx_lpfFreq=12000.0f, fx_lpfQ=0.707f;
-float fx_bitcrush=0.0f, fx_masterVol=0.6f, fx_swing=0.0f;
-bool  fx_stutter=false;
+float fx_masterVol=0.6f, fx_swing=0.0f;
+bool  fx_fill=false, fx_beatrep=false, fx_drop=false;
+
+// ---- DELAY (eco sincronizado a 1/8 del BPM) ----
+#define DELAY_MAX 22050           // 0.5 s @44.1k (44 KB en RAM)
+int16_t  delayBuf[DELAY_MAX];
+uint32_t delayLen = 11025, dpos = 0;
+float    fx_delayWet = 0.0f, fx_delayFb = 0.0f;
 
 void computeHPF(float freq, float Q) {
   if (freq < 20.0f) freq = 20.0f;
@@ -999,11 +1401,18 @@ inline float applyLPF(float x) {
   float y = lpf_b0*x + lpf_b1*lpf_x1 + lpf_b2*lpf_x2 - lpf_a1*lpf_y1 - lpf_a2*lpf_y2;
   lpf_x2=lpf_x1; lpf_x1=x; lpf_y2=lpf_y1; lpf_y1=y; return y;
 }
-inline float applyBitcrush(float x, float amt) {
-  if (amt < 0.02f) return x;
-  int bits = 16 - (int)(amt * 12.0f); if (bits < 2) bits = 2;
-  float levels = (float)(1 << (bits - 1));
-  return roundf(x * levels) / levels;
+inline float applyDelay(float x) {
+  float d = (float)delayBuf[dpos] / 32768.0f;          // muestra retrasada
+  if (fx_delayWet >= 0.001f) {
+    float fbIn = x + d * fx_delayFb;                   // realimentación
+    if (fbIn >  1.0f) fbIn =  1.0f;
+    if (fbIn < -1.0f) fbIn = -1.0f;
+    delayBuf[dpos] = (int16_t)(fbIn * 32767.0f);
+  } else {
+    delayBuf[dpos] = (int16_t)(x * 32767.0f);          // mantiene el buffer fresco
+  }
+  dpos = (dpos + 1) % delayLen;
+  return x * (1.0f - fx_delayWet) + d * fx_delayWet;   // mezcla dry/wet
 }
 inline float softLimit(float x) {
   const float knee = 0.85f; float a = fabsf(x);
@@ -1044,9 +1453,16 @@ uint16_t tickCount = 0;
 uint8_t  currentStep = 0;
 bool     playing = false;
 
+void recomputeDelay() {
+  float t = (60.0f / bpm) / 2.0f;                  // 1/8 de nota en segundos
+  uint32_t L = (uint32_t)(SAMPLE_RATE * t);
+  if (L < 1) L = 1; if (L > DELAY_MAX) L = DELAY_MAX;
+  delayLen = L;
+}
 void recomputeClock() {
   if (bpm<30.0f) bpm=30.0f; if (bpm>240.0f) bpm=240.0f;
   clockIntervalUs = (uint32_t)(60000000.0f / (bpm * (float)PPQ));
+  recomputeDelay();
 }
 void fireStep(uint8_t step) {
   for (int t=0; t<NUM_TRACKS; t++) if (pattern[t][step]) triggerTrack(t, 1.0f);
@@ -1066,14 +1482,16 @@ void handleCC(uint8_t cc, uint8_t v) {
   float n = v / 127.0f;
   switch (cc) {
     case 20: bpm = 40.0f + n*160.0f; recomputeClock(); break;
-    case 21: fx_swing = n*0.4f; break;
+    case 21: fx_swing = n; break;   // 0..1 → shuffle (se aplica en el clock)
     case 22: g_pitchRatio = powf(2.0f, (n-0.5f)*2.0f); break;
     case 23: fx_hpfFreq = 20.0f + n*n*3980.0f; computeHPF(fx_hpfFreq, 0.707f); break;
     case 24: fx_masterVol = n; break;
     case 25: fx_lpfFreq = 200.0f + n*19800.0f; computeLPF(fx_lpfFreq, fx_lpfQ); break;
-    case 26: fx_bitcrush = n; break;
-    case 27: fx_stutter = (v>=64); break;
-    case 28: g_reverseMode = (v>=64); break;
+    case 26: fx_delayWet = n*0.5f; fx_delayFb = n*0.72f; break;  // DELAY (1 perilla = mezcla + feedback)
+    case 27: fx_fill    = (v>=64); break;                        // FILL (roll de caja)
+    case 28: g_reverseMode = (v>=64); break;                     // REVERSE
+    case 29: fx_beatrep = (v>=64); break;                        // BEAT REPEAT
+    case 30: fx_drop    = (v>=64); break;                        // DROP (mute para builds)
   }
 }
 void handleMidiByte(uint8_t b1, uint8_t b2, uint8_t b3) {
@@ -1108,9 +1526,11 @@ void setup() {
   analogReadResolution(12);
   for (int i=0; i<5; i++) pinMode(BTN_PINS[i], INPUT_PULLUP);
   for (int i=0; i<NUM_VOICES; i++) voices[i].active = false;
+  for (uint32_t i=0; i<DELAY_MAX; i++) delayBuf[i] = 0;
   initI2S(); computeHPF(fx_hpfFreq, 0.707f); computeLPF(fx_lpfFreq, fx_lpfQ); recomputeClock();
   MIDI.begin(); USB.begin();
-  Serial.println("Listo. BTN0=play  POT0=BPM POT1=LPF POT2=crush POT3=vol");
+  Serial.println("Listo. BTN1=play BTN2=fill BTN3=beatrep BTN4=reverse BTN5=drop");
+  Serial.println("POT0=BPM POT1=LPF POT2=DELAY POT3=vol");
 }
 
 void loop() {
@@ -1120,7 +1540,7 @@ void loop() {
   int p0=readPot(POT_PINS[0]), p1=readPot(POT_PINS[1]), p2=readPot(POT_PINS[2]), p3=readPot(POT_PINS[3]);
   if (abs(p0-lp0)>20) { lp0=p0; bpm=40.0f+(p0/4095.0f)*160.0f; recomputeClock(); midiSendCC(15,20,(uint8_t)((bpm-40.0f)/160.0f*127.0f)); }
   if (abs(p1-lp1)>20) { lp1=p1; fx_lpfFreq=200.0f+(p1/4095.0f)*19800.0f; computeLPF(fx_lpfFreq, fx_lpfQ); midiSendCC(15,25,(uint8_t)((fx_lpfFreq-200.0f)/19800.0f*127.0f)); }
-  if (abs(p2-lp2)>20) { lp2=p2; fx_bitcrush=p2/4095.0f; midiSendCC(15,26,(uint8_t)(fx_bitcrush*127.0f)); }
+  if (abs(p2-lp2)>20) { lp2=p2; float n=p2/4095.0f; fx_delayWet=n*0.5f; fx_delayFb=n*0.72f; midiSendCC(15,26,(uint8_t)(n*127.0f)); }
   if (abs(p3-lp3)>20) { lp3=p3; fx_masterVol=0.1f+(p3/4095.0f)*0.9f; midiSendCC(15,24,(uint8_t)(fx_masterVol*127.0f)); }
   for (int i=0; i<5; i++) {
     bool pressed = (digitalRead(BTN_PINS[i])==LOW);
@@ -1128,20 +1548,37 @@ void loop() {
       btnLastMs[i]=now; btnPrev[i]=pressed;
       if (pressed) {
         switch (i) {
-          case 0: playing ? doStop() : doStart(); break;
-          case 1: fx_stutter=true; midiSendCC(15,27,127); break;
-          case 2: g_reverseMode=!g_reverseMode; midiSendCC(15,28, g_reverseMode?127:0); break;
-          case 3: triggerTrack(0, 1.0f); break;
-          case 4: triggerTrack(1, 1.0f); break;
+          case 0: playing ? doStop() : doStart(); break;            // BTN1 play/stop
+          case 1: fx_fill=true;    midiSendCC(15,27,127); break;    // BTN2 fill (hold)
+          case 2: fx_beatrep=true; midiSendCC(15,29,127); break;    // BTN3 beat repeat (hold)
+          case 3: g_reverseMode=!g_reverseMode; midiSendCC(15,28, g_reverseMode?127:0); break; // BTN4 reverse toggle
+          case 4: fx_drop=true;    midiSendCC(15,30,127); break;    // BTN5 drop (hold)
         }
-      } else if (i==1) { fx_stutter=false; midiSendCC(15,27,0); }
+      } else {  // release de los botones momentáneos
+        if (i==1) { fx_fill=false;    midiSendCC(15,27,0); }
+        if (i==2) { fx_beatrep=false; midiSendCC(15,29,0); }
+        if (i==4) { fx_drop=false;    midiSendCC(15,30,0); }
+      }
     }
   }
   if (playing) {
+    static uint16_t fillTick = 0;
     while ((int32_t)(nowUs-nextClockUs)>=0) {
-      midiSendRT(0xF8); tickCount++;
-      uint16_t stepEvery = fx_stutter ? (TICKS_PER_STEP/2) : TICKS_PER_STEP;
-      if (tickCount>=stepEvery) { tickCount=0; advanceStep(); }
+      midiSendRT(0xF8); tickCount++; fillTick++;
+      if (fx_beatrep) {
+        // BEAT REPEAT: repite el paso actual rápido (glitch), no avanza el secuenciador
+        if (tickCount >= 3) { tickCount=0; fireStep(currentStep); }
+      } else {
+        // SWING (shuffle): retrasa las semicorcheas impares
+        int sd = (int)(fx_swing * 6.0f); if (sd > 2) sd = 2;
+        uint16_t stepEvery = (currentStep % 2 == 0)
+                              ? (uint16_t)(TICKS_PER_STEP + sd)    // on-beat más largo
+                              : (uint16_t)(TICKS_PER_STEP - sd);   // off-beat más corto
+        if (tickCount >= stepEvery) { tickCount=0; advanceStep(); }
+      }
+      // FILL: roll de caja (T1) por encima de lo que esté sonando
+      if (fx_fill) { if (fillTick >= 3) { fillTick=0; triggerTrack(1, 1.0f); } }
+      else fillTick = 0;
       nextClockUs += clockIntervalUs;
       nowUs = micros();
       if ((int32_t)(nowUs-nextClockUs)>100000) nextClockUs=nowUs;
@@ -1172,7 +1609,9 @@ void loop() {
     }
     mix = (mix * 0.18f) / 32768.0f; mix *= fx_masterVol;
     mix = applyHPF(mix); mix = applyLPF(mix);
-    mix = applyBitcrush(mix, fx_bitcrush); mix = softLimit(mix);
+    mix = applyDelay(mix);
+    if (fx_drop) mix = 0.0f;            // DROP: silencia el master (builds)
+    mix = softLimit(mix);
     int16_t out = (int16_t)(mix*32767.0f);
     buf[s*2]=out; buf[s*2+1]=out;
   }
