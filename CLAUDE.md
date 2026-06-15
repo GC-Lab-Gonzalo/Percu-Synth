@@ -30,6 +30,7 @@ percusynth/
 │   ├── dub_siren_generator/        #   Generates dub siren .ino with embedded samples
 │   ├── midi_sampler/               #   MIDI-USB sampler: live Web Audio instrument + generates .ino
 │   ├── video_synth/                #   Audiovisual video synth driven over Web Serial
+│   ├── arp_matrix/                 #   Polyphonic arpeggiator + horizontal 64×32 round-LED matrix, 3 control panels (Web Audio + Web Serial) + generates .ino
 │   └── loops/bpm_mono_44100/       #   BPM-aware loop editor
 ├── videogame/
 │   └── cyber_flight/               # NEON STRIKE: cyberpunk first-person shooter (Web Serial)

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ArpMatrix · PercuSynth · GC Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   ArpMatrix — arpegiador polifónico + matriz LED 64×128 (vertical)
+   Estética idéntica a tools/percu_control (gabinete madera + PCB +
+   módulos serigrafiados, Orbitron/Space Mono, paleta silk/cyan).
+   Proyecto colectivo del taller PercuSynth · GC Lab Chile.
+═══════════════════════════════════════════════════════════════════════ */
+:root{
+  --wood-1:#5a3520;--wood-2:#3d2114;--wood-3:#2a160c;
+  --silk:#e8e2cf;--silk-d:#8a8470;--silk-f:#5a5440;
+  --cyan:#5dd7ff;--violet:#b58aff;--amber:#ffaa44;--mint:#5fffc4;
+  --red:#ff5a4a;--blue:#5aa0ff;--pink:#ff6aa8;--led:#4dd0a0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;font-family:'Space Mono',monospace;color:var(--silk);background:#0a0805}
+
+/* ════════ WOODEN ENCLOSURE ════════ */
+.case{position:fixed;inset:0;padding:clamp(8px,1.2vmin,18px);display:flex;flex-direction:column;
+  background:
+    repeating-linear-gradient(92deg,rgba(0,0,0,0) 0,rgba(0,0,0,.07) 1px,rgba(0,0,0,0) 3px,rgba(255,180,120,.03) 5px,rgba(0,0,0,0) 9px),
+    repeating-linear-gradient(88deg,rgba(0,0,0,0) 0,rgba(0,0,0,.18) .5px,rgba(0,0,0,0) 7px),
+    linear-gradient(180deg,var(--wood-1) 0%,var(--wood-2) 50%,var(--wood-3) 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,200,140,.18),inset 0 0 22px rgba(0,0,0,.6),inset 0 -3px 18px rgba(0,0,0,.7)}
+/* ════════ PCB ════════ */
+.pcb{flex:1;min-height:0;position:relative;border-radius:6px;padding:clamp(10px,1.5vmin,18px);
+  display:grid;grid-template-rows:auto 1fr;gap:clamp(8px,1.2vmin,14px);
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,0) 4px),
+    repeating-linear-gradient(45deg,rgba(40,80,55,.10) 0,rgba(40,80,55,.10) 1px,rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    repeating-linear-gradient(-45deg,rgba(40,80,55,.08) 0,rgba(40,80,55,.08) 1px,rgba(0,0,0,0) 1px,rgba(0,0,0,0) 16px),
+    radial-gradient(ellipse at 30% 0%,rgba(40,90,60,.10),transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(60,40,30,.18),transparent 60%),
+    linear-gradient(180deg,#101108 0%,#070806 50%,#0a0b07 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),inset 0 0 0 2px rgba(0,0,0,.6),0 4px 24px rgba(0,0,0,.55)}
+.pcb::before{content:'';position:absolute;inset:8px;pointer-events:none;border:1px dashed rgba(232,226,207,.07);border-radius:4px}
+.pcb::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 16px 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) 16px,#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at 16px calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px),
+    radial-gradient(circle at calc(100% - 16px) calc(100% - 16px),#000 0 5px,rgba(160,150,120,.5) 5px 6px,transparent 7px)}
+
+/* ════════ HEADER ════════ */
+.hdr{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:18px;padding:8px 18px;min-height:72px;
+  background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.15));border:1px solid rgba(232,226,207,.1);border-radius:4px}
+.brand{display:flex;align-items:center;gap:16px}
+.brand-logo{width:clamp(48px,6vmin,72px);height:clamp(48px,6vmin,72px);
+  background:url('../percu_control/assets/gclab-logo.png') center/contain no-repeat,radial-gradient(circle,rgba(93,215,255,.12),transparent 70%);
+  filter:brightness(1.25) drop-shadow(0 0 8px rgba(232,226,207,.28));flex-shrink:0;border-radius:6px}
+.brand-text{display:flex;flex-direction:column;line-height:1.05}
+.brand-name{font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(18px,2.4vmin,29px);letter-spacing:4px;color:var(--silk);text-shadow:0 0 12px rgba(232,226,207,.18)}
+.brand-name span{color:var(--cyan)}
+.brand-sub{font-family:'Space Mono',monospace;font-size:clamp(8px,.9vmin,11px);letter-spacing:4px;color:var(--silk-d);margin-top:6px}
+.hdr-status{display:flex;align-items:center;gap:12px;justify-self:end;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1.5px}
+.smd-led{width:7px;height:7px;border-radius:50%;background:#1a1a1a;box-shadow:inset 0 0 0 1px rgba(0,0,0,.8),0 0 0 1px rgba(232,226,207,.1)}
+.smd-led.on{background:var(--led);box-shadow:0 0 7px var(--led),0 0 14px rgba(77,208,160,.4)}
+.smd-led.rx{background:#5dd7ff;box-shadow:0 0 8px #5dd7ff;animation:blink .4s ease-out}
+@keyframes blink{0%{box-shadow:0 0 12px #5dd7ff}100%{box-shadow:0 0 4px #5dd7ff}}
+.hdr-lbl{color:var(--silk-d);text-transform:uppercase;font-size:10px}
+.hdr-lbl.on{color:var(--led)}
+select,.btn{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;background:linear-gradient(180deg,#181a14,#0a0c08);color:var(--silk);
+  border:1px solid rgba(232,226,207,.18);border-radius:3px;padding:7px 14px;cursor:pointer;text-transform:uppercase;outline:none;transition:all .15s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.6)}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 10px rgba(93,215,255,.25)}
+.btn.pri{background:linear-gradient(180deg,#0f3a4a,#082230);border-color:rgba(93,215,255,.5);color:var(--cyan);font-weight:700}
+.btn.pri:hover{background:linear-gradient(180deg,#11546b,#0a2f40)}
+.btn.sec{border-color:rgba(255,170,68,.5);color:var(--amber)}
+
+/* ════════ BODY — sides anchas + matriz vertical central ════════ */
+.body{display:grid;grid-template-columns:minmax(230px,1fr) minmax(0,2.1fr) minmax(230px,1fr);
+  gap:clamp(8px,1.1vmin,14px);min-height:0;overflow:hidden}
+.col{display:flex;flex-direction:column;gap:clamp(8px,1.1vmin,14px);min-height:0;overflow:auto;padding-top:14px;padding-right:2px}
+.col::-webkit-scrollbar{width:4px}.col::-webkit-scrollbar-thumb{background:rgba(232,226,207,.1);border-radius:2px}
+.center{display:grid;grid-template-rows:auto 1fr;gap:clamp(8px,1.1vmin,13px);min-height:0;padding-top:14px}
+
+/* ════════ MODULE ════════ */
+.mod{position:relative;padding:15px 11px 10px;border:1px solid rgba(232,226,207,.13);border-radius:4px;
+  background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.03),transparent 70%),linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.08));
+  display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0}
+.mod.grow{flex:1}
+.mod-lbl{position:absolute;top:-9px;left:14px;padding:1px 11px;font-family:'Orbitron',sans-serif;font-weight:800;font-size:12px;letter-spacing:4px;
+  color:var(--c,#e8e2cf);background:#0c0e09;display:flex;align-items:center;gap:8px;text-shadow:0 0 8px rgba(var(--cr,232,226,207),.35);z-index:1;border-radius:2px}
+.mod-led{width:6px;height:6px;border-radius:50%;background:var(--c,#5dd7ff);box-shadow:0 0 6px var(--c,#5dd7ff),0 0 12px rgba(var(--cr,93,215,255),.4);animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.sub-lbl{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;color:var(--silk-f);margin:2px 0 -2px}
+
+/* ════════ chips ════════ */
+.row{display:flex;gap:5px;flex-wrap:wrap}
+.col-list{display:flex;flex-direction:column;gap:5px;flex:1}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.chip{flex:1;min-width:0;background:linear-gradient(180deg,#15170f,#0a0b07);border:1px solid rgba(232,226,207,.14);color:var(--silk-d);
+  font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:8px 4px;line-height:1;border-radius:2px;cursor:pointer;text-align:center;
+  transition:all .12s;letter-spacing:.5px;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 1px 1px rgba(0,0,0,.5)}
+.chip:hover{color:var(--silk)}
+.chip.active{background:linear-gradient(180deg,rgba(var(--cr,93,215,255),.2),rgba(var(--cr,93,215,255),.06));border-color:var(--c,#5dd7ff);
+  color:var(--c,#5dd7ff);text-shadow:0 0 6px var(--c,#5dd7ff);box-shadow:inset 0 0 10px rgba(var(--cr,93,215,255),.25)}
+.chip.wave{font-size:13px;padding:8px 4px}
+.chip.lg{padding:11px 4px;font-size:12px}
+.chip.hold.active{background:linear-gradient(180deg,rgba(255,170,68,.25),rgba(255,170,68,.07));border-color:var(--amber);color:var(--amber);text-shadow:0 0 6px var(--amber)}
+
+/* ════════ knobs (idéntico a percu_control) ════════ */
+.kcol{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;justify-content:space-around;margin-top:2px}
+.kw{display:flex;flex-direction:column;align-items:center;gap:3px;user-select:none}
+canvas.kc{cursor:ns-resize;touch-action:none;display:block}
+.kname{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;color:var(--silk-d);letter-spacing:1.5px;text-transform:uppercase}
+
+/* ════════ TRANSPORT strip ════════ */
+.tstrip{display:flex;align-items:center;gap:14px;padding:9px 14px;border:1px solid rgba(232,226,207,.13);border-radius:4px;
+  background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.08));position:relative}
+.tstrip::before{content:'';position:absolute;top:-1px;left:-1px;width:14px;height:14px;border-top:1px solid rgba(232,226,207,.4);border-left:1px solid rgba(232,226,207,.4)}
+.tstrip-l{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:800;letter-spacing:3px;color:var(--cyan);display:flex;align-items:center;gap:8px}
+.tstrip-l::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--silk-f);transition:.2s}
+.tstrip-l.play::before{background:var(--led);box-shadow:0 0 8px var(--led);animation:pulse 1s ease-in-out infinite}
+.tstrip-r{display:flex;gap:15px;font-family:'Space Mono',monospace;font-size:11px;margin-left:auto}
+.tstrip-r .it{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.tstrip-r .l{font-size:8px;letter-spacing:1.5px;color:var(--silk-f)}
+.tstrip-r .v{font-weight:700;color:var(--amber);text-shadow:0 0 5px rgba(255,170,68,.4)}
+
+/* ════════ MATRIZ LED VERTICAL (HERO) ════════ */
+.screen-wrap{position:relative;min-height:0;border:1px solid rgba(232,226,207,.2);border-radius:6px;background:linear-gradient(180deg,#0a0b06,#020301);
+  padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 0 26px rgba(0,0,0,.85),0 2px 8px rgba(0,0,0,.5)}
+.screen-head{width:100%;display:flex;justify-content:space-between;align-items:center;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;color:var(--silk);padding:0 2px 10px}
+.screen-head .lbl{display:flex;align-items:center;gap:7px}
+.screen-head .lbl::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 6px var(--mint)}
+.screen-head .scn{display:flex;gap:4px}
+.scn .chip{padding:5px 9px;flex:0 0 auto;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1.5px}
+.matrix{width:100%;aspect-ratio:64/32;max-height:100%;margin:auto;position:relative;border:1px solid rgba(60,90,70,.3);border-radius:4px;overflow:hidden;background:#000;
+  box-shadow:inset 0 0 28px rgba(0,0,0,.95),0 0 30px rgba(93,215,255,.07)}
+.matrix canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.matrix .vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.5) 100%)}
+.matrix-info{position:absolute;left:8px;bottom:6px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.5px;color:rgba(120,255,200,.6);display:flex;gap:12px;pointer-events:none}
+.matrix-info b{color:rgba(120,255,200,.95);font-weight:700}
+
+/* ════════ MODAL ════════ */
+.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal{width:min(560px,94vw);max-height:90vh;overflow-y:auto;background:linear-gradient(180deg,#141509 0%,#080906 100%);border:1px solid rgba(232,226,207,.22);border-radius:6px;padding:24px 26px;box-shadow:0 25px 70px rgba(0,0,0,.85);position:relative}
+.modal::before{content:'';position:absolute;inset:8px;pointer-events:none;border:1px dashed rgba(232,226,207,.08);border-radius:4px}
+.modal-h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.modal-h h3{font-family:'Orbitron',sans-serif;font-weight:800;font-size:15px;letter-spacing:4px;color:var(--silk);display:flex;align-items:center;gap:10px}
+.modal-h h3::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.modal-close{cursor:pointer;background:none;border:none;color:var(--silk-f);font-size:18px;line-height:1;padding:4px 8px}
+.modal-close:hover{color:var(--silk)}
+.modal p{font-family:'Space Mono',monospace;font-size:11px;color:var(--silk-d);line-height:1.7;margin-bottom:10px}
+.modal code{background:rgba(0,0,0,.55);color:var(--cyan);padding:1px 5px;border-radius:2px;font-size:10px;border:1px solid rgba(93,215,255,.18)}
+.modal .warn{border-left:2px solid var(--amber);padding:8px 12px;background:rgba(255,170,68,.05);font-size:10px;color:var(--amber);margin:10px 0 16px;border-radius:0 2px 2px 0}
+.modal .install-row{display:flex;justify-content:flex-end;gap:12px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(232,226,207,.1)}
+
+@media(max-width:920px){.body{grid-template-columns:1fr;grid-template-rows:auto auto auto;overflow:auto}html,body{overflow:auto}.matrix{min-height:360px}}
+</style>
+</head>
+<body>
+<div class="case">
+<div class="pcb">
+
+  <!-- ═════════ HEADER ═════════ -->
+  <div class="hdr">
+    <div class="brand">
+      <div class="brand-logo"></div>
+      <div class="brand-text">
+        <div class="brand-name">ARP<span>MATRIX</span></div>
+        <div class="brand-sub">GC LAB CHILE · ESP32-S3 · ARPEGGIATOR + LED MATRIX</div>
+      </div>
+    </div>
+    <div></div>
+    <div class="hdr-status">
+      <span class="smd-led" id="led-rx"></span>
+      <span class="smd-led" id="led-conn"></span>
+      <span class="hdr-lbl" id="hlbl">OFFLINE</span>
+      <button class="btn sec" id="btn-fw">⬇ .INO</button>
+      <button class="btn pri" id="btn-conn">CONECTAR</button>
+    </div>
+  </div>
+
+  <!-- ═════════ BODY ═════════ -->
+  <div class="body">
+
+    <!-- ──── LEFT ──── -->
+    <div class="col">
+      <div class="mod" style="--c:var(--cyan);--cr:93,215,255">
+        <div class="mod-lbl"><span class="mod-led"></span>ARP</div>
+        <div class="grid3" id="pat-row"></div>
+        <div class="row">
+          <button class="chip lg" id="chip-play">▶ PLAY</button>
+          <button class="chip lg hold" id="chip-rep">⚡ REPEAT</button>
+        </div>
+      </div>
+      <div class="mod grow" style="--c:var(--violet);--cr:181,138,255">
+        <div class="mod-lbl"><span class="mod-led"></span>SCALE</div>
+        <div class="col-list" id="mode-row"></div>
+        <div class="sub-lbl">OCTAVA</div>
+        <div class="grid2" id="oct-row"></div>
+        <div class="sub-lbl">RANGO · OCTAVAS</div>
+        <div class="grid3" id="span-row"></div>
+      </div>
+    </div>
+
+    <!-- ──── CENTER · MATRIZ LED HORIZONTAL ──── -->
+    <div class="center">
+      <div class="tstrip">
+        <div class="tstrip-l" id="tl">ARPMATRIX</div>
+        <div class="tstrip-r">
+          <div class="it"><span class="l">MODO</span><span class="v" id="t-mode">Jónico</span></div>
+          <div class="it"><span class="l">PATRÓN</span><span class="v" id="t-pat">UP</span></div>
+          <div class="it"><span class="l">ONDA</span><span class="v" id="t-wave">SINE</span></div>
+          <div class="it"><span class="l">TEMPO</span><span class="v" id="t-bpm">300</span></div>
+        </div>
+      </div>
+      <div class="screen-wrap">
+        <div class="screen-head">
+          <span class="lbl" id="scene-lbl">LED · NEXUS</span>
+          <span class="scn" id="scene-row"></span>
+        </div>
+        <div class="matrix">
+          <canvas id="matrix" width="896" height="448"></canvas>
+          <div class="vig"></div>
+          <div class="matrix-info">
+            <span>OCT <b id="mi-oct">C4</b></span><span>WAVE <b id="mi-wave">SINE</b></span><span>RANGO <b id="mi-span">2</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──── RIGHT ──── -->
+    <div class="col">
+      <div class="mod" style="--c:var(--mint);--cr:95,255,196">
+        <div class="mod-lbl"><span class="mod-led"></span>ONDA</div>
+        <div class="grid2" id="osc-wave"></div>
+      </div>
+      <div class="mod grow" style="--c:var(--amber);--cr:255,170,68">
+        <div class="mod-lbl"><span class="mod-led"></span><span id="syn-lbl">POTS</span></div>
+        <div class="grid3" id="panel-sel"></div>
+        <div class="kcol" id="pot-col"></div>
+        <div id="panelc-extra" style="display:none">
+          <div class="sub-lbl">FILTRO · BTN1</div>
+          <div class="grid3" id="ftype-row"></div>
+          <div class="sub-lbl">LFO · BTN2</div>
+          <div class="grid3" id="lforate-row"></div>
+          <button class="chip" id="sub-chip" style="margin-top:5px">◇ SUB-OSC · BTN3</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.body -->
+</div><!-- /.pcb -->
+</div><!-- /.case -->
+
+<!-- ═════════ MODAL FIRMWARE ═════════ -->
+<div class="modal-bg" id="modal-fw">
+  <div class="modal">
+    <div class="modal-h"><h3>GENERAR FIRMWARE</h3><button class="modal-close" id="fw-close">✕</button></div>
+    <div class="warn">Mismo motor de síntesis que esta webapp → el hardware suena igual.</div>
+    <p>Descarga <code>arp_matrix_percusynth.ino</code> y flashéalo desde el Arduino IDE.</p>
+    <p>Board <code>ESP32S3 Dev Module</code> · USB CDC On Boot <code>Enabled</code> · Flash Mode <code>DIO</code> (OPI rompe el I2S) · PSRAM <code>OPI PSRAM</code>. Salida por el DAC PCM5102.</p>
+    <p>El firmware corre el arpegiador y la síntesis de forma autónoma con sus pots/botones/IMU, y transmite <code>p0..p3,b1..b5,imuX,imuY</code> a 50 Hz para que la webapp lo espeje.</p>
+    <div class="install-row"><button class="btn" id="fw-close2">CERRAR</button><button class="btn pri" id="fw-dl">⬇ DESCARGAR .INO</button></div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   ArpMatrix — motor de audio + matriz + Web Serial (comentarios en español)
+═══════════════════════════════════════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+
+const MODES=[
+  {n:'Jónico',iv:[0,2,4,5,7,9,11],hue:190},{n:'Dórico',iv:[0,2,3,5,7,9,10],hue:160},
+  {n:'Frigio',iv:[0,1,3,5,7,8,10],hue:280},{n:'Lidio',iv:[0,2,4,6,7,9,11],hue:48},
+  {n:'Mixolidio',iv:[0,2,4,5,7,9,10],hue:25},{n:'Eólico',iv:[0,2,3,5,7,8,10],hue:210},
+  {n:'Locrio',iv:[0,1,3,5,6,8,10],hue:320},{n:'Pentatónica',iv:[0,2,4,7,9],hue:130},
+];
+const OCT_HZ=[65.41,130.81,261.63,523.25], OCT_NAME=['C2','C3','C4','C5'];
+const WAVES=['SINE','SQUARE','SAW','TRIANGLE'], WAVE_AC=['sine','square','sawtooth','triangle'], WAVE_SYM=['∿ SINE','⊓ SQR','⟋ SAW','△ TRI'];
+const PATTERNS=['UP','DOWN','UP-DN','DN-UP','RND','CHORD'];
+const SCENES=['NEXUS','LISSAJOUS','PLASMA','FRACTAL'];
+
+const FILTERS=['LPF','HPF','BPF'], FILTER_AC=['lowpass','highpass','bandpass'];
+const LFO_RATES=[0.2,1.0,4.0], LFO_NAMES=['LENTO','MEDIO','RÁPIDO'];
+const ST={playing:false,oct:2,mode:0,pat:0,wave:0,span:2,
+  noise:0,sat:0,speed:0.5,vol:0.85,
+  attack:0.1,decay:0.3,sustain:0.6,release:0.4,
+  cutoff:0.78,res:0.25,pwm:0.5,lfo:0,filterType:0,lfoRate:1,sub:false,
+  panel:0,beatRepeat:false,imuX:0,imuY:0};                      // panel: 0=PRINCIPAL · 1=ADSR · 2=TIMBRE
+
+/* ════════ AUDIO ════════ */
+let actx=null,master=null,satNode=null,voicesBus=null,noiseBuf=null,analyser=null,comp=null,timeBuf=null,freqBuf=null,filt=null,lfo=null,lfoGain=null;
+function initAudio(){
+  if(actx)return;
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  voicesBus=actx.createGain();voicesBus.gain.value=0.5;
+  filt=actx.createBiquadFilter();filt.type='lowpass';                 // filtro resonante (Panel C)
+  satNode=actx.createWaveShaper();satNode.oversample='2x';
+  master=actx.createGain();master.gain.value=ST.vol;
+  comp=actx.createDynamicsCompressor();comp.threshold.value=-14;comp.knee.value=20;comp.ratio.value=4;comp.attack.value=.003;comp.release.value=.18;
+  analyser=actx.createAnalyser();analyser.fftSize=512;analyser.smoothingTimeConstant=.78;
+  timeBuf=new Uint8Array(analyser.fftSize);freqBuf=new Uint8Array(analyser.frequencyBinCount);
+  // buffer de ruido reutilizable (el ruido se dispara POR NOTA, como una voz más del arpegio)
+  const nlen=actx.sampleRate,nb=actx.createBuffer(1,nlen,actx.sampleRate),d=nb.getChannelData(0);
+  for(let i=0;i<nlen;i++)d[i]=Math.random()*2-1;noiseBuf=nb;
+  // LFO global → modula el cutoff del filtro (POT4 = profundidad, da movimiento/dinámica)
+  lfo=actx.createOscillator();lfo.type='sine';lfoGain=actx.createGain();lfoGain.gain.value=0;
+  lfo.connect(lfoGain).connect(filt.frequency);lfo.start();
+  voicesBus.connect(filt);filt.connect(satNode);satNode.connect(master);master.connect(comp);comp.connect(analyser);analyser.connect(actx.destination);
+  updateSaturation();updateFilter();
+}
+function resumeAudio(){initAudio();if(actx.state==='suspended')actx.resume();}
+function updateSaturation(){if(!satNode)return;const k=ST.sat*40,N=1024,c=new Float32Array(N);for(let i=0;i<N;i++){const x=i/(N-1)*2-1;c[i]=Math.tanh((1+k)*x);}satNode.curve=c;}
+function cutoffHz(){return 80*Math.pow(150,ST.cutoff);}                  // 80..12000 Hz
+function updateFilter(){if(!filt)return;const f=cutoffHz();
+  filt.type=FILTER_AC[ST.filterType];filt.frequency.setTargetAtTime(f,actx.currentTime,.02);filt.Q.setTargetAtTime(0.5+ST.res*22,actx.currentTime,.02);
+  if(lfo){lfo.frequency.setTargetAtTime(LFO_RATES[ST.lfoRate],actx.currentTime,.02);lfoGain.gain.setTargetAtTime(ST.lfo*f*0.7,actx.currentTime,.02);}}
+// PWM: onda de pulso con ancho variable (band-limited vía PeriodicWave); cache por ancho
+const _pwCache={};
+function pulseWave(duty){const k=Math.round(duty*20);if(_pwCache[k])return _pwCache[k];
+  const N=32,re=new Float32Array(N+1),im=new Float32Array(N+1);
+  for(let n=1;n<=N;n++){re[n]=2*Math.sin(2*Math.PI*n*duty)/(Math.PI*n);im[n]=2*(1-Math.cos(2*Math.PI*n*duty))/(Math.PI*n);}
+  return _pwCache[k]=actx.createPeriodicWave(re,im);}
+function adsr(){return{a:0.003+ST.attack*0.6,d:0.02+ST.decay*0.7,s:0.05+ST.sustain*0.9,r:0.03+ST.release*1.4};}
+function triggerVoice(freq,vel,when){
+  if(!actx)return;const t=(when!==undefined?when:actx.currentTime),e=adsr();
+  const g=actx.createGain(),peak=vel,sus=peak*e.s;
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(peak,t+e.a);g.gain.linearRampToValueAtTime(sus,t+e.a+e.d);
+  const end=t+Math.max(e.a+e.d,stepSec()*0.92)+e.r,gate=t+Math.max(e.a+e.d,stepSec()*0.92);
+  g.gain.setValueAtTime(sus,gate);g.gain.exponentialRampToValueAtTime(0.0001,end);
+  const o=actx.createOscillator();
+  if(ST.wave===1)o.setPeriodicWave(pulseWave(0.05+ST.pwm*0.9));        // square → PWM (duty 0.05..0.95)
+  else o.type=WAVE_AC[ST.wave];
+  o.frequency.value=freq;o.connect(g);o.start(t);o.stop(end+0.02);
+  // sub-oscilador (-1 octava): da cuerpo (Panel C)
+  if(ST.sub){const o2=actx.createOscillator();o2.type='sine';o2.frequency.value=freq*0.5;
+    const sg=actx.createGain();sg.gain.value=0.5;o2.connect(sg).connect(g);o2.start(t);o2.stop(end+0.02);}
+  // ruido como voz acompañante: misma envolvente que la nota, nivel = POT1
+  if(ST.noise>0.002&&noiseBuf){const ns=actx.createBufferSource();ns.buffer=noiseBuf;ns.loop=true;
+    const ng=actx.createGain();ng.gain.value=ST.noise*0.8;ns.connect(ng).connect(g);ns.start(t);ns.stop(end+0.02);}
+  g.connect(voicesBus);o.onended=()=>{try{g.disconnect()}catch(_){}};
+}
+function scaleFreqs(){const base=OCT_HZ[ST.oct],iv=MODES[ST.mode].iv,out=[];for(let o=0;o<ST.span;o++)for(const s of iv)out.push(base*Math.pow(2,o+s/12));return out;}
+function arpBpm(){return 20+ST.speed*110;}                              // 1/4 de la velocidad anterior (20..130)
+function stepSec(){let s=15/arpBpm();if(ST.beatRepeat)s/=2.2;return s;}
+let arpIdx=0,schedTimer=null,nextNoteTime=0,lastNoteHz=261.63;
+const flashQ=[];                                                        // flashes visuales pendientes (tiempo de audio)
+const LOOKAHEAD=0.10, SCHED_MS=25;                                      // ventana de programación y periodo del scheduler
+// Programa UN paso en el instante de audio 'when' (preciso a nivel de muestra → tempo consistente)
+function scheduleStep(when){
+  const f=scaleFreqs(),pat=ST.pat;
+  const vel=0.22+Math.min(0.18,(Math.abs(ST.imuX)+Math.abs(ST.imuY))*0.18);
+  if(pat===5){[0,2,4,6].forEach(i=>{if(f[i])triggerVoice(f[i],vel*0.7,when)});lastNoteHz=f[0];}
+  else{
+    let i;
+    if(pat===0)i=arpIdx%f.length;
+    else if(pat===1)i=f.length-1-arpIdx%f.length;
+    else if(pat===2||pat===3){const span=(f.length-1)*2;let p=arpIdx%span;if(p>=f.length)p=span-p;i=(pat===3)?(f.length-1-p):p;}
+    else i=Math.floor(Math.random()*f.length);
+    triggerVoice(f[i],vel,when);lastNoteHz=f[i];
+  }
+  if(flashQ.length<128)flashQ.push(when);
+  if(!(ST.beatRepeat&&pat!==5))arpIdx++;
+}
+// Scheduler con look-ahead: ancla el tiempo de cada paso al reloj de AudioContext,
+// inmune al jitter de setTimeout (carga del hilo principal / render de la matriz).
+function scheduler(){
+  if(!ST.playing)return;
+  while(nextNoteTime < actx.currentTime + LOOKAHEAD){
+    scheduleStep(nextNoteTime);
+    nextNoteTime += stepSec();
+  }
+  schedTimer=setTimeout(scheduler,SCHED_MS);
+}
+function play(){resumeAudio();if(ST.playing)return;ST.playing=true;arpIdx=0;nextNoteTime=actx.currentTime+0.06;scheduler();syncUI();}
+function stop(){ST.playing=false;if(schedTimer)clearTimeout(schedTimer);flashQ.length=0;syncUI();}
+function togglePlay(){ST.playing?stop():play();}
+
+/* ════════ MENÚS / BOTONES ════════
+   Menú 1: BTN1 octava · BTN2 modo · BTN3 patrón · BTN4(hold) repeat · BTN5 play
+   Menú 2: BTN1 onda · BTN2 visualización · BTN3 rango octavas · BTN4(hold) repeat · BTN5 play
+   Combo BTN1+BTN5 alterna menú 1↔2 (pots de menú 2 = ADSR) */
+const padState=[false,false,false,false,false];
+const comboLatch=[false,false,false,false,false];
+function setPanel(p){ST.panel=(ST.panel===p)?0:p;resetPotPickup();syncUI();}
+function clearLatch(){if(!padState[0]&&!padState[1]&&!padState[3]&&!padState[4])for(let j=0;j<5;j++)comboLatch[j]=false;}
+function setPad(i,down){if(padState[i]===down)return;padState[i]=down;pressBtn(i,down);if(!down)clearLatch();}
+/* TRES PANELES (como trance_imu_leds). Combos: BTN1+BTN5 ↔ Panel ADSR · BTN2+BTN4 ↔ Panel TIMBRE.
+   Los botones que participan en combos (BTN1/BTN2/BTN5) actúan al SOLTAR; si se formó el combo,
+   ese release queda consumido (comboLatch) y no dispara su acción individual. BTN4 = beat repeat
+   (hold) salvo que forme el combo con BTN2. BTN3 actúa al presionar. */
+function pressBtn(i,down){
+  // — combos (en el 2º down) —
+  if(down&&((i===0&&padState[4])||(i===4&&padState[0]))){comboLatch[0]=comboLatch[4]=true;ST.beatRepeat=false;setPanel(1);return;}
+  if(down&&((i===1&&padState[3])||(i===3&&padState[1]))){comboLatch[1]=comboLatch[3]=true;ST.beatRepeat=false;setPanel(2);return;}
+  // — BTN4: beat repeat (hold), salvo combo —
+  if(i===3){
+    if(down)ST.beatRepeat=true;else ST.beatRepeat=false;
+    syncUI();return;
+  }
+  // — BTN3: al presionar —
+  if(i===2){if(!down)return;
+    if(ST.panel===0)ST.pat=(ST.pat+1)%PATTERNS.length;else if(ST.panel===1)ST.span=ST.span%3+1;else ST.sub=!ST.sub;
+    syncUI();return;}
+  // — BTN1 / BTN2 / BTN5: al soltar —
+  if(down)return;
+  if(comboLatch[i])return;                                             // release consumido por el combo (limpieza en clearLatch)
+  if(i===4)togglePlay();
+  else if(i===0){if(ST.panel===0)ST.oct=(ST.oct+1)%4;else if(ST.panel===1)ST.wave=(ST.wave+1)%4;else ST.filterType=(ST.filterType+1)%3;}
+  else if(i===1){if(ST.panel===0)ST.mode=(ST.mode+1)%MODES.length;else if(ST.panel===1)scene=(scene+1)%SCENES.length;else ST.lfoRate=(ST.lfoRate+1)%3;}
+  syncUI();
+}
+
+/* ════════ POTS + soft-takeover (congelado al cambiar de menú, como trance_imu_leds) ════════ */
+const potAnchor=[-1,-1,-1,-1], potLive=[true,true,true,true];
+function resetPotPickup(){for(let i=0;i<4;i++){potLive[i]=false;potAnchor[i]=-1;}}
+function applyPot(i,v){                                                  // escribe el parámetro del panel activo
+  v=Math.max(0,Math.min(1,v));
+  if(ST.panel===1){if(i===0)ST.attack=v;else if(i===1)ST.decay=v;else if(i===2)ST.sustain=v;else ST.release=v;}
+  else if(ST.panel===2){if(i===0)ST.cutoff=v;else if(i===1)ST.res=v;else if(i===2)ST.pwm=v;else ST.lfo=v;updateFilter();}
+  else{
+    if(i===0)ST.noise=v;                                  // POT1: nivel de la voz de ruido (se aplica por nota)
+    else if(i===1){ST.sat=v;updateSaturation();}
+    else if(i===2)ST.speed=v;
+    else{ST.vol=v;if(master)master.gain.setTargetAtTime(v,actx.currentTime,.02);}
+  }
+  syncUI();
+}
+function dragPot(i,v){applyPot(i,v);potLive[i]=false;potAnchor[i]=-1;}    // al arrastrar, congela el pot HW hasta que se mueva
+function hwPot(i,raw){                                                   // pot físico (telemetría) con pickup
+  if(potAnchor[i]<0){potAnchor[i]=raw;return;}
+  if(!potLive[i]&&Math.abs(raw-potAnchor[i])>0.02)potLive[i]=true;
+  if(potLive[i])applyPot(i,raw);
+}
+
+/* ════════ UI ════════ */
+function mkChip(parent,label,onClick,extra){const b=document.createElement('button');b.className='chip'+(extra?' '+extra:'');b.innerHTML=label;b.addEventListener('click',()=>{resumeAudio();onClick();});parent.appendChild(b);return b;}
+function buildUI(){
+  PATTERNS.forEach((p,i)=>mkChip($('pat-row'),p,()=>{ST.pat=i;syncUI();}).dataset.v=i);
+  MODES.forEach((m,i)=>mkChip($('mode-row'),m.n.toUpperCase(),()=>{ST.mode=i;syncUI();}).dataset.v=i);
+  OCT_NAME.forEach((o,i)=>mkChip($('oct-row'),o,()=>{ST.oct=i;syncUI();}).dataset.v=i);
+  [1,2,3].forEach(s=>mkChip($('span-row'),s+(s>1?' OCT':' OCT'),()=>{ST.span=s;syncUI();}).dataset.v=s);
+  WAVES.forEach((w,i)=>mkChip($('osc-wave'),WAVE_SYM[i],()=>{ST.wave=i;syncUI();},'wave').dataset.v=i);
+  SCENES.forEach((s,i)=>mkChip($('scene-row'),s,()=>{scene=i;syncUI();}).dataset.v=i);
+  $('chip-play').addEventListener('click',()=>{resumeAudio();togglePlay();});
+  const rep=$('chip-rep');
+  const repDn=e=>{e.preventDefault();resumeAudio();setPad(3,true);},repUp=e=>{e.preventDefault();setPad(3,false);};
+  rep.addEventListener('mousedown',repDn);rep.addEventListener('mouseup',repUp);rep.addEventListener('mouseleave',()=>padState[3]&&setPad(3,false));
+  rep.addEventListener('touchstart',repDn,{passive:false});rep.addEventListener('touchend',repUp);
+  // selector de panel (3) + controles extra del Panel C
+  ['PRINCIPAL','ADSR','TIMBRE'].forEach((p,i)=>mkChip($('panel-sel'),p,()=>{ST.panel=i;resetPotPickup();syncUI();}).dataset.v=i);
+  FILTERS.forEach((f,i)=>mkChip($('ftype-row'),f,()=>{ST.filterType=i;updateFilter&&updateFilter();syncUI();}).dataset.v=i);
+  LFO_NAMES.forEach((n,i)=>mkChip($('lforate-row'),n,()=>{ST.lfoRate=i;updateFilter&&updateFilter();syncUI();}).dataset.v=i);
+  $('sub-chip').addEventListener('click',()=>{resumeAudio();ST.sub=!ST.sub;syncUI();});
+  buildKnobs();
+}
+function setActive(rowId,val){document.querySelectorAll('#'+rowId+' .chip').forEach(c=>c.classList.toggle('active',+c.dataset.v===val));}
+function syncUI(){
+  setActive('pat-row',ST.pat);setActive('mode-row',ST.mode);setActive('oct-row',ST.oct);setActive('span-row',ST.span);setActive('osc-wave',ST.wave);setActive('scene-row',scene);
+  $('t-mode').textContent=MODES[ST.mode].n;$('t-pat').textContent=PATTERNS[ST.pat];$('t-wave').textContent=WAVES[ST.wave];$('t-bpm').textContent=Math.round(arpBpm());
+  $('mi-oct').textContent=OCT_NAME[ST.oct];$('mi-wave').textContent=WAVES[ST.wave];$('mi-span').textContent=ST.span;
+  $('scene-lbl').textContent='LED · '+SCENES[scene];
+  $('chip-play').innerHTML=ST.playing?'■ STOP':'▶ PLAY';$('chip-play').classList.toggle('active',ST.playing);
+  $('chip-rep').classList.toggle('active',ST.beatRepeat);
+  const PNAME=['ARPMATRIX','PANEL 2 · ADSR','PANEL 3 · TIMBRE'];
+  $('tl').textContent=PNAME[ST.panel];$('tl').classList.toggle('play',ST.playing);
+  $('syn-lbl').textContent=['POTS','ADSR','TIMBRE'][ST.panel];
+  setActive('panel-sel',ST.panel);
+  setActive('ftype-row',ST.filterType);setActive('lforate-row',ST.lfoRate);
+  $('sub-chip').classList.toggle('active',ST.sub);$('sub-chip').innerHTML=(ST.sub?'◆':'◇')+' SUB-OSC · BTN3';
+  $('panelc-extra').style.display=ST.panel===2?'block':'none';
+  const pct=v=>Math.round(v*100)+'%';
+  const main=[['RUIDO',ST.noise,'#5dd7ff',pct],['SATUR',ST.sat,'#ff5a4a',pct],['VEL',ST.speed,'#ffaa44',v=>Math.round(20+v*110)],['VOLUMEN',ST.vol,'#5fffc4',pct]];
+  const ad=[['ATTACK',ST.attack],['DECAY',ST.decay],['SUSTAIN',ST.sustain],['RELEASE',ST.release]];
+  const tim=[['CUTOFF',ST.cutoff,'#5fffc4',v=>{const f=80*Math.pow(150,v);return f>=1000?(f/1000).toFixed(1)+'k':Math.round(f);}],
+             ['RES',ST.res,'#ff6aa8',pct],['PWM',ST.pwm,'#b58aff',pct],['LFO',ST.lfo,'#ffaa44',pct]];
+  for(let i=0;i<4;i++){const k=K['p'+i],set=ST.panel===1?ad[i]:ST.panel===2?tim[i]:main[i];
+    if(ST.panel===1){k.val=set[1];k.col='#b58aff';k.name=set[0];k.fmt=pct;}
+    else{k.val=set[1];k.col=set[2];k.name=set[0];k.fmt=set[3];}
+    $('kn-p'+i).textContent=k.name;drawKnob('p'+i);
+  }
+}
+
+/* ════════ KNOBS (drawKnob idéntico a percu_control) ════════ */
+const K={};
+function buildKnobs(){
+  ['p0','p1','p2','p3'].forEach(id=>{
+    const wrap=document.createElement('div');wrap.className='kw';
+    const cv=document.createElement('canvas');cv.className='kc';cv.id='k-'+id;cv.width=66;cv.height=66;
+    const nm=document.createElement('div');nm.className='kname';nm.id='kn-'+id;
+    wrap.appendChild(cv);wrap.appendChild(nm);$('pot-col').appendChild(wrap);
+    K[id]={val:0.5,col:'#5dd7ff',name:'',fmt:v=>Math.round(v*100)+'%'};
+    let drag=false,sy=0,sv=0;const idx=+id.slice(1);
+    const dn=e=>{drag=true;sy=(e.touches?e.touches[0].clientY:e.clientY);sv=K[id].val;e.preventDefault();resumeAudio();};
+    const mv=e=>{if(!drag)return;const y=(e.touches?e.touches[0].clientY:e.clientY);dragPot(idx,sv+(sy-y)/150);e.preventDefault();};
+    cv.addEventListener('mousedown',dn);cv.addEventListener('touchstart',dn,{passive:false});
+    window.addEventListener('mousemove',mv);window.addEventListener('touchmove',mv,{passive:false});
+    window.addEventListener('mouseup',()=>drag=false);window.addEventListener('touchend',()=>drag=false);
+  });
+}
+function drawKnob(id){
+  const cv=$('k-'+id);if(!cv)return;const d=K[id],ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2,R=W/2-3,PI=Math.PI,S=135*PI/180,SW=270*PI/180;
+  const pct=d.val,ang=S+pct*SW,col=d.col;ctx.clearRect(0,0,W,H);
+  ctx.beginPath();ctx.arc(cx,cy,R-1,S,S+SW,false);ctx.strokeStyle='rgba(232,226,207,.09)';ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
+  for(let i=0;i<=10;i++){const t=i/10,a=S+t*SW,maj=(i===0||i===5||i===10);ctx.beginPath();ctx.moveTo(cx+(R-(maj?3:4))*Math.cos(a),cy+(R-(maj?3:4))*Math.sin(a));ctx.lineTo(cx+(R+1)*Math.cos(a),cy+(R+1)*Math.sin(a));ctx.strokeStyle=maj?'rgba(232,226,207,.45)':'rgba(232,226,207,.18)';ctx.lineWidth=maj?1.2:.6;ctx.stroke();}
+  if(pct>.005){ctx.save();ctx.shadowColor=col;ctx.shadowBlur=18;ctx.beginPath();ctx.arc(cx,cy,R-1,S,ang,false);ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.lineCap='round';ctx.stroke();ctx.restore();}
+  const kR=R-8;ctx.save();ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=12;ctx.shadowOffsetY=4;ctx.beginPath();ctx.arc(cx,cy+1,kR,0,2*PI);ctx.fillStyle='#000';ctx.fill();ctx.restore();
+  const skirt=ctx.createRadialGradient(cx-kR*.4,cy-kR*.4,kR*.1,cx,cy,kR);skirt.addColorStop(0,'#c8c8d0');skirt.addColorStop(.4,'#7a7a85');skirt.addColorStop(.75,'#3a3a42');skirt.addColorStop(1,'#1a1a20');
+  ctx.beginPath();ctx.arc(cx,cy,kR,0,2*PI);ctx.fillStyle=skirt;ctx.fill();
+  ctx.save();ctx.translate(cx,cy);const nK=Math.round(kR*.7);for(let i=0;i<nK;i++){const a=(i/nK)*2*PI;ctx.beginPath();ctx.moveTo(Math.cos(a)*(kR-1.5),Math.sin(a)*(kR-1.5));ctx.lineTo(Math.cos(a)*(kR*.72),Math.sin(a)*(kR*.72));ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.6;ctx.stroke();}ctx.restore();
+  const capR=kR*.74;const cap=ctx.createRadialGradient(cx-capR*.45,cy-capR*.5,capR*.05,cx,cy,capR);cap.addColorStop(0,'#3a3a42');cap.addColorStop(.55,'#1a1a22');cap.addColorStop(1,'#08080c');
+  ctx.beginPath();ctx.arc(cx,cy,capR,0,2*PI);ctx.fillStyle=cap;ctx.fill();
+  ctx.save();const gl=ctx.createLinearGradient(cx,cy-capR,cx,cy);gl.addColorStop(0,'rgba(255,255,255,.22)');gl.addColorStop(1,'rgba(255,255,255,0)');ctx.beginPath();ctx.arc(cx,cy,capR,PI,2*PI);ctx.closePath();ctx.fillStyle=gl;ctx.fill();ctx.restore();
+  ctx.beginPath();ctx.arc(cx,cy,capR,0,2*PI);ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=.6;ctx.stroke();
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(ang+PI/2);ctx.shadowColor=col;ctx.shadowBlur=pct>.005?10:0;ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.55)';ctx.fillRect(-1.2,-capR*.92,2.4,capR*.45);ctx.restore();
+  ctx.save();if(pct>.005){ctx.shadowColor=col;ctx.shadowBlur=10;}ctx.beginPath();ctx.arc(cx+(R+1)*Math.cos(ang),cy+(R+1)*Math.sin(ang),2.2,0,2*PI);ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.22)';ctx.fill();ctx.restore();
+  if(capR>16){const fs=Math.max(9,capR*.3);ctx.save();ctx.fillStyle=pct>.005?col:'rgba(232,226,207,.45)';if(pct>.005){ctx.shadowColor=col;ctx.shadowBlur=6;}ctx.font='700 '+fs+"px 'Space Mono',monospace";ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d.fmt(d.val),cx,cy+capR*.48);ctx.restore();}
+}
+/* ════════ MATRIZ LED 64×32 — render como LEDs REDONDOS (matriz LED real) ════════
+   Las escenas dibujan en un buffer lógico 64×32 (bctx); presentLEDs() lo muestra
+   como una rejilla de círculos en el canvas visible (mctx, alta resolución). */
+const MX=$('matrix'),mctx=MX.getContext('2d'),MW=64,MH=32;
+const buf=document.createElement('canvas');buf.width=MW;buf.height=MH;const bctx=buf.getContext('2d');
+const CELL=14,RAD=CELL*0.40;                                   // px por LED en el canvas visible
+let scene=0,frame=0,beatFlash=0;
+const PARTS=[];for(let i=0;i<46;i++)PARTS.push({x:Math.random()*MW,y:Math.random()*MH,vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5});
+let fracImg=null;
+function hsl2rgb(h,s,l){let r,g,b;if(s===0){r=g=b=l;}else{const f=(p,q,t)=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;r=f(p,q,h+1/3);g=f(p,q,h);b=f(p,q,h-1/3);}return[r*255|0,g*255|0,b*255|0];}
+function audioEnergy(){if(!analyser)return{rms:0,bass:0,hi:0};analyser.getByteTimeDomainData(timeBuf);analyser.getByteFrequencyData(freqBuf);
+  let s=0;for(let i=0;i<timeBuf.length;i++){const x=(timeBuf[i]-128)/128;s+=x*x;}const rms=Math.sqrt(s/timeBuf.length);
+  let bass=0;for(let i=0;i<8;i++)bass+=freqBuf[i];bass/=8*255;let hi=0;for(let i=freqBuf.length-30;i<freqBuf.length;i++)hi+=freqBuf[i];hi/=30*255;return{rms,bass,hi};}
+function renderMatrix(){
+  frame++;const E=audioEnergy(),hue=MODES[ST.mode].hue;
+  if(actx){while(flashQ.length&&flashQ[0]<=actx.currentTime){flashQ.shift();beatFlash=1;}} // flash en el instante real de la nota
+  if(scene===3){sceneFractal(E,hue);}
+  else{
+    bctx.globalCompositeOperation='source-over';bctx.fillStyle='rgba(3,3,8,'+(0.28+E.bass*0.25)+')';bctx.fillRect(0,0,MW,MH);
+    bctx.globalCompositeOperation='lighter';
+    if(scene===0)sceneNexus(E,hue);else if(scene===1)sceneLissajous(E,hue);else scenePlasma(E,hue);
+  }
+  if(beatFlash>0){bctx.globalCompositeOperation='lighter';bctx.fillStyle='hsla('+hue+',90%,70%,'+(beatFlash*0.10)+')';bctx.fillRect(0,0,MW,MH);beatFlash*=0.78;if(beatFlash<.02)beatFlash=0;}
+  presentLEDs();
+  requestAnimationFrame(renderMatrix);
+}
+// muestra el buffer como una matriz de LEDs circulares: aro apagado + halo (bloom) + LED + brillo especular
+function presentLEDs(){
+  const W=MX.width,H=MX.height;
+  mctx.globalCompositeOperation='source-over';mctx.fillStyle='#070709';mctx.fillRect(0,0,W,H);
+  const d=bctx.getImageData(0,0,MW,MH).data;
+  mctx.fillStyle='#16161d';                                    // 1) todos los LEDs apagados → rejilla visible
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){mctx.beginPath();mctx.arc(x*CELL+CELL/2,y*CELL+CELL/2,RAD,0,6.2832);mctx.fill();}
+  mctx.globalCompositeOperation='lighter';                     // 2) halo/bloom de los encendidos
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){const o=(y*MW+x)*4,R=d[o],G=d[o+1],B=d[o+2];if(R+G+B<24)continue;
+    mctx.fillStyle='rgba('+R+','+G+','+B+',0.16)';mctx.beginPath();mctx.arc(x*CELL+CELL/2,y*CELL+CELL/2,RAD*1.7,0,6.2832);mctx.fill();}
+  mctx.globalCompositeOperation='source-over';                 // 3) LED sólido + especular
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){const o=(y*MW+x)*4,R=d[o],G=d[o+1],B=d[o+2];if(R+G+B<24)continue;
+    const cx=x*CELL+CELL/2,cy=y*CELL+CELL/2;
+    mctx.fillStyle='rgb('+R+','+G+','+B+')';mctx.beginPath();mctx.arc(cx,cy,RAD,0,6.2832);mctx.fill();
+    mctx.fillStyle='rgba(255,255,255,0.35)';mctx.beginPath();mctx.arc(cx-RAD*0.28,cy-RAD*0.28,RAD*0.30,0,6.2832);mctx.fill();}
+}
+function sceneNexus(E,hue){const dx=ST.imuX*1.1,dy=ST.imuY*.7,spd=0.4+E.rms*3;
+  for(const p of PARTS){p.x+=(p.vx*spd)+dx;p.y+=(p.vy*spd)+dy;if(p.x<0)p.x+=MW;if(p.x>=MW)p.x-=MW;if(p.y<0)p.y+=MH;if(p.y>=MH)p.y-=MH;
+    bctx.fillStyle='hsla('+((hue+p.x*2)%360)+',100%,'+(55+E.hi*40)+'%,.95)';bctx.fillRect(p.x|0,p.y|0,1,1);}
+  const cx=MW/2+ST.imuX*22,cy=MH/2+ST.imuY*12,r=1.5+E.bass*5;bctx.fillStyle='hsla('+hue+',100%,75%,.5)';bctx.beginPath();bctx.arc(cx,cy,r,0,7);bctx.fill();}
+function sceneLissajous(E,hue){const a=2+(ST.mode%4),b=3+(ST.pat%3),A=MW*0.44,B=MH*0.42,delta=frame*0.012+ST.imuX*3,amp=0.6+E.rms*2;
+  bctx.lineWidth=1;bctx.strokeStyle='hsla('+hue+',100%,'+(60+E.hi*30)+'%,.95)';bctx.beginPath();
+  for(let t=0;t<=Math.PI*2;t+=0.025){const x=MW/2+A*Math.sin(a*t+delta)*amp,y=MH/2+B*Math.sin(b*t+ST.imuY*2);t===0?bctx.moveTo(x,y):bctx.lineTo(x,y);}bctx.stroke();}
+function scenePlasma(E,hue){const t=frame*0.03;for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+    const v=Math.sin(x*0.18+t)+Math.sin(y*0.22-t)+Math.sin((x+y)*0.10+ST.imuX*2),l=(v+3)/6*(45+E.rms*120);
+    if(l>26){bctx.fillStyle='hsla('+((hue+v*40)%360)+',90%,'+Math.min(72,l)+'%,.55)';bctx.fillRect(x,y,1,1);}}}
+function sceneFractal(E,hue){
+  // Conjunto de Julia animado (idea: visual generativa por ecuaciones — Alfredo/Francisco)
+  if(!fracImg)fracImg=bctx.createImageData(MW,MH);const data=fracImg.data,t=frame*0.012;
+  const cre=0.355+0.22*Math.sin(t)+ST.imuX*0.18, cim=0.355+0.22*Math.cos(t*1.3)+ST.imuY*0.18+E.bass*0.12;
+  const zoom=1.5-E.rms*0.5, maxI=16, asp=MW/MH;
+  for(let y=0;y<MH;y++){const zy0=(y/MH-0.5)*2*zoom;
+    for(let x=0;x<MW;x++){let zx=(x/MW-0.5)*2*zoom*asp,zy=zy0,it=0;
+      for(;it<maxI;it++){const xx=zx*zx,yy=zy*zy;if(xx+yy>4)break;const nzx=xx-yy+cre;zy=2*zx*zy+cim;zx=nzx;}
+      const o=(y*MW+x)*4;
+      if(it>=maxI){data[o]=2;data[o+1]=2;data[o+2]=8;data[o+3]=255;}
+      else{const rgb=hsl2rgb(((hue+it*12)%360)/360,1,Math.min(.62,.10+it/maxI*0.6));data[o]=rgb[0];data[o+1]=rgb[1];data[o+2]=rgb[2];data[o+3]=255;}
+    }}
+  bctx.putImageData(fracImg,0,0);
+}
+
+/* ════════ WEB SERIAL — espeja telemetría ════════ */
+let port=null,reader=null,connected=false;
+async function toggleConnect(){
+  if(port){await disconnect();return;}
+  if(!('serial' in navigator)){alert('Web Serial no disponible. Usa Chrome o Edge.');return;}
+  try{port=await navigator.serial.requestPort();await port.open({baudRate:115200});connected=true;connUI(true);resumeAudio();readLoop();}
+  catch(e){if(e.name!=='NotFoundError')console.warn(e.message);port=null;}
+}
+async function disconnect(){connected=false;connUI(false);try{reader&&reader.cancel()}catch(_){}try{port&&await port.close()}catch(_){}reader=null;port=null;}
+async function readLoop(){const dec=new TextDecoder();let buf='';
+  while(port&&port.readable){reader=port.readable.getReader();
+    try{while(true){const{value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});
+      let nl;while((nl=buf.indexOf('\n'))!==-1){const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);if(line)parseTelemetry(line);}}}
+    catch(_){}finally{reader.releaseLock();reader=null;}}
+  await disconnect();}
+const prevBtn=[0,0,0,0,0];
+function parseTelemetry(line){
+  const p=line.split(',');if(p.length<11)return;const n=p.map(Number);if(n.some(isNaN))return;flashRx();
+  hwPot(0,n[0]/4095);hwPot(1,n[1]/4095);hwPot(2,n[2]/4095);hwPot(3,n[3]/4095);
+  for(let i=0;i<5;i++){const b=n[4+i]?1:0;if(b!==prevBtn[i]){setPad(i,!!b);prevBtn[i]=b;}}
+  ST.imuX=(n[9]-2048)/2048;ST.imuY=(n[10]-2048)/2048;
+}
+function connUI(on){$('led-conn').className='smd-led'+(on?' on':'');$('hlbl').textContent=on?'ONLINE':'OFFLINE';$('hlbl').className='hdr-lbl'+(on?' on':'');$('btn-conn').textContent=on?'DESCONECTAR':'CONECTAR';}
+function flashRx(){const e=$('led-rx');e.className='smd-led rx';clearTimeout(e._t);e._t=setTimeout(()=>e.className='smd-led',120);}
+
+/* ════════ EVENTOS ════════ */
+$('btn-conn').onclick=toggleConnect;
+$('btn-fw').onclick=()=>$('modal-fw').classList.add('open');
+$('fw-close').onclick=$('fw-close2').onclick=()=>$('modal-fw').classList.remove('open');
+$('modal-fw').onclick=e=>{if(e.target===$('modal-fw'))$('modal-fw').classList.remove('open');};
+$('fw-dl').onclick=downloadFirmware;
+window.addEventListener('keydown',e=>{
+  if(e.repeat&&e.key!=='4')return;const k=e.key.toLowerCase();
+  if(k===' '||e.code==='Space'){e.preventDefault();resumeAudio();togglePlay();}
+  else if(k>='1'&&k<='5'){resumeAudio();setPad(+k-1,true);}
+  else if(k==='w'){ST.wave=(ST.wave+1)%4;syncUI();}
+  else if(k==='a'){resumeAudio();setPanel(1);}
+  else if(k==='f'){resumeAudio();setPanel(2);}
+  else if(k==='m'){scene=(scene+1)%SCENES.length;syncUI();}
+});
+window.addEventListener('keyup',e=>{const k=e.key;if(k>='1'&&k<='5')setPad(+k-1,false);});
+
+buildUI();syncUI();requestAnimationFrame(renderMatrix);
+if(!('serial' in navigator)){$('hlbl').textContent='WEB SERIAL N/A';}
+
+/* ════════ FIRMWARE (.ino) — mismo motor → suena igual ════════ */
+function downloadFirmware(){const blob=new Blob([FIRMWARE],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='arp_matrix_percusynth.ino';a.click();URL.revokeObjectURL(a.href);}
+const FIRMWARE=String.raw`// ==============================================================================================================================================
+// PERCU-SYNTH — ArpMatrix · Arpegiador polifonico + telemetria CSV — GC Lab Chile
+// ==============================================================================================================================================
+// Proyecto colectivo del taller PercuSynth.
+// Creditos: Juan Leon, Alfredo Romero, Francisco Castro, Pablo Zabal, Manuel Martinez, Nicolas Martinez, Gonzalo Sandoval.
+// Licencia SW: MIT  ·  Licencia HW: CERN-OHL-P  ·  Mantener atribucion a GC Lab Chile.
+// ==============================================================================================================================================
+// HARDWARE
+//   - ESP32-S3 + DAC PCM5102 via I2S (44.1 kHz / 16-bit estereo)  | LCK->39  DIN->40  BCK->41 |
+//   - IMU MPU6050 (I2C)  | SDA->21  SCL->38  (0x68) |
+//   - 5 Botones pull-up  | BTN1->44  BTN2->42  BTN3->0  BTN4->45  BTN5->47 |
+//   - 4 Potenciometros   | POT1->ADC1  POT2->ADC2  POT3->ADC8  POT4->ADC10 |
+// ARDUINO IDE: Board "ESP32S3 Dev Module" · USB CDC On Boot = Enabled · Flash Mode = DIO (OPI rompe el I2S) · PSRAM = OPI PSRAM
+// LIBRERIAS:   ESP32 Arduino core >= 3.x (driver/i2s_std.h) · Wire.h
+// ==============================================================================================================================================
+// DESCRIPCION
+//   Instrumento autonomo: corre el MISMO arpegiador y la MISMA sintesis que la webapp ArpMatrix,
+//   de modo que el hardware suena igual. Ademas transmite por USB Serial @115200 a 50 Hz:
+//       p0,p1,p2,p3,b1,b2,b3,b4,b5,imuX,imuY
+//   para que la webapp espeje el estado en su matriz visual LED 64x32 (horizontal).
+//
+//   TRES PANELES (combos para cambiar):  BTN1+BTN5 <-> Panel 2 (ADSR)   ·   BTN2+BTN4 <-> Panel 3 (TIMBRE)
+//   PANEL 1 (principal):  BTN1 octava · BTN2 modo griego · BTN3 patron · BTN4(hold) beat repeat · BTN5 Play/Stop
+//                         POT1 ruido · POT2 saturacion · POT3 velocidad · POT4 VOLUMEN
+//   PANEL 2 (ADSR):       BTN1 tipo de onda · BTN2 visualizacion (matriz, solo webapp) · BTN3 rango de octavas
+//                         POT1 Attack · POT2 Decay · POT3 Sustain · POT4 Release
+//   PANEL 3 (TIMBRE):     BTN1 tipo de filtro (LPF/HPF/BPF) · BTN2 velocidad del LFO · BTN3 sub-osc on/off
+//                         POT1 Cutoff · POT2 Resonancia · POT3 PWM (ancho de pulso) · POT4 LFO (modula el cutoff)
+//   Al cambiar de panel los pots quedan CONGELADOS y solo retoman control cuando se mueven (>2%).
+// ==============================================================================================================================================
+#include <driver/i2s_std.h>
+#include <Wire.h>
+#include <math.h>
+
+#define I2S_LCK 39
+#define I2S_DIN 40
+#define I2S_BCK 41
+#define SAMPLE_RATE    44100
+#define BUFFER_SAMPLES 128
+static i2s_chan_handle_t tx_chan;
+
+#define SDA_PIN 21
+#define SCL_PIN 38
+#define IMU_ADDR 0x68
+
+const int BTN_PIN[5]={44,42,0,45,47};
+const int POT_PIN[4]={1,2,8,10};
+bool  btnState[5]={0,0,0,0,0};
+uint32_t btnT[5]={0,0,0,0,0};
+const uint32_t DEBOUNCE_MS=180;
+bool  comboLatch[5]={0,0,0,0,0};
+
+const int8_t MODE_IV[8][7]={
+  {0,2,4,5,7,9,11},{0,2,3,5,7,9,10},{0,1,3,5,7,8,10},{0,2,4,6,7,9,11},
+  {0,2,4,5,7,9,10},{0,2,3,5,7,8,10},{0,1,3,5,6,8,10},{0,2,4,7,9,-1,-1}
+};
+const int MODE_LEN[8]={7,7,7,7,7,7,7,5};
+const float OCT_HZ[4]={65.41f,130.81f,261.63f,523.25f};
+
+int   stOct=2, stMode=0, stPat=0, stWave=0, spanOct=2;
+int   stPanel=0;                                  // 0=PRINCIPAL · 1=ADSR · 2=TIMBRE
+bool  stPlaying=false, stBeatRepeat=false;
+float potNoise=0, potSat=0, potSpeed=0.5f, potVol=0.85f;
+float adsA=0.1f, adsD=0.3f, adsS=0.6f, adsR=0.4f;
+// Panel 3 (timbre): filtro resonante + PWM + LFO + sub-osc
+float ctCut=0.78f, ctRes=0.25f, ctPwm=0.5f, ctLfo=0.0f;
+int   filtType=0, lfoRate=1; bool subOsc=false;
+const float LFO_HZ[3]={0.2f,1.0f,4.0f};
+float lfoPhase=0;
+// Biquad filter (RBJ), estado mono sobre la mezcla
+float fb0=1,fb1=0,fb2=0,fa1=0,fa2=0,fz1=0,fz2=0;
+float imuX=0, imuY=0;
+int   rawP[4]={0,0,0,0};
+int   imuRawX=2048, imuRawY=2048;
+
+// Pots congelados al cambiar de menu (soft-takeover como trance_imu_leds)
+float potAnchor[4]={-1,-1,-1,-1};
+bool  potLive[4]={true,true,true,true};
+bool  menuChanged=false;
+const float POT_MOVE_THR=0.02f;
+
+#define NVOICES 16
+struct Voice{ bool active; float phase, subphase, freq, env, vel; uint8_t stage; uint32_t age; };
+Voice voices[NVOICES];
+float envA,envD,envS,envR;
+uint32_t gateSamples=4000;
+
+uint32_t samplesPerStep=8000, stepCounter=0;
+int arpIdx=0;
+uint32_t lcg=22222;
+inline float frand(){ lcg=lcg*1664525u+1013904223u; return (lcg>>9)*(1.0f/8388608.0f)-1.0f; }
+
+float readPot(int pin){ uint32_t s=0; for(int i=0;i<8;i++)s+=analogRead(pin); return (s/8)/4095.0f; }
+
+void imuInit(){
+  Wire.begin(SDA_PIN,SCL_PIN); Wire.setClock(400000);
+  Wire.beginTransmission(IMU_ADDR); Wire.write(0x6B); Wire.write(0); Wire.endTransmission(true);
+  Wire.beginTransmission(IMU_ADDR); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true);
+}
+void imuRead(){
+  Wire.beginTransmission(IMU_ADDR); Wire.write(0x3B); Wire.endTransmission(false);
+  Wire.requestFrom(IMU_ADDR,6,true);
+  if(Wire.available()>=6){
+    int16_t rx=(Wire.read()<<8)|Wire.read();
+    int16_t ry=(Wire.read()<<8)|Wire.read();
+    (void)((Wire.read()<<8)|Wire.read());
+    float nx=rx/16384.0f, ny=ry/16384.0f;
+    imuX=imuX*0.9f+nx*0.1f; imuY=imuY*0.9f+ny*0.1f;
+    imuRawX=(int)(2048+imuX*2048); imuRawY=(int)(2048+imuY*2048);
+    if(imuRawX<0)imuRawX=0; if(imuRawX>4095)imuRawX=4095;
+    if(imuRawY<0)imuRawY=0; if(imuRawY>4095)imuRawY=4095;
+  }
+}
+inline float oscWave(int w, float ph){
+  if(w==0) return sinf(6.2831853f*ph);
+  if(w==1) return ph<ctPwm? 1.0f:-1.0f;        // cuadrada con PWM (ancho de pulso)
+  if(w==2) return 2.0f*ph-1.0f;
+  return 4.0f*fabsf(ph-0.5f)-1.0f;
+}
+// Coeficientes biquad RBJ (LPF/HPF/BPF) desde cutoff(Hz) y Q. cutoff modulado por el LFO.
+void updateFilter(){
+  float lfo=sinf(6.2831853f*lfoPhase);
+  float base=80.0f*powf(150.0f, ctCut);                  // 80..12000 Hz
+  float f0=base*(1.0f+ctLfo*0.7f*lfo); if(f0<40)f0=40; if(f0>15000)f0=15000;
+  float Q=0.5f+ctRes*22.0f;
+  float w0=6.2831853f*f0/SAMPLE_RATE, cw=cosf(w0), sw=sinf(w0), alpha=sw/(2.0f*Q);
+  float b0,b1,b2,a0,a1,a2;
+  if(filtType==1){ b0=(1+cw)/2; b1=-(1+cw); b2=(1+cw)/2; }       // HPF
+  else if(filtType==2){ b0=alpha; b1=0; b2=-alpha; }             // BPF
+  else { b0=(1-cw)/2; b1=1-cw; b2=(1-cw)/2; }                    // LPF
+  a0=1+alpha; a1=-2*cw; a2=1-alpha;
+  fb0=b0/a0; fb1=b1/a0; fb2=b2/a0; fa1=a1/a0; fa2=a2/a0;
+}
+inline float biquad(float x){ float y=fb0*x+fz1; fz1=fb1*x-fa1*y+fz2; fz2=fb2*x-fa2*y; return y; }
+float scaleFreq(int idx){
+  int len=MODE_LEN[stMode]; int oct=idx/len, deg=idx%len;
+  return OCT_HZ[stOct]*powf(2.0f,(float)oct + MODE_IV[stMode][deg]/12.0f);
+}
+int scaleCount(){ return MODE_LEN[stMode]*spanOct; }
+void triggerVoice(float freq,float vel){
+  int slot=-1; uint32_t oldest=0;
+  for(int i=0;i<NVOICES;i++){ if(!voices[i].active){slot=i;break;} if(voices[i].age>oldest){oldest=voices[i].age;slot=i;} }
+  Voice&v=voices[slot]; v.active=true; v.phase=0; v.subphase=0; v.freq=freq; v.env=0; v.vel=vel; v.stage=1; v.age=0;
+}
+void recalcEnv(){
+  float a=0.003f+adsA*0.6f, d=0.02f+adsD*0.7f, r=0.03f+adsR*1.4f;
+  envA=1.0f/(a*SAMPLE_RATE); envD=1.0f/(d*SAMPLE_RATE); envS=0.05f+adsS*0.9f; envR=1.0f/(r*SAMPLE_RATE);
+  float bpm=20.0f+potSpeed*110.0f; float stepSec=15.0f/bpm; if(stBeatRepeat)stepSec/=2.2f;  // 1/4 de la velocidad anterior
+  samplesPerStep=(uint32_t)(stepSec*SAMPLE_RATE); if(samplesPerStep<300)samplesPerStep=300;
+  gateSamples=(uint32_t)(samplesPerStep*0.92f);
+}
+void arpTrigger(){
+  int n=scaleCount(); float vel=0.22f+fminf(0.18f,(fabsf(imuX)+fabsf(imuY))*0.18f);
+  if(stPat==5){ int deg[4]={0,2,4,6}; for(int k=0;k<4;k++) if(deg[k]<n) triggerVoice(scaleFreq(deg[k]),vel*0.7f); }
+  else{
+    int i;
+    if(stPat==0) i=arpIdx%n;
+    else if(stPat==1) i=n-1-(arpIdx%n);
+    else if(stPat==2||stPat==3){ int span=(n-1)*2; int p=arpIdx%span; if(p>=n)p=span-p; i=(stPat==3)?(n-1-p):p; }
+    else { i=(int)((frand()*0.5f+0.5f)*n); if(i>=n)i=n-1; }
+    triggerVoice(scaleFreq(i),vel);
+  }
+  if(!(stBeatRepeat&&stPat!=5))arpIdx++;
+}
+// TRES PANELES. Combos: BTN1+BTN5 <-> ADSR · BTN2+BTN4 <-> TIMBRE.
+// Los botones de combo (BTN1/BTN2/BTN5) actuan al SOLTAR; si se formo el combo, ese release
+// queda consumido (comboLatch). BTN4 = beat repeat (hold) salvo combo. BTN3 al presionar.
+inline void setPanelHW(int p){ stPanel=(stPanel==p)?0:p; menuChanged=true; }
+void onBtnEdge(int i,bool down){
+  if(down && ((i==0&&btnState[4])||(i==4&&btnState[0]))){ comboLatch[0]=comboLatch[4]=true; stBeatRepeat=false; setPanelHW(1); return; }
+  if(down && ((i==1&&btnState[3])||(i==3&&btnState[1]))){ comboLatch[1]=comboLatch[3]=true; stBeatRepeat=false; setPanelHW(2); return; }
+  if(i==3){ stBeatRepeat=down; return; }                        // BTN4 hold = beat repeat (salvo combo)
+  if(i==2){ if(!down)return;                                    // BTN3 -> al presionar
+    if(stPanel==0)stPat=(stPat+1)%6; else if(stPanel==1)spanOct=spanOct%3+1; else subOsc=!subOsc; return; }
+  // BTN1 / BTN2 / BTN5 -> al soltar
+  if(down)return;
+  if(comboLatch[i])return;                                      // release consumido por el combo (limpieza en scanButtons)
+  if(i==4){ stPlaying=!stPlaying; if(stPlaying){arpIdx=0;stepCounter=samplesPerStep;} }
+  else if(i==0){ if(stPanel==0)stOct=(stOct+1)&3; else if(stPanel==1)stWave=(stWave+1)&3; else filtType=(filtType+1)%3; }
+  else if(i==1){ if(stPanel==0)stMode=(stMode+1)%8; else if(stPanel==1){/*visual webapp*/} else lfoRate=(lfoRate+1)%3; }
+}
+void scanButtons(){
+  uint32_t now=millis();
+  for(int i=0;i<5;i++){ bool raw=(digitalRead(BTN_PIN[i])==LOW);
+    if(raw!=btnState[i] && (now-btnT[i])>DEBOUNCE_MS){ btnT[i]=now; btnState[i]=raw; onBtnEdge(i,raw);
+      if(!raw && !btnState[0]&&!btnState[1]&&!btnState[3]&&!btnState[4]){ for(int j=0;j<5;j++)comboLatch[j]=false; } } }
+}
+void applyPotV(int i,float v){
+  if(stPanel==1){ if(i==0)adsA=v;else if(i==1)adsD=v;else if(i==2)adsS=v;else adsR=v; }
+  else if(stPanel==2){ if(i==0)ctCut=v;else if(i==1)ctRes=v;else if(i==2)ctPwm=0.05f+v*0.9f;else ctLfo=v; }
+  else { if(i==0)potNoise=v;else if(i==1)potSat=v;else if(i==2)potSpeed=v;else potVol=v; }
+}
+void scanPots(){
+  if(menuChanged){ for(int i=0;i<4;i++){potLive[i]=false;potAnchor[i]=-1.0f;} menuChanged=false; }
+  for(int i=0;i<4;i++){
+    float pv=readPot(POT_PIN[i]); rawP[i]=(int)(pv*4095);        // rawP refleja siempre la posicion fisica (para la telemetria)
+    if(potAnchor[i]<0.0f){ potAnchor[i]=pv; continue; }          // captura ancla, no aplica
+    if(!potLive[i] && fabsf(pv-potAnchor[i])>POT_MOVE_THR) potLive[i]=true;
+    if(potLive[i]) applyPotV(i,pv);
+  }
+}
+void i2s_init(){
+  i2s_chan_config_t chan_cfg=I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0,I2S_ROLE_MASTER);
+  chan_cfg.auto_clear=true; ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg,&tx_chan,NULL));
+  i2s_std_config_t std_cfg={
+    .clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+    .slot_cfg=I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,I2S_SLOT_MODE_STEREO),
+    .gpio_cfg={ .mclk=I2S_GPIO_UNUSED, .bclk=(gpio_num_t)I2S_BCK, .ws=(gpio_num_t)I2S_LCK,
+                .dout=(gpio_num_t)I2S_DIN, .din=I2S_GPIO_UNUSED, .invert_flags={false,false,false} },
+  };
+  ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_chan,&std_cfg));
+  ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
+}
+void setup(){
+  Serial.begin(115200);
+  for(int i=0;i<5;i++)pinMode(BTN_PIN[i],INPUT_PULLUP);
+  analogReadResolution(12); imuInit(); i2s_init(); recalcEnv();
+}
+int16_t buffer[BUFFER_SAMPLES*2];
+uint32_t telemDiv=0, imuDiv=0;
+void loop(){
+  scanButtons(); scanPots(); recalcEnv();
+  // LFO (block-rate) + recalculo del filtro una vez por buffer
+  lfoPhase+=LFO_HZ[lfoRate]*BUFFER_SAMPLES/SAMPLE_RATE; if(lfoPhase>=1.0f)lfoPhase-=1.0f;
+  updateFilter();
+  float drive=1.0f+potSat*40.0f; float master=potVol;            // POT4 = volumen master
+  for(int s=0;s<BUFFER_SAMPLES;s++){
+    if(stPlaying){ if(++stepCounter>=samplesPerStep){ stepCounter=0; arpTrigger(); } }
+    float mix=0;
+    for(int i=0;i<NVOICES;i++){
+      Voice&v=voices[i]; if(!v.active)continue; v.age++;
+      if(v.stage==1){ v.env+=envA; if(v.env>=1.0f){v.env=1.0f;v.stage=2;} }
+      else if(v.stage==2){ v.env-=envD; if(v.env<=envS){v.env=envS;v.stage=3;} }
+      else if(v.stage==3){ if(v.age>=gateSamples)v.stage=4; }
+      else if(v.stage==4){ v.env-=envR; if(v.env<=0.0001f){v.env=0;v.active=false;continue;} }
+      v.phase+=v.freq/SAMPLE_RATE; if(v.phase>=1.0f)v.phase-=1.0f;
+      float sub=0; if(subOsc){ v.subphase+=(v.freq*0.5f)/SAMPLE_RATE; if(v.subphase>=1.0f)v.subphase-=1.0f; sub=sinf(6.2831853f*v.subphase)*0.5f; }
+      // osc + sub-osc + ruido (voz acompañante), todo con la MISMA envolvente de la nota
+      mix+=(oscWave(stWave,v.phase)+sub+frand()*potNoise*0.8f)*v.env*v.vel;
+    }
+    mix*=0.32f; mix=biquad(mix); mix=tanhf(drive*mix)*master;
+    if(mix>1.0f)mix=1.0f; if(mix<-1.0f)mix=-1.0f;
+    int16_t o=(int16_t)(mix*32000.0f); buffer[s*2]=o; buffer[s*2+1]=o;
+  }
+  size_t written; i2s_channel_write(tx_chan,buffer,sizeof(buffer),&written,portMAX_DELAY);
+  if(++imuDiv>=2){ imuDiv=0; imuRead(); }
+  if(++telemDiv>=7){ telemDiv=0;
+    Serial.print(rawP[0]);Serial.print(',');Serial.print(rawP[1]);Serial.print(',');
+    Serial.print(rawP[2]);Serial.print(',');Serial.print(rawP[3]);Serial.print(',');
+    Serial.print(btnState[0]?1:0);Serial.print(',');Serial.print(btnState[1]?1:0);Serial.print(',');
+    Serial.print(btnState[2]?1:0);Serial.print(',');Serial.print(btnState[3]?1:0);Serial.print(',');
+    Serial.print(btnState[4]?1:0);Serial.print(',');
+    Serial.print(imuRawX);Serial.print(',');Serial.println(imuRawY);
+  }
+}
+`;
+</script>
+</body>
+</html>
