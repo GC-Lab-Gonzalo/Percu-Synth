@@ -11,6 +11,7 @@ percusynth/
 │   ├── synth_basico/               #   5-voice polyphonic synth
 │   ├── trance_imu/                 #   Polyphonic trance sequencer (IMU → filter)
 │   ├── trance_imu_leds/            #   trance_imu + 6 on-board SMD LEDs as visualizer
+│   ├── pads_imu/                   #   Deep ambient pads: 5 buttons play sustained chords (no sequencer, stereo)
 │   ├── impact_chimes/              #   Floor-impact chimes (accelerometer triggers scale notes)
 │   ├── seismic_drone/              #   Deep drones from ground vibration (±2g)
 │   ├── MIDI_Drum/                  #   MIDI controller (buttons + piezos + IMU)
@@ -54,6 +55,7 @@ PercuSynth is an embedded electronic percussion synthesizer project by GC Lab Ch
 - **synth_basico** — 5-voice polyphonic synthesizer with waveform morphing (sine → square → saw)
 - **trance_imu** — Polyphonic trance sequencer ported from Proto-Synth v2 to I2S 44.1 kHz/16-bit; each step fires a 4-voice chord over a 16-voice pool; PolyBLEP saw + resonant biquad LPF driven live by the IMU (X → cutoff, Y → resonance). No LEDs/Serial (all CPU to audio)
 - **trance_imu_leds** — Same as trance_imu but uses the 6 on-board SMD WS2812 LEDs as a visualizer (poly VU + beat flash + filter-driven color)
+- **pads_imu** — Ambient sibling of trance_imu: same audio engine but **no sequencer/patterns**. The 5 buttons latch sustained **absolute chords** as deep pads (attack→sustain→release over a 32-voice pool, **stereo** with per-voice detune/pan + dual biquad). **3 chord banks** (B0: C·G·Am·F·Dm — B1: C·Am·Em·F·G — B2: C·Am·E7·F·G), cycled by BTN3 in Panel B. Optional **arpeggio** layer that runs the active chord's notes (Panel B pots: volume/speed/range/gate). 3 panels: A (chords + attack/volume/release/movement-LFO), B (transpose/octave/bank + arp), C (waveform + sub/oct/fifth/shimmer layers, detune/tone/cutoff/Q). IMU → filter. No LEDs/Serial (all CPU to audio)
 - **impact_chimes** — Floor-impact instrument: accelerometer detects hits on the floor → triggers scale notes (chimes); one scale per button, pots = synthesis
 - **seismic_drone** — Deep ambient sibling of impact_chimes: MPU6050 at ±2g senses ground vibration → epic drone (detuned stereo saw + sub, breathing resonant filter)
 - **MIDI_Drum** — Hardware MIDI USB controller using piezo sensors, buttons, and IMU (MPU6050); velocity-by-IMU-motion for button hits
