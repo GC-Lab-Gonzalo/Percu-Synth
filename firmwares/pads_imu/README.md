@@ -61,7 +61,7 @@ si fue combo, así presionar dos juntos no dispara su acorde por accidente.)
 |---|---|---|
 | BTN1..BTN5 | 44/42/0/45/47 | Los **5 acordes del banco activo** (latch: el mismo botón apaga) |
 | POT1 | ADC1 | **Ataque** (5 ms percusivo → ~4 s de fundido lento) |
-| POT2 | ADC2 | **Volumen** master (curva cuadrática) |
+| POT2 | ADC2 | **Volumen del pad** (solo los acordes; el arpegio tiene su propio volumen en Panel B) |
 | POT3 | ADC8 | **Release** (~0.2 s corto → ~8 s de cola enorme) |
 | POT4 | ADC10 | **Movimiento** (LFO lento: respira el filtro + tremolo) |
 | IMU X | — | Cutoff del filtro paso-bajo |
@@ -80,7 +80,7 @@ enciende** (en 0 está apagado); el resto de los pots dan forma SOLO al arpegio.
 | BTN2 | 42 | **Octava global −1** |
 | BTN4 | 45 | **Octava global +1** |
 | BTN3 | 0  | **Cambiar banco** de acordes (0 → 1 → 2) |
-| POT1 | ADC1 | **Volumen del arpegio** (en 0 = arpegio APAGADO) |
+| POT1 | ADC1 | **Volumen del arpegio** (en 0 = arpegio APAGADO; independiente del volumen del pad) |
 | POT2 | ADC2 | **Velocidad** del arpegio (2 → 16 notas/s) |
 | POT3 | ADC8 | **Rango de octavas** del arpegio (1 → 3) |
 | POT4 | ADC10 | **Gate** (largo de cada nota: 30 ms staccato → 480 ms casi ligado) |
