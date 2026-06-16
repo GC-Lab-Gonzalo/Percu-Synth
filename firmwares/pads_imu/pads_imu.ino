@@ -60,7 +60,7 @@
 // ── PANEL A (interpretación) ──────────────────────────────────────────────────
 // - BTN1..BTN5 → los 5 acordes del banco activo (LATCH: el mismo botón lo apaga)
 // - POT1 (ADC1)  → Ataque    (5 ms percusivo → ~4 s de fundido lento, pad clásico)
-// - POT2 (ADC2)  → Volumen master (curva cuadrática)
+// - POT2 (ADC2)  → Volumen del PAD (solo acordes; el arpegio tiene su propio volumen)
 // - POT3 (ADC8)  → Release    (~0.2 s corto → ~8 s de cola enorme)
 // - POT4 (ADC10) → Movimiento (LFO lento que respira: barre el filtro + tremolo)
 //
@@ -193,6 +193,7 @@ int transpose        = 0;     // transposición fina en semitonos
 int globalOctaveSemi = -12;   // octava global (deep por defecto: 1 octava abajo)
 
 // ─── Arpegio (Panel B) — PERSISTENTE ───────────────────────
+#define ARP_MAX  8            // tope de voces simultáneas del arpegio (protege CPU/pad)
 float arpVol      = 0.0f;     // POT1 → volumen (0 = apagado)
 float arpRate     = 6.0f;     // POT2 → notas por segundo
 int   arpRange    = 2;        // POT3 → rango de octavas (1–3)
@@ -203,7 +204,7 @@ int   arpStep     = 0;
 uint32_t arpSampleCount   = 0;
 uint32_t arpSamplesPerStep = 7350;          // SR / arpRate (recalculado)
 float arpAtkInc   = 0.02f;                  // ataque rápido del pluck del arp
-float arpDecCoef  = 0.9998f;                // decay del pluck (de arpGate)
+float arpDecCoef  = 0.99877f;               // decay del pluck (≈ arpGate 0.12 s con -6.5)
 
 // ─── Timbre (Panel C) — PERSISTENTE ────────────────────────
 int   waveType    = 0;        // 0 = sierra · 1 = cuadrada · 2 = triangular
@@ -501,7 +502,7 @@ void applyPot(int i, float val) {
     switch (i) {
       case 0: { float at = 0.005f + val * 4.0f;
                 attackInc = 1.0f / (at * SAMPLE_RATE); } break;
-      case 1: g_volume = val * val; break;
+      case 1: g_volume = val * val; break;        // volumen SOLO del pad (no del arpegio)
       case 2: { float rt = 0.2f + val * val * 8.0f;
                 releaseCoef = expf(-1.0f / (rt * SAMPLE_RATE)); } break;
       case 3: lfoAmt = val; break;
@@ -514,7 +515,9 @@ void applyPot(int i, float val) {
                 arpSamplesPerStep = (uint32_t)(SAMPLE_RATE / arpRate); } break;
       case 2: arpRange = 1 + (int)(val * 2.0f + 0.5f); break; // POT3 → 1–3 octavas
       case 3: { arpGate = 0.03f + val * 0.45f;               // POT4 → 30 ms – 480 ms
-                arpDecCoef = expf(-1.0f / (arpGate * SAMPLE_RATE)); } break;
+                // -6.5 ≈ caída a -60 dB en arpGate segundos → el control ES el
+                // largo real de la nota (antes era la constante de tiempo → tail 7× más larga).
+                arpDecCoef = expf(-6.5f / (arpGate * SAMPLE_RATE)); } break;
     }
   } else {
     // PANEL C — timbre / síntesis
@@ -624,6 +627,19 @@ void loop() {
     if (arpVol > 0.02f && activeChord >= 0 && arpCount > 0) {
       if (arpSampleCount >= arpSamplesPerStep) {
         arpSampleCount = 0;
+
+        // Tope de voces del arp: si ya hay ARP_MAX sonando, libera la MÁS VIEJA
+        // antes de crear la nueva. Sin esto, un Gate largo + velocidad alta pedía
+        // decenas de voces, saturaba el pool y la CPU → crasheo constante.
+        int arpActive = 0, oldestArp = -1; uint32_t oldestAge = 0xFFFFFFFF;
+        for (int i = 0; i < NUM_VOICES; i++) {
+          if (voices[i].active && voices[i].kind == 1) {
+            arpActive++;
+            if (voices[i].age < oldestAge) { oldestAge = voices[i].age; oldestArp = i; }
+          }
+        }
+        if (arpActive >= ARP_MAX && oldestArp >= 0) voices[oldestArp].active = false;
+
         int note = arpStep % arpCount;
         int oct  = (arpStep / arpCount) % arpRange;
         int semi = arpNotes[note] + 12 * oct + 12;        // +12: una octava sobre el pad
@@ -637,7 +653,9 @@ void loop() {
       arpSampleCount = 0;
     }
 
-    float mixL = 0.0f, mixR = 0.0f;
+    // Dos buses independientes: PAD y ARPEGIO. El volumen del Panel A (g_volume)
+    // se aplica SOLO al pad; el arpegio lleva su propio volumen (arpVol, Panel B).
+    float padL = 0.0f, padR = 0.0f, arpL = 0.0f, arpR = 0.0f;
     for (int i = 0; i < NUM_VOICES; i++) {
       Voice &v = voices[i];
       if (!v.active) continue;
@@ -661,12 +679,13 @@ void loop() {
       }                                           // stage 1 = sustain del pad (mantiene)
 
       float a = wave * v.env * v.gain;
-      mixL += a * v.lGain;
-      mixR += a * v.rGain;
+      if (v.kind == 0) { padL += a * v.lGain; padR += a * v.rGain; }  // pad
+      else             { arpL += a * v.lGain; arpR += a * v.rGain; }  // arpegio
     }
 
-    mixL *= 0.13f;
-    mixR *= 0.13f;
+    // Volumen del Panel A solo al pad; el arpegio ya trae su arpVol baked-in.
+    float mixL = (padL * g_volume + arpL) * 0.13f;
+    float mixR = (padR * g_volume + arpR) * 0.13f;
     // Anti-denormal: DC ínfimo (inaudible) para que los filtros nunca caigan a
     // números denormales (que en el FPU del ESP32 son lentísimos → glitches).
     mixL += 1.0e-18f;
@@ -678,7 +697,7 @@ void loop() {
     toneL += toneCoef * (fL - toneL);
     toneR += toneCoef * (fR - toneR);
 
-    float gd = g_volume * g_trem;                 // salida limpia (sin drive)
+    float gd = g_trem;                            // salida limpia (volumen ya por-bus)
     float vL = toneL * gd;
     float vR = toneR * gd;
 
