@@ -101,7 +101,7 @@ dan forma SOLO al arpegio. El **tipo de arpegio** se elige en el Panel C (BTN1/B
 | BTN1 | 44 | **Tipo de arpegio ◀** (anterior) |
 | BTN2 | 42 | **Forma de onda**: Seno → Sierra → Cuadrada → Triangular |
 | BTN3 | 0  | **Sub-osc** (−12, cuerpo de bajo) on/off *(ON por defecto → pad profundo)* |
-| BTN4 | 45 | **Quinta** (+7, power/órgano) on/off |
+| BTN4 | 45 | **Modo AUTO** on/off (cama armónica generativa — ver abajo) |
 | BTN5 | 47 | **Tipo de arpegio ▶** (siguiente) |
 | POT1 | ADC1 | **Detune/ensemble** — duplica cada nota en 2 voces desafinadas → coro ancho audible (0–40 cents) |
 | POT2 | ADC2 | **Tono** (oscuro → brillante: filtro suave, **no satura**) |
@@ -109,8 +109,19 @@ dan forma SOLO al arpegio. El **tipo de arpegio** se elige en el Panel C (BTN1/B
 | POT4 | ADC10 | **Resonancia base** (Q) del filtro (el IMU suma encima) |
 
 **Tipos de arpegio** (BTN1 ◀ / BTN5 ▶): `UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD`
-(CHORD toca las 4 notas en bloque). Las capas **sub** y **quinta** se agregan/quitan
-**en vivo**: entran con su ataque y salen con su release, sin reiniciar el pad.
+(CHORD toca las 4 notas en bloque). La capa **sub** se agrega/quita **en vivo**: entra
+con su ataque y sale con su release, sin reiniciar el pad.
+
+### Modo AUTO — cama armónica generativa (BTN4 del Panel C)
+
+Toca solo. Con una **semilla fija** genera (siempre la misma) una **progresión
+diatónica funcional** en una tonalidad mayor — empieza en I y termina en V (cadencia
+V→I al loopear), de 4 a 8 acordes — y la reproduce en **loop**. Cada acorde dura un
+número fijo de negras elegido al azar en **4/4** (4, 8, 16, 32, 64 o 128; mínimo 1
+compás; tempo 80 BPM). El **arpegio** pasa a tocar notas **aleatorias dentro de la
+escala mayor** de la tonalidad (sube su volumen con **POT1 del Panel B**). Como todo
+está en la misma tonalidad, el arpegio genera una melodía consonante con la progresión.
+Mientras AUTO está activo, los botones de acorde manuales se ignoran.
 
 ### Congelado de controles entre paneles
 

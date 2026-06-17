@@ -47,7 +47,7 @@ paneles, los bancos de acordes y el arpegio. Resumen:
 
 - **Panel A** (cian): BTN1..5 = los 5 acordes del banco (**BTN1+BTN3 = 6º acorde**) · POT1 ataque · POT2 **volumen del pad** · POT3 release · POT4 movimiento.
 - **Panel B** (violeta, `BTN1+BTN5`): arpegio (POT1 volumen — 0 = off · POT2 velocidad · POT3 rango · POT4 gate) · BTN1/5 transpose · BTN2/4 octava · **BTN3 cambia banco**.
-- **Panel C** (naranja, `BTN2+BTN4`, todo en vivo): BTN1 arpegio ◀ · BTN2 onda (Seno→Sierra→Cuadrada→Triangular) · BTN3 sub · BTN4 quinta · BTN5 arpegio ▶ · POT1 detune · POT2 tono · POT3 cutoff · POT4 Q. Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD.
+- **Panel C** (naranja, `BTN2+BTN4`, todo en vivo): BTN1 arpegio ◀ · BTN2 onda (Seno→Sierra→Cuadrada→Triangular) · BTN3 sub · **BTN4 modo AUTO** · BTN5 arpegio ▶ · POT1 detune · POT2 tono · POT3 cutoff · POT4 Q. Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD. **AUTO** = cama armónica generativa (progresión + tiempos con semilla fija, loop en 4/4) + arpegio aleatorio en la escala (sube POT1 del Panel B).
 
 ## Compilar y flashear (Arduino IDE)
 

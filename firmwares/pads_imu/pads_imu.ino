@@ -83,9 +83,17 @@
 // - BTN1 → Tipo de arpegio ◀ anterior
 // - BTN2 → Forma de onda  (Seno → Sierra → Cuadrada → Triangular)
 // - BTN3 → Sub-osc (−12, cuerpo de bajo) on/off
-// - BTN4 → Quinta (+7, power/órgano) on/off
+// - BTN4 → Modo AUTO on/off (cama armónica generativa, ver abajo)
 // - BTN5 → Tipo de arpegio ▶ siguiente
 //     Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD (bloque)
+//
+// MODO AUTO (BTN4 del Panel C): toca solo. Con una SEMILLA FIJA genera (siempre la
+// misma) una progresión diatónica funcional en una tonalidad mayor — empieza en I y
+// termina en V (cadencia V→I al loopear), 4–8 acordes — y la reproduce en loop. Cada
+// acorde dura un nº fijo de negras elegido al azar en 4/4 (4, 8, 16, 32, 64 o 128;
+// mín. 1 compás, tempo 80 BPM). El ARPEGIO pasa a tocar notas ALEATORIAS dentro de la
+// escala mayor de la tonalidad (sube su volumen con POT1 del Panel B). Mientras AUTO
+// está activo, los botones de acorde manuales se ignoran.
 // - POT1 (ADC1)  → Detune/ensemble (duplica voces desafinadas → coro ancho audible)
 // - POT2 (ADC2)  → Tono (oscuro → brillante: filtro suave, NO satura)
 // - POT3 (ADC8)  → Piso de cutoff del filtro (carácter aunque no muevas el IMU)
@@ -243,13 +251,29 @@ float arpDecCoef  = 0.99877f;               // decay del pluck (≈ arpGate 0.12
 // ─── Timbre (Panel C) — PERSISTENTE ────────────────────────
 int   waveType    = 3;        // 0 = seno · 1 = sierra · 2 = cuadrada · 3 = triangular (arranca aquí)
 bool  subOsc      = true;     // capa una octava abajo (cuerpo) — ON: pad profundo
-bool  fifthLayer  = false;    // capa de quinta justa (+7)
 float detuneCents = 12.0f;    // desafinación ensemble (POT1) — voces duplicadas
 float panWidth    = 0.54f;    // ancho estéreo (deriva de detuneCents)
 float toneCoef    = 0.55f;    // Tono (POT2): one-pole LPF, oscuro→brillante (no satura)
 float toneL = 0.0f, toneR = 0.0f;
 float cutoffBase  = 400.0f;   // piso de cutoff (POT3)
 float qBase       = 1.0f;     // resonancia base (POT4)
+
+// ─── Modo AUTO (BTN4 Panel C): cama armónica generativa con semilla ─────────
+// Genera con semilla FIJA una progresión diatónica funcional (siempre la misma) +
+// duraciones aleatorias-pero-fijas en 4/4, y la reproduce en loop. El arpegio toca
+// notas aleatorias dentro de la escala mayor de la tonalidad.
+bool  autoMode = false;
+#define AUTO_BPM   80
+const uint32_t beatSamples = (uint32_t)SAMPLE_RATE * 60 / AUTO_BPM;  // 1 negra (4/4)
+const uint32_t autoSeed = 0x1234ABCDu;     // semilla FIJA → la cama es siempre la misma
+int   autoKeyRoot = 0;                     // tonalidad (mayor), semitonos desde C
+int   autoLen     = 4;                     // nº de acordes de la progresión (4–8)
+int   autoRoot[8];                         // raíz (semitonos desde C3, sin transpose/octava)
+bool  autoMin[8];                          // ¿acorde menor?
+int   autoBeats[8];                        // duración en negras (4·2^k: 4,8,16,32,64,128)
+int   autoIdx = 0;
+uint32_t autoSampleCount = 0, autoChordSamples = 0;
+const int scaleMajor[7] = {0, 2, 4, 5, 7, 9, 11};  // escala mayor (para el arpegio aleatorio)
 
 // ─── Movimiento (LFO lento, Panel A POT4) ──────────────────
 float lfoPhase = 0.0f;
@@ -365,7 +389,6 @@ void releaseAll() {
 // Usan soundingRoot = la raíz del acorde que SUENA (no recalcula desde el banco,
 // así cambiar de banco no desincroniza las capas con lo que está sonando).
 void spawnLayerSub()   { if (activeChord >= 0) spawnVoice(soundingRoot - 12, 0.85f,  0.0f,  0, LYR_SUB); }
-void spawnLayerFifth() { if (activeChord >= 0) spawnVoice(soundingRoot + 7,  0.50f, -0.25f, 0, LYR_FIFTH); }
 void releaseLayer(uint8_t layer) {
   for (int i = 0; i < NUM_VOICES; i++)
     if (voices[i].active && voices[i].kind == 0 && voices[i].layer == layer && voices[i].stage < 2)
@@ -412,13 +435,13 @@ void triggerChord(int idx) {
     spawnVoice(semi, 0.9f, pans[n] + 0.25f, 0, LYR_CORE);
   }
 
-  // Capas de timbre (Panel C) — etiquetadas para poder togglearlas en vivo
-  if (subOsc)     spawnVoice(root - 12, 0.85f,  0.0f,  0, LYR_SUB);   // cuerpo de bajo
-  if (fifthLayer) spawnVoice(root + 7,  0.50f, -0.25f, 0, LYR_FIFTH); // quinta
+  // Capa de timbre (Panel C) — etiquetada para poder togglearla en vivo
+  if (subOsc) spawnVoice(root - 12, 0.85f, 0.0f, 0, LYR_SUB);   // cuerpo de bajo
 }
 
 // ─── Latch de acorde: tócalo para encender, otra vez para apagar ──
 void playChord(int i) {
+  if (autoMode) return;                 // en modo AUTO los acordes los maneja la cama
   if (activeChord == i) { releaseAll(); activeChord = -1; arpCount = 0; }
   else                  { triggerChord(i); activeChord = i; }
 }
@@ -444,6 +467,20 @@ void capArp(int toSpawn) {
 // ─── Disparar UN paso del arpegio según el tipo activo ─────
 // UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD (acorde en bloque).
 void arpTrigger() {
+  // Modo AUTO → nota ALEATORIA dentro de la escala mayor de la tonalidad
+  if (autoMode) {
+    arpRng = arpRng * 1664525u + 1013904223u;
+    int deg = (int)((arpRng >> 9) % 7);
+    int oct = (int)((arpRng >> 16) % (uint32_t)arpRange);
+    int base = autoKeyRoot + transpose + globalOctaveSemi;
+    int semi = base + scaleMajor[deg] + 12 * oct + 12;   // +12: una octava sobre el pad
+    float pan = (arpStep & 1) ? 0.5f : -0.5f;
+    capArp(1);
+    spawnVoice(semi, arpVol, pan, 1, 0);
+    arpStep++;
+    return;
+  }
+
   int total = arpCount * arpRange;
   if (total < 1) total = 1;
 
@@ -477,6 +514,50 @@ void arpTrigger() {
 
   arpStep++;
   if (arpStep >= 1000000) arpStep = 0;          // guarda contra overflow (realineación imperceptible)
+}
+
+// ─── Disparar un acorde arbitrario (raíz + cualidad) como pad — modo AUTO ──
+void triggerAutoChord(int rootBase, bool minor) {
+  releaseAll();
+  capPad(8);
+  int root = rootBase + transpose + globalOctaveSemi;
+  soundingRoot = root;
+  int third = minor ? 3 : 4;
+  arpNotes[0] = root; arpNotes[1] = root + third; arpNotes[2] = root + 7; arpNotes[3] = root + 12;
+  arpCount = 4; arpStep = 0;
+  const float pans[3] = { 0.0f, -0.7f, 0.7f };
+  const int   iv[3]   = { 0, third, 7 };
+  for (int n = 0; n < 3; n++) {
+    int semi = root + iv[n];
+    spawnVoice(semi, 0.9f, pans[n] - 0.25f, 0, LYR_CORE);
+    spawnVoice(semi, 0.9f, pans[n] + 0.25f, 0, LYR_CORE);
+  }
+  if (subOsc) spawnVoice(root - 12, 0.85f, 0.0f, 0, LYR_SUB);
+}
+
+// ─── Generar (con semilla FIJA) la cama armónica y arrancar el modo AUTO ──
+void startAuto() {
+  uint32_t s = autoSeed;
+  static const int8_t degOff[6] = { 0, 2, 4, 5, 7, 9 };          // I ii iii IV V vi (mayor)
+  static const bool   degMin[6] = { false, true, true, false, false, true };
+  static const int8_t NEXT[6][4] = {                             // movimientos funcionales coherentes
+    {3,4,5,1}, {4,3,4,3}, {5,3,5,3}, {4,0,1,4}, {0,5,0,5}, {3,1,4,3}
+  };
+  s = s * 1664525u + 1013904223u; autoKeyRoot = (int)((s >> 16) % 12);
+  s = s * 1664525u + 1013904223u; autoLen = 4 + (int)((s >> 16) % 5);   // 4–8 acordes
+  int deg = 0;                                                   // empieza en I (tónica = "casa")
+  for (int i = 0; i < autoLen; i++) {
+    if      (i == autoLen - 1) deg = 4;                          // termina en V → cadencia V-I al loopear
+    else if (i > 0) { s = s * 1664525u + 1013904223u; deg = NEXT[deg][(s >> 16) % 4]; }
+    autoRoot[i] = autoKeyRoot + degOff[deg];
+    autoMin[i]  = degMin[deg];
+    s = s * 1664525u + 1013904223u; uint32_t r = (s >> 16) % 100;
+    int k = (r < 40) ? 0 : (r < 65) ? 1 : (r < 82) ? 2 : (r < 93) ? 3 : (r < 98) ? 4 : 5;
+    autoBeats[i] = 4 << k;                                       // 4,8,16,32,64,128 negras (pesado a corto)
+  }
+  autoIdx = 0; autoSampleCount = 0;
+  autoChordSamples = (uint32_t)((uint64_t)autoBeats[0] * beatSamples);
+  triggerAutoChord(autoRoot[0], autoMin[0]);
 }
 
 // ─── PolyBLEP ──────────────────────────────────────────────
@@ -708,8 +789,9 @@ void loop() {
     else if (panel == PANEL_B) { globalOctaveSemi += 12;
                                  if (globalOctaveSemi > 12) globalOctaveSemi = 12;
                                  retriggerActive(); }
-    else { fifthLayer = !fifthLayer;            // Panel C → quinta EN VIVO (sin re-disparar el pad)
-           if (fifthLayer) spawnLayerFifth(); else releaseLayer(LYR_FIFTH); }
+    else { autoMode = !autoMode;                // Panel C → modo AUTO (cama armónica generativa)
+           if (autoMode) startAuto();
+           else { releaseAll(); activeChord = -1; arpCount = 0; } }
   }
 
   if (b1 == HIGH && b5 == HIGH) combo15 = false;
@@ -759,12 +841,23 @@ void loop() {
   }
   if (potLive[pi]) applyPot(pi, pv);
 
+  // — Modo AUTO: avanza la progresión por tiempo (cada acorde dura sus negras) —
+  if (autoMode) {
+    autoSampleCount += BUFFER_SAMPLES;
+    if (autoSampleCount >= autoChordSamples) {
+      autoSampleCount = 0;
+      autoIdx = (autoIdx + 1) % autoLen;
+      autoChordSamples = (uint32_t)((uint64_t)autoBeats[autoIdx] * beatSamples);
+      triggerAutoChord(autoRoot[autoIdx], autoMin[autoIdx]);
+    }
+  }
+
   // — Generar buffer de audio (estéreo) —
   int16_t buffer[BUFFER_SAMPLES * 2];
 
   for (int n = 0; n < BUFFER_SAMPLES; n++) {
-    // — Arpegiador: dispara un paso (según el tipo) cada arpSamplesPerStep —
-    if (arpVol > 0.02f && activeChord >= 0 && arpCount > 0) {
+    // — Arpegiador: dispara un paso cada arpSamplesPerStep (en AUTO suena siempre) —
+    if (arpVol > 0.02f && (autoMode || (activeChord >= 0 && arpCount > 0))) {
       if (arpSampleCount >= arpSamplesPerStep) { arpSampleCount = 0; arpTrigger(); }
       arpSampleCount++;
     } else {
