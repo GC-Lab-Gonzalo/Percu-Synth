@@ -114,13 +114,14 @@ con su ataque y sale con su release, sin reiniciar el pad.
 
 ### Modo AUTO — cama armónica generativa (BTN4 del Panel C)
 
-Toca solo. Con una **semilla fija** genera (siempre la misma) una **progresión
-diatónica funcional** en una tonalidad mayor — empieza en I y termina en V (cadencia
-V→I al loopear), de 4 a 8 acordes — y la reproduce en **loop tipo canción**: **todos
-los acordes duran lo mismo** (8 o 16 negras según la semilla, en **4/4**, tempo 80 BPM).
-El **arpegio** pasa a tocar notas **aleatorias del acorde que está sonando** (sube su
-volumen con **POT1 del Panel B**) → melodía siempre consonante con la progresión.
-Mientras AUTO está activo, los botones de acorde manuales se ignoran.
+Toca solo. **Cada vez que lo enciendes (BTN4) genera una canción NUEVA y distinta**:
+tonalidad aleatoria (cualquiera de las 12), **modo mayor o menor**, y una **progresión
+diatónica funcional** — empieza en la tónica y termina en V (cadencia V→i al loopear),
+de 4 a 8 acordes — que reproduce en **loop tipo canción**: **todos los acordes duran lo
+mismo** (8 o 16 negras según el azar, en **4/4**, tempo 80 BPM). El **arpegio** pasa a
+tocar notas **aleatorias del acorde que está sonando** (sube su volumen con **POT1 del
+Panel B**) → melodía siempre consonante. Mientras AUTO está activo, los botones de
+acorde manuales se ignoran. Apretá BTN4 de nuevo para **re-generar otra canción**.
 
 ### Congelado de controles entre paneles
 
