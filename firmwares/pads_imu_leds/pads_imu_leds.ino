@@ -271,6 +271,7 @@ float g_trem   = 1.0f;
 // ─── Pots congelados al cambiar de panel ───────────────────
 float       potAnchor[4] = {0, 0, 0, 0};
 bool        potLive[4]   = {true, true, true, true};
+uint8_t     potMoveCnt[4] = {0, 0, 0, 0};   // lecturas seguidas movido (anti-ruido)
 bool        panelChanged = false;
 const float POT_MOVE_THR = 0.04f;   // 4 %: hay que MOVER el pot a propósito (inmune al ruido del ADC)
 
@@ -799,18 +800,23 @@ void loop() {
   static uint8_t potScan = 0;
 
   if (panelChanged) {
-    for (int i = 0; i < 4; i++) { potLive[i] = false; potAnchor[i] = -1.0f; }
+    // Captura las 4 anclas DE GOLPE (lectura limpia) y congela todo. Ningún
+    // parámetro del panel nuevo cambia hasta que MUEVAS su pot.
+    for (int i = 0; i < 4; i++) {
+      potLive[i] = false; potMoveCnt[i] = 0; potAnchor[i] = readPot(POT_PIN[i]);
+    }
     panelChanged = false;
   }
 
   int pi = potScan; potScan = (potScan + 1) & 3;
   float pv = readPot(POT_PIN[pi]);
-  if (potAnchor[pi] < 0.0f) {
-    potAnchor[pi] = pv;
-  } else {
-    if (!potLive[pi] && fabsf(pv - potAnchor[pi]) > POT_MOVE_THR) potLive[pi] = true;
-    if (potLive[pi]) applyPot(pi, pv);
+  if (!potLive[pi]) {
+    // Despierta sólo si el movimiento supera el umbral en 3 lecturas SEGUIDAS
+    // (un pico de ruido no dura 3 lecturas → no despierta el pot solo).
+    if (fabsf(pv - potAnchor[pi]) > POT_MOVE_THR) { if (++potMoveCnt[pi] >= 3) potLive[pi] = true; }
+    else potMoveCnt[pi] = 0;
   }
+  if (potLive[pi]) applyPot(pi, pv);
 
   // — Energía del PAD para los LEDs: suma de envolventes de las voces del pad
   //   (kind 0), independiente del volumen, con seguidor de envolvente. —
