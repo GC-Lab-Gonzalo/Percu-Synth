@@ -26,15 +26,17 @@ mientras el pad se sostiene.
 
 ## Bancos de acordes (BTN1..BTN5 en Panel A)
 
-Hay **3 bancos** de 5 acordes. **BTN3 del Panel B** cicla entre ellos:
+Hay **5 bancos** de 6 acordes. **BTN3 del Panel B** cicla entre ellos (sin reiniciar
+el pad). El **6º acorde** de cada banco se toca con **BTN1+BTN3 a la vez**:
 
-| Botón | Pin | Banco 0 | Banco 1 | Banco 2 |
-|---|---|---|---|---|
-| BTN1 | 44 | Do Mayor (C E G) | Do Mayor | Do Mayor |
-| BTN2 | 42 | Sol Mayor (G B D) | La menor (A C E) | La menor |
-| BTN3 | 0  | La menor (A C E) | Mi menor (E G B) | **Mi7** (E G# B D) |
-| BTN4 | 45 | Fa Mayor (F A C) | Fa Mayor | Fa Mayor |
-| BTN5 | 47 | Re menor (D F A) | Sol Mayor (G B D) | Sol Mayor |
+| Botón | Banco 0 | Banco 1 | Banco 2 | Banco 3 | Banco 4 |
+|---|---|---|---|---|---|
+| BTN1 | Do M | Do M | Do M | Do M | Re m |
+| BTN2 | Sol M | La m | La m | **Mi M** | **Si♭ M** |
+| BTN3 | La m | Mi m | **Mi7** | Fa M | **La M** |
+| BTN4 | Fa M | Fa M | Fa M | **Fa m** | Do M |
+| BTN5 | Re m | Sol M | Sol M | Mi m | Fa M |
+| **BTN1+BTN3** | Mi m | Re m | Re m | **Sol M** | **Sol m** |
 
 Son acordes **absolutos** (raíz + intervalos reales), no grados de escala. Tocar un
 botón **latchea** su acorde como pad sostenido; **tocar el mismo botón otra vez lo
@@ -60,6 +62,7 @@ si fue combo, así presionar dos juntos no dispara su acorde por accidente.)
 | Control | Pin | Función |
 |---|---|---|
 | BTN1..BTN5 | 44/42/0/45/47 | Los **5 acordes del banco activo** (latch: el mismo botón apaga) |
+| BTN1+BTN3 | 44+0 | **6º acorde** del banco |
 | POT1 | ADC1 | **Ataque** (5 ms percusivo → ~4 s de fundido lento) |
 | POT2 | ADC2 | **Volumen del pad** (solo los acordes; el arpegio tiene su propio volumen en Panel B) |
 | POT3 | ADC8 | **Release** (~0.2 s corto → ~8 s de cola enorme) |
@@ -69,9 +72,10 @@ si fue combo, así presionar dos juntos no dispara su acorde por accidente.)
 
 ### Panel B (arpegio / armonía) — BTN1+BTN5
 
-El **arpegio** recorre las notas del acorde que esté sonando (queda amarrado a la
-armonía) y suena una octava sobre el pad, pasando por el mismo filtro. **POT1 lo
-enciende** (en 0 está apagado); el resto de los pots dan forma SOLO al arpegio.
+El **arpegio** recorre las **4 notas** del acorde que esté sonando (a las tríadas se
+les agrega la octava de la raíz → 4 notas para tocar en 4/4), una octava sobre el pad
+y por el mismo filtro. **POT1 lo enciende** (en 0 está apagado); el resto de los pots
+dan forma SOLO al arpegio. El **tipo de arpegio** se elige en el Panel C (BTN1/BTN5).
 
 | Control | Pin | Función |
 |---|---|---|
@@ -79,7 +83,7 @@ enciende** (en 0 está apagado); el resto de los pots dan forma SOLO al arpegio.
 | BTN5 | 47 | Transponer **+1 semitono** |
 | BTN2 | 42 | **Octava global −1** |
 | BTN4 | 45 | **Octava global +1** |
-| BTN3 | 0  | **Cambiar banco** de acordes (0 → 1 → 2) |
+| BTN3 | 0  | **Cambiar banco** de acordes (0 → … → 4, **sin reiniciar el pad**) |
 | POT1 | ADC1 | **Volumen del arpegio** (en 0 = arpegio APAGADO; independiente del volumen del pad) |
 | POT2 | ADC2 | **Velocidad** del arpegio (2 → 16 notas/s) |
 | POT3 | ADC8 | **Rango de octavas** del arpegio (1 → 3) |
@@ -90,20 +94,23 @@ enciende** (en 0 está apagado); el resto de los pots dan forma SOLO al arpegio.
 
 ### Panel C (timbre / síntesis) — BTN2+BTN4
 
+**Todos los botones actúan EN VIVO, sin reiniciar el pad ni su ataque.**
+
 | Control | Pin | Función |
 |---|---|---|
-| BTN1 | 44 | **Forma de onda**: Sierra → Cuadrada → Triangular (en vivo, sin re-disparar) |
-| BTN2 | 42 | **Octava arriba** (+12, brillo) on/off |
+| BTN1 | 44 | **Tipo de arpegio ◀** (anterior) |
+| BTN2 | 42 | **Forma de onda**: Seno → Sierra → Cuadrada → Triangular |
 | BTN3 | 0  | **Sub-osc** (−12, cuerpo de bajo) on/off *(ON por defecto → pad profundo)* |
 | BTN4 | 45 | **Quinta** (+7, power/órgano) on/off |
-| BTN5 | 47 | **Shimmer** (+24, capa etérea ancha) on/off |
+| BTN5 | 47 | **Tipo de arpegio ▶** (siguiente) |
 | POT1 | ADC1 | **Detune/ensemble** — duplica cada nota en 2 voces desafinadas → coro ancho audible (0–40 cents) |
 | POT2 | ADC2 | **Tono** (oscuro → brillante: filtro suave, **no satura**) |
 | POT3 | ADC8 | **Piso de cutoff** del filtro (el IMU suma encima) |
 | POT4 | ADC10 | **Resonancia base** (Q) del filtro (el IMU suma encima) |
 
-- Los **toggles de capa** re-disparan el acorde activo para oír el cambio. La forma
-  de onda se lee en vivo, así que afecta a todas las voces al instante.
+**Tipos de arpegio** (BTN1 ◀ / BTN5 ▶): `UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD`
+(CHORD toca las 4 notas en bloque). Las capas **sub** y **quinta** se agregan/quitan
+**en vivo**: entran con su ataque y salen con su release, sin reiniciar el pad.
 
 ### Congelado de controles entre paneles
 
