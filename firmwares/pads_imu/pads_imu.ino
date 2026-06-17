@@ -328,25 +328,30 @@ void spawnVoice(int semi, float gain, float pan, uint8_t kind, uint8_t layer) {
     }
   }
 
-  float det = exp2f((pan * detuneCents) / 1200.0f);       // detune según el pan
+  // detune = 2^a con a pequeño → aprox. polinómica barata (evita exp2f por voz)
+  float a = (pan * detuneCents) / 1200.0f;
+  float det = 1.0f + a * (0.6931472f + a * 0.2401597f);
 
   Voice &v = voices[idx];
   v.active = true;
   v.kind   = kind;
   v.layer  = layer;
   v.freq   = semiToFreq(semi) * det;
-  v.phase  = fmodf((float)voiceCounter * 0.61803f, 1.0f);
+  float ph = (float)voiceCounter * 0.61803f; ph -= (float)(int)ph;   // fase decorrelacionada
+  v.phase  = ph;
   v.env    = 0.0f;
   v.stage  = 0;
   v.gain   = gain;
   v.age    = voiceCounter++;
 
+  // Paneo equal-power vía la tabla de seno (evita cosf/sinf por voz):
+  // rGain = sin(th), lGain = cos(th) = sin(th+90°). th=(p+1)·90°/2 → fase (p+1)/8.
   float p = pan * panWidth;
   if (p >  1.0f) p =  1.0f;
   if (p < -1.0f) p = -1.0f;
-  float th = (p + 1.0f) * 0.25f * (float)M_PI;
-  v.lGain = cosf(th);
-  v.rGain = sinf(th);
+  float phr = (p + 1.0f) * 0.125f;
+  v.rGain = oscSine(phr);
+  v.lGain = oscSine(phr + 0.25f);
 }
 
 // ─── Mandar las voces del PAD a release (el arp decae solo) ──
@@ -386,7 +391,7 @@ void capPad(int keep) {
 // ─── Armar y disparar un acorde como pad sostenido ─────────
 void triggerChord(int idx) {
   releaseAll();
-  capPad(12);                                    // acota las colas viejas antes de sumar el acorde nuevo
+  capPad(8);                                     // acota las colas viejas antes de sumar el acorde nuevo
   const Chord &ch = BANKS[currentBank][idx];
   int root = ch.root + transpose + globalOctaveSemi;
   soundingRoot = root;                           // recordar la raíz que ahora suena
@@ -566,8 +571,8 @@ inline float applyFilter(BiqState &st, float in) {
 void i2s_init() {
   i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
   chan_cfg.auto_clear = true;
-  chan_cfg.dma_desc_num   = 8;     // más descriptores DMA → más colchón ante picos de CPU
-  chan_cfg.dma_frame_num  = 240;   // (≈ 43 ms de buffer total; latencia imperceptible en un pad)
+  chan_cfg.dma_desc_num   = 10;    // más descriptores DMA → más colchón ante picos de CPU
+  chan_cfg.dma_frame_num  = 240;   // (≈ 54 ms de buffer total; latencia imperceptible en un pad)
   ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_chan, NULL));
 
   i2s_std_config_t std_cfg = {
