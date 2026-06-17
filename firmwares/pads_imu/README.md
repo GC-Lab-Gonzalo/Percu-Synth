@@ -31,12 +31,12 @@ el pad). El **6º acorde** de cada banco se toca con **BTN1+BTN3 a la vez**:
 
 | Botón | Banco 0 | Banco 1 | Banco 2 | Banco 3 | Banco 4 |
 |---|---|---|---|---|---|
-| BTN1 | Do M | Do M | Do M | Do M | Re m |
-| BTN2 | Sol M | La m | La m | **Mi M** | **Si♭ M** |
-| BTN3 | La m | Mi m | **Mi7** | Fa M | **La M** |
-| BTN4 | Fa M | Fa M | Fa M | **Fa m** | Do M |
-| BTN5 | Re m | Sol M | Sol M | Mi m | Fa M |
-| **BTN1+BTN3** | Mi m | Re m | Re m | **Sol M** | **Sol m** |
+| BTN1 | Do M | Do M | Do M | Re m | **Mi M** |
+| BTN2 | Sol M | La m | **Mi M** | Si♭ M | **Mi m** |
+| BTN3 | La m | **Mi7** | Fa M | La M | **Si M** |
+| BTN4 | Fa M | Fa M | **Fa m** | Do M | **Si m** |
+| BTN5 | Re m | Sol M | Mi m | Fa M | Do M |
+| **BTN1+BTN3** | Mi m | Re m | Sol M | Sol m | **Re M** |
 
 Son acordes **absolutos** (raíz + intervalos reales), no grados de escala. Tocar un
 botón **latchea** su acorde como pad sostenido; **tocar el mismo botón otra vez lo

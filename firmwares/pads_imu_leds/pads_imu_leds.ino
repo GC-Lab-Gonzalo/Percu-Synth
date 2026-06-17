@@ -70,8 +70,8 @@
 // ── PANEL A (interpretación) ──────────────────────────────────────────────────
 // - BTN1..BTN5 → los 5 acordes del banco activo (LATCH) · BTN1+BTN3 = 6º acorde
 //     5 bancos (BTN3 del Panel B cicla, sin reiniciar el pad):
-//       0:C·G·Am·F·Dm(+Em)  1:C·Am·Em·F·G(+Dm)  2:C·Am·E7·F·G(+Dm)
-//       3:C·E·F·Fm·Em(+G)   4:Dm·Bb·A·C·F(+Gm)
+//       0:C·G·Am·F·Dm(+Em)  1:C·Am·E7·F·G(+Dm)  2:C·E·F·Fm·Em(+G)
+//       3:Dm·Bb·A·C·F(+Gm)  4:E·Em·B·Bm·C(+D)
 // - POT1 → Ataque · POT2 → Volumen del PAD (no del arpegio) · POT3 → Release · POT4 → Movimiento
 //
 // ── PANEL B (arpegio / armonía) — BTN1+BTN5 ───────────────────────────────────
@@ -198,14 +198,14 @@ struct Chord { const char* name; int8_t root; int8_t iv[4]; uint8_t n; };
 const Chord BANKS[NUM_BANKS][6] = {
   // Banco 0 — C  G  Am F  Dm   (+ BTN1+3: Em)
   { {"DoM", 0,{0,4,7,0},3}, {"SolM",7,{0,4,7,0},3}, {"Lam", 9,{0,3,7,0},3}, {"FaM", 5,{0,4,7,0},3}, {"Rem", 2,{0,3,7,0},3}, {"Mim", 4,{0,3,7,0},3} },
-  // Banco 1 — C  Am Em F  G    (+ BTN1+3: Dm)
-  { {"DoM", 0,{0,4,7,0},3}, {"Lam", 9,{0,3,7,0},3}, {"Mim", 4,{0,3,7,0},3}, {"FaM", 5,{0,4,7,0},3}, {"SolM",7,{0,4,7,0},3}, {"Rem", 2,{0,3,7,0},3} },
-  // Banco 2 — C  Am E7 F  G    (+ BTN1+3: Dm)
+  // Banco 1 — C  Am E7 F  G    (+ BTN1+3: Dm)
   { {"DoM", 0,{0,4,7,0},3}, {"Lam", 9,{0,3,7,0},3}, {"Mi7", 4,{0,4,7,10},4},{"FaM", 5,{0,4,7,0},3}, {"SolM",7,{0,4,7,0},3}, {"Rem", 2,{0,3,7,0},3} },
-  // Banco 3 — C  E  F  Fm Em   (+ BTN1+3: G)
+  // Banco 2 — C  E  F  Fm Em   (+ BTN1+3: G)
   { {"DoM", 0,{0,4,7,0},3}, {"MiM", 4,{0,4,7,0},3}, {"FaM", 5,{0,4,7,0},3}, {"Fam", 5,{0,3,7,0},3}, {"Mim", 4,{0,3,7,0},3}, {"SolM",7,{0,4,7,0},3} },
-  // Banco 4 — Dm Bb A  C  F    (+ BTN1+3: Gm)
+  // Banco 3 — Dm Bb A  C  F    (+ BTN1+3: Gm)
   { {"Rem", 2,{0,3,7,0},3}, {"SibM",10,{0,4,7,0},3},{"LaM", 9,{0,4,7,0},3}, {"DoM", 0,{0,4,7,0},3}, {"FaM", 5,{0,4,7,0},3}, {"Solm",7,{0,3,7,0},3} },
+  // Banco 4 — E  Em B  Bm C    (+ BTN1+3: D)
+  { {"MiM", 4,{0,4,7,0},3}, {"Mim", 4,{0,3,7,0},3}, {"SiM",11,{0,4,7,0},3}, {"Sim",11,{0,3,7,0},3}, {"DoM", 0,{0,4,7,0},3}, {"ReM", 2,{0,4,7,0},3} },
 };
 int currentBank = 0;
 int activeChord = -1;                       // -1 = nada sonando (latch)
