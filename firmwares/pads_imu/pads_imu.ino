@@ -87,13 +87,13 @@
 // - BTN5 → Tipo de arpegio ▶ siguiente
 //     Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD (bloque)
 //
-// MODO AUTO (BTN4 del Panel C): toca solo. Con una SEMILLA FIJA genera (siempre la
-// misma) una progresión diatónica funcional en una tonalidad mayor — empieza en I y
-// termina en V (cadencia V→I al loopear), 4–8 acordes — y la reproduce en loop tipo
-// canción: TODOS los acordes duran lo MISMO (8 o 16 negras según la semilla, en 4/4,
-// tempo 80 BPM). El ARPEGIO pasa a tocar notas ALEATORIAS del ACORDE que está sonando
-// (sube su volumen con POT1 del Panel B). Mientras AUTO está activo, los botones de
-// acorde manuales se ignoran.
+// MODO AUTO (BTN4 del Panel C): toca solo. CADA VEZ que lo enciendes genera una
+// CANCIÓN NUEVA y distinta: tonalidad aleatoria (12), modo mayor o menor, y una
+// progresión diatónica funcional — empieza en la tónica y termina en V (cadencia
+// V→i al loopear), 4–8 acordes — que reproduce en loop tipo canción: TODOS los
+// acordes duran lo MISMO (8 o 16 negras según el azar, en 4/4, tempo 80 BPM). El
+// ARPEGIO pasa a tocar notas ALEATORIAS del ACORDE que está sonando (sube su volumen
+// con POT1 del Panel B). Mientras AUTO está activo, los acordes manuales se ignoran.
 // - POT1 (ADC1)  → Detune/ensemble (duplica voces desafinadas → coro ancho audible)
 // - POT2 (ADC2)  → Tono (oscuro → brillante: filtro suave, NO satura)
 // - POT3 (ADC8)  → Piso de cutoff del filtro (carácter aunque no muevas el IMU)
@@ -265,7 +265,7 @@ float qBase       = 1.0f;     // resonancia base (POT4)
 bool  autoMode = false;
 #define AUTO_BPM   80
 const uint32_t beatSamples = (uint32_t)SAMPLE_RATE * 60 / AUTO_BPM;  // 1 negra (4/4)
-const uint32_t autoSeed = 0x1234ABCDu;     // semilla FIJA → la cama es siempre la misma
+uint32_t autoSeed = 0x1234ABCDu;           // semilla; evoluciona en cada toggle → canción distinta
 int   autoKeyRoot = 0;                     // tonalidad (mayor), semitonos desde C
 int   autoLen     = 4;                     // nº de acordes de la progresión (4–8)
 int   autoRoot[8];                         // raíz (semitonos desde C3, sin transpose/octava)
@@ -535,25 +535,41 @@ void triggerAutoChord(int rootBase, bool minor) {
   if (subOsc) spawnVoice(root - 12, 0.85f, 0.0f, 0, LYR_SUB);
 }
 
-// ─── Generar (con semilla FIJA) la cama armónica y arrancar el modo AUTO ──
+// ─── Generar una CANCIÓN NUEVA (tonalidad + modo + progresión aleatorios) ──
+// Semilla fresca en cada toggle (mezcla micros + contador de voces) → cada vez que
+// enciendes AUTO sale otra tonalidad (12), otro modo (mayor/menor) y otra progresión.
 void startAuto() {
+  autoSeed = autoSeed * 1664525u + 1013904223u + (uint32_t)micros() + voiceCounter;
   uint32_t s = autoSeed;
-  static const int8_t degOff[6] = { 0, 2, 4, 5, 7, 9 };          // I ii iii IV V vi (mayor)
-  static const bool   degMin[6] = { false, true, true, false, false, true };
-  static const int8_t NEXT[6][4] = {                             // movimientos funcionales coherentes
+
+  // Grados diatónicos y movimientos funcionales coherentes — MAYOR y MENOR.
+  static const int8_t majOff[6] = { 0, 2, 4, 5, 7, 9 };          // I  ii iii IV V  vi
+  static const bool   majMin[6] = { false, true, true, false, false, true };
+  static const int8_t minOff[6] = { 0, 3, 5, 7, 8, 10 };         // i  III iv V  VI VII
+  static const bool   minMin[6] = { true, false, true, false, false, false };
+  static const int8_t NEXTmaj[6][4] = {
     {3,4,5,1}, {4,3,4,3}, {5,3,5,3}, {4,0,1,4}, {0,5,0,5}, {3,1,4,3}
   };
+  static const int8_t NEXTmin[6][4] = {
+    {2,3,4,1}, {4,2,5,4}, {3,0,5,3}, {0,4,0,4}, {2,1,3,2}, {1,0,1,0}
+  };
+
+  s = s * 1664525u + 1013904223u; bool minorKey = ((s >> 17) & 1);
   s = s * 1664525u + 1013904223u; autoKeyRoot = (int)((s >> 16) % 12);
   s = s * 1664525u + 1013904223u; autoLen = 4 + (int)((s >> 16) % 5);   // 4–8 acordes
   // Duración COMÚN para TODOS los acordes (loop parejo tipo canción): 8 o 16 negras.
   s = s * 1664525u + 1013904223u; autoBeats = (((s >> 16) & 1) ? 16 : 8);
-  int deg = 0;                                                   // empieza en I (tónica = "casa")
+
+  int deg = 0;                                                   // empieza en la tónica (i/I)
+  int endDeg = minorKey ? 3 : 4;                                 // termina en V → cadencia V→i
   for (int i = 0; i < autoLen; i++) {
-    if      (i == autoLen - 1) deg = 4;                          // termina en V → cadencia V-I al loopear
-    else if (i > 0) { s = s * 1664525u + 1013904223u; deg = NEXT[deg][(s >> 16) % 4]; }
-    autoRoot[i] = autoKeyRoot + degOff[deg];
-    autoMin[i]  = degMin[deg];
+    if      (i == autoLen - 1) deg = endDeg;
+    else if (i > 0) { s = s * 1664525u + 1013904223u;
+                      deg = minorKey ? NEXTmin[deg][(s >> 16) % 4] : NEXTmaj[deg][(s >> 16) % 4]; }
+    autoRoot[i] = autoKeyRoot + (minorKey ? minOff[deg] : majOff[deg]);
+    autoMin[i]  = minorKey ? minMin[deg] : majMin[deg];
   }
+  autoSeed = s;                                                  // decorrelaciona para el próximo toggle
   autoIdx = 0; autoSampleCount = 0;
   autoChordSamples = (uint32_t)((uint64_t)autoBeats * beatSamples);   // igual para todos
   triggerAutoChord(autoRoot[0], autoMin[0]);
