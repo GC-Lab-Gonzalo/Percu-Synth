@@ -89,11 +89,11 @@
 //
 // MODO AUTO (BTN4 del Panel C): toca solo. Con una SEMILLA FIJA genera (siempre la
 // misma) una progresión diatónica funcional en una tonalidad mayor — empieza en I y
-// termina en V (cadencia V→I al loopear), 4–8 acordes — y la reproduce en loop. Cada
-// acorde dura un nº fijo de negras elegido al azar en 4/4 (4, 8, 16, 32, 64 o 128;
-// mín. 1 compás, tempo 80 BPM). El ARPEGIO pasa a tocar notas ALEATORIAS dentro de la
-// escala mayor de la tonalidad (sube su volumen con POT1 del Panel B). Mientras AUTO
-// está activo, los botones de acorde manuales se ignoran.
+// termina en V (cadencia V→I al loopear), 4–8 acordes — y la reproduce en loop tipo
+// canción: TODOS los acordes duran lo MISMO (8 o 16 negras según la semilla, en 4/4,
+// tempo 80 BPM). El ARPEGIO pasa a tocar notas ALEATORIAS del ACORDE que está sonando
+// (sube su volumen con POT1 del Panel B). Mientras AUTO está activo, los botones de
+// acorde manuales se ignoran.
 // - POT1 (ADC1)  → Detune/ensemble (duplica voces desafinadas → coro ancho audible)
 // - POT2 (ADC2)  → Tono (oscuro → brillante: filtro suave, NO satura)
 // - POT3 (ADC8)  → Piso de cutoff del filtro (carácter aunque no muevas el IMU)
@@ -270,10 +270,9 @@ int   autoKeyRoot = 0;                     // tonalidad (mayor), semitonos desde
 int   autoLen     = 4;                     // nº de acordes de la progresión (4–8)
 int   autoRoot[8];                         // raíz (semitonos desde C3, sin transpose/octava)
 bool  autoMin[8];                          // ¿acorde menor?
-int   autoBeats[8];                        // duración en negras (4·2^k: 4,8,16,32,64,128)
+int   autoBeats = 16;                      // duración COMÚN de cada acorde en negras (igual para todos → loop tipo canción)
 int   autoIdx = 0;
 uint32_t autoSampleCount = 0, autoChordSamples = 0;
-const int scaleMajor[7] = {0, 2, 4, 5, 7, 9, 11};  // escala mayor (para el arpegio aleatorio)
 
 // ─── Movimiento (LFO lento, Panel A POT4) ──────────────────
 float lfoPhase = 0.0f;
@@ -467,16 +466,17 @@ void capArp(int toSpawn) {
 // ─── Disparar UN paso del arpegio según el tipo activo ─────
 // UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD (acorde en bloque).
 void arpTrigger() {
-  // Modo AUTO → nota ALEATORIA dentro de la escala mayor de la tonalidad
+  // Modo AUTO → nota ALEATORIA del ACORDE que está sonando (sus 4 notas)
   if (autoMode) {
-    arpRng = arpRng * 1664525u + 1013904223u;
-    int deg = (int)((arpRng >> 9) % 7);
-    int oct = (int)((arpRng >> 16) % (uint32_t)arpRange);
-    int base = autoKeyRoot + transpose + globalOctaveSemi;
-    int semi = base + scaleMajor[deg] + 12 * oct + 12;   // +12: una octava sobre el pad
-    float pan = (arpStep & 1) ? 0.5f : -0.5f;
-    capArp(1);
-    spawnVoice(semi, arpVol, pan, 1, 0);
+    if (arpCount > 0) {
+      arpRng = arpRng * 1664525u + 1013904223u;
+      int note = (int)((arpRng >> 9) % (uint32_t)arpCount);
+      int oct  = (int)((arpRng >> 16) % (uint32_t)arpRange);
+      int semi = arpNotes[note] + 12 * oct + 12;   // +12: una octava sobre el pad
+      float pan = (arpStep & 1) ? 0.5f : -0.5f;
+      capArp(1);
+      spawnVoice(semi, arpVol, pan, 1, 0);
+    }
     arpStep++;
     return;
   }
@@ -545,18 +545,17 @@ void startAuto() {
   };
   s = s * 1664525u + 1013904223u; autoKeyRoot = (int)((s >> 16) % 12);
   s = s * 1664525u + 1013904223u; autoLen = 4 + (int)((s >> 16) % 5);   // 4–8 acordes
+  // Duración COMÚN para TODOS los acordes (loop parejo tipo canción): 8 o 16 negras.
+  s = s * 1664525u + 1013904223u; autoBeats = (((s >> 16) & 1) ? 16 : 8);
   int deg = 0;                                                   // empieza en I (tónica = "casa")
   for (int i = 0; i < autoLen; i++) {
     if      (i == autoLen - 1) deg = 4;                          // termina en V → cadencia V-I al loopear
     else if (i > 0) { s = s * 1664525u + 1013904223u; deg = NEXT[deg][(s >> 16) % 4]; }
     autoRoot[i] = autoKeyRoot + degOff[deg];
     autoMin[i]  = degMin[deg];
-    s = s * 1664525u + 1013904223u; uint32_t r = (s >> 16) % 100;
-    int k = (r < 40) ? 0 : (r < 65) ? 1 : (r < 82) ? 2 : (r < 93) ? 3 : (r < 98) ? 4 : 5;
-    autoBeats[i] = 4 << k;                                       // 4,8,16,32,64,128 negras (pesado a corto)
   }
   autoIdx = 0; autoSampleCount = 0;
-  autoChordSamples = (uint32_t)((uint64_t)autoBeats[0] * beatSamples);
+  autoChordSamples = (uint32_t)((uint64_t)autoBeats * beatSamples);   // igual para todos
   triggerAutoChord(autoRoot[0], autoMin[0]);
 }
 
@@ -844,10 +843,9 @@ void loop() {
   // — Modo AUTO: avanza la progresión por tiempo (cada acorde dura sus negras) —
   if (autoMode) {
     autoSampleCount += BUFFER_SAMPLES;
-    if (autoSampleCount >= autoChordSamples) {
+    if (autoSampleCount >= autoChordSamples) {     // misma duración para cada acorde
       autoSampleCount = 0;
       autoIdx = (autoIdx + 1) % autoLen;
-      autoChordSamples = (uint32_t)((uint64_t)autoBeats[autoIdx] * beatSamples);
       triggerAutoChord(autoRoot[autoIdx], autoMin[autoIdx]);
     }
   }

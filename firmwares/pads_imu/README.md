@@ -116,11 +116,10 @@ con su ataque y sale con su release, sin reiniciar el pad.
 
 Toca solo. Con una **semilla fija** genera (siempre la misma) una **progresión
 diatónica funcional** en una tonalidad mayor — empieza en I y termina en V (cadencia
-V→I al loopear), de 4 a 8 acordes — y la reproduce en **loop**. Cada acorde dura un
-número fijo de negras elegido al azar en **4/4** (4, 8, 16, 32, 64 o 128; mínimo 1
-compás; tempo 80 BPM). El **arpegio** pasa a tocar notas **aleatorias dentro de la
-escala mayor** de la tonalidad (sube su volumen con **POT1 del Panel B**). Como todo
-está en la misma tonalidad, el arpegio genera una melodía consonante con la progresión.
+V→I al loopear), de 4 a 8 acordes — y la reproduce en **loop tipo canción**: **todos
+los acordes duran lo mismo** (8 o 16 negras según la semilla, en **4/4**, tempo 80 BPM).
+El **arpegio** pasa a tocar notas **aleatorias del acorde que está sonando** (sube su
+volumen con **POT1 del Panel B**) → melodía siempre consonante con la progresión.
 Mientras AUTO está activo, los botones de acorde manuales se ignoran.
 
 ### Congelado de controles entre paneles
