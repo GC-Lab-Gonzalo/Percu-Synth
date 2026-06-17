@@ -1,5 +1,5 @@
 // ==============================================================================================================================================
-// PERCU-SYNTH — Pads Profundos Polifónicos + Arpegio (IMU) — GC Lab Chile
+// PERCU-SYNTH — Pads Profundos Polifónicos + Arpegio (IMU) + 6 LEDs de placa — GC Lab Chile
 // ==============================================================================================================================================
 // Desarrollado por: Gonzalo - GC Lab Chile
 // Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
@@ -15,6 +15,7 @@
 // - Microcontrolador ESP32-S3
 // - DAC PCM5102 vía I2S — estéreo 44.1 kHz · 16-bit |LCK -> 39, DIN -> 40, BCK -> 41|
 // - IMU MPU6050 (acelerómetro I2C) |SDA -> 21, SCL -> 38, VCC -> 3.3V, GND -> GND|  (dirección 0x68)
+// - 6 LEDs WS2812 SMD internos de la placa |DATA -> 46| (índices 0..5 de la tira)
 // - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
 // - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
 // ==============================================================================================================================================
@@ -29,78 +30,70 @@
 // ==============================================================================================================================================
 // - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h)
 // - Wire.h (I2C, incluida en el core) — para el MPU6050
+// - FastLED (instalar desde el gestor de librerías Arduino) — para los 6 LEDs de placa
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
-// Hermano "ambient" del trance_imu: MISMO motor de audio (I2S 44.1 kHz / 16-bit,
-// osciladores PolyBLEP anti-aliasing, filtro biquad resonante barrido por el IMU,
-// soft-limiter de seguridad) pero SIN secuenciador ni patrones. En su lugar es una
-// máquina de PADS PROFUNDOS: cada botón dispara un ACORDE sostenido (drone) con
-// ataque y release lentos sobre un pool de voces polifónico, repartidas en el campo
-// ESTÉREO con detune (ensemble) → texturas anchas y cinematográficas.
+// Igual que `pads_imu` (máquina de PADS PROFUNDOS: cada botón latchea un acorde
+// sostenido estéreo, con capa de arpegio, filtro biquad barrido por el IMU), pero
+// AHORA con un visualizador reactivo sobre los 6 LEDs WS2812 internos de la placa
+// (los que `test_leds` dejaba apagados a propósito).
 //
-// Encima del pad hay una capa opcional de ARPEGIO que recorre las notas del acorde
-// que esté sonando (queda amarrado a la armonía) y pasa por el mismo filtro.
-//
-// Acordes por banco (BTN3 del Panel B cicla los 5 bancos). BTN1+BTN3 a la vez = 6º acorde:
-//   Banco 0: C  G  Am F  Dm   (+ Em)
-//   Banco 1: C  Am Em F  G    (+ Dm)
-//   Banco 2: C  Am E7 F  G    (+ Dm)
-//   Banco 3: C  E  F  Fm Em   (+ G)
-//   Banco 4: Dm Bb A  C  F    (+ Gm)
-// Son acordes ABSOLUTOS (raíz + intervalos reales). Tocar el acorde activo otra vez
-// lo APAGA (release con cola). Cambiar de acorde hace cross-fade.
-//
-// Sin LEDs y sin Serial a propósito: todo el presupuesto de CPU va al audio.
+// El render de LEDs corre en el MISMO loop() que el audio (sin concurrencia): el
+// único cuidado es throttlear FastLED.show() para no robarle tiempo a los buffers
+// de I2S. FastLED en el ESP32-S3 usa el periférico RMT (no el I2S), así que NO
+// choca con la salida de audio. Como son sólo 6 LEDs, cada refresco transmite en
+// ~180 µs por hardware → impacto despreciable.
 // ==============================================================================================================================================
-// FUNCIONAMIENTO
+// FUNCIONAMIENTO (LEDs)
+// ==============================================================================================================================================
+// Los 6 LEDs de la placa muestran 3 cosas a la vez:
+//   1. PALETA = PANEL ACTIVO (también sirve de indicador de panel):
+//        · Panel A (interpretación)  → cian/azul (marca GC Lab)
+//        · Panel B (arpegio/armonía) → violeta
+//        · Panel C (timbre/síntesis) → naranja
+//      Al cambiar de panel, un flash blanco breve confirma el cambio.
+//   2. BARRA (VU): cuántos LEDs encienden = energía del PAD (suma de envolventes de
+//      los acordes). Más voces/cola = barra más llena. Sin acorde → respiración suave.
+//   3. ARPEGIO: un PUNTO que CORRE por los 6 LEDs al ritmo del arpegio (avanza una
+//      posición por nota), en color de contraste → ves su velocidad y movimiento.
+//   El filtro del IMU desplaza el tono (filter sweep ↔ color sweep).
+//
+// El resto de controles (botones / pots / paneles / IMU) es IDÉNTICO a pads_imu.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO (controles — igual que pads_imu)
 // ==============================================================================================================================================
 // TRES PANELES DE CONTROL (combos para cambiar de panel; el mismo combo te devuelve a A):
 //   · BTN1 + BTN5 a la vez → Panel B (arpegio / armonía)
 //   · BTN2 + BTN4 a la vez → Panel C (timbre / síntesis)
 //
 // ── PANEL A (interpretación) ──────────────────────────────────────────────────
-// - BTN1..BTN5 → los 5 acordes del banco activo (LATCH: el mismo botón lo apaga)
-// - BTN1 + BTN3 a la vez → 6º acorde del banco
-// - BTN3 del Panel B cambia de banco SIN reiniciar el pad (aplica al próximo acorde)
-// - POT1 (ADC1)  → Ataque    (5 ms percusivo → ~4 s de fundido lento, pad clásico)
-// - POT2 (ADC2)  → Volumen del PAD (solo acordes; el arpegio tiene su propio volumen)
-// - POT3 (ADC8)  → Release    (~0.2 s corto → ~8 s de cola enorme)
-// - POT4 (ADC10) → Movimiento (LFO lento que respira: barre el filtro + tremolo)
+// - BTN1..BTN5 → los 5 acordes del banco activo (LATCH) · BTN1+BTN3 = 6º acorde
+//     5 bancos (BTN3 del Panel B cicla, sin reiniciar el pad):
+//       0:C·G·Am·F·Dm(+Em)  1:C·Am·Em·F·G(+Dm)  2:C·Am·E7·F·G(+Dm)
+//       3:C·E·F·Fm·Em(+G)   4:Dm·Bb·A·C·F(+Gm)
+// - POT1 → Ataque · POT2 → Volumen del PAD (no del arpegio) · POT3 → Release · POT4 → Movimiento
 //
 // ── PANEL B (arpegio / armonía) — BTN1+BTN5 ───────────────────────────────────
-// El arpegio recorre las notas del acorde activo. POT1 lo enciende (volumen > 0).
-// - BTN1 → Transponer −1 semitono   ·  BTN5 → Transponer +1 semitono
-// - BTN2 → Octava global −1          ·  BTN4 → Octava global +1
-// - BTN3 → Cambiar BANCO de acordes (0 → 1 → 2)
-// - POT1 (ADC1)  → Volumen del arpegio (en 0 = arpegio APAGADO)
-// - POT2 (ADC2)  → Velocidad del arpegio (lento → rápido)
-// - POT3 (ADC8)  → Rango de octavas del arpegio (1 → 3)
-// - POT4 (ADC10) → Gate (largo de cada nota: staccato → casi ligado)
+// - BTN1/BTN5 → transponer ∓1 · BTN2/BTN4 → octava global ∓1 · BTN3 → cambiar banco
+// - POT1 → Volumen del arpegio (0 = apagado) · POT2 → Velocidad · POT3 → Rango octavas · POT4 → Gate
 //
 // ── PANEL C (timbre / síntesis) — BTN2+BTN4 ───────────────────────────────────
-// Todos los botones actúan EN VIVO (no reinician el pad ni su ataque):
-// - BTN1 → Tipo de arpegio ◀ anterior
-// - BTN2 → Forma de onda  (Seno → Sierra → Cuadrada → Triangular)
-// - BTN3 → Sub-osc (−12, cuerpo de bajo) on/off
-// - BTN4 → Quinta (+7, power/órgano) on/off
-// - BTN5 → Tipo de arpegio ▶ siguiente
-//     Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD (bloque)
-// - POT1 (ADC1)  → Detune/ensemble (duplica voces desafinadas → coro ancho audible)
-// - POT2 (ADC2)  → Tono (oscuro → brillante: filtro suave, NO satura)
-// - POT3 (ADC8)  → Piso de cutoff del filtro (carácter aunque no muevas el IMU)
-// - POT4 (ADC10) → Resonancia base (Q) del filtro (el IMU suma encima)
+// (todo EN VIVO, sin reiniciar el pad) BTN1 → arpegio ◀ · BTN2 → forma de onda
+// (Seno→Sierra→Cuadrada→Triangular) · BTN3 → sub-osc · BTN4 → quinta · BTN5 → arpegio ▶
+//   Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD
+// - POT1 → detune/ancho · POT2 → tono · POT3 → piso de cutoff · POT4 → resonancia base
 //
-// CONGELADO DE CONTROLES: al cambiar de panel los pots NO se auto-actualizan; quedan
-// congelados. Cada pot retoma el control solo cuando se MUEVE (≥ 2 %). El acorde, la
-// armonía/arp (Panel B) y el timbre (Panel C) PERSISTEN al volver al Panel A.
+// CONGELADO DE CONTROLES: al cambiar de panel los pots quedan congelados y sólo retoman
+// el control cuando se MUEVEN (≥ 2 %). El acorde, el arpegio y el timbre PERSISTEN.
 //
-// - IMU (MPU6050): X → cutoff del LPF · Y → resonancia (Q). Activo en los 3 paneles.
+// - IMU (MPU6050): aceleración X → cutoff del LPF · aceleración Y → resonancia (Q).
 // ==============================================================================================================================================
 
 #include <Arduino.h>
 #include <driver/i2s_std.h>
 #include <Wire.h>
+#include <FastLED.h>
 #include <math.h>
 
 // ─── Tipos (definidos arriba del todo para que el IDE de Arduino genere bien los
@@ -122,6 +115,22 @@ struct BiqState { float x1, x2, y1, y2; };
 const unsigned long IMU_READ_INTERVAL = 10;   // ms entre lecturas del IMU
 const float IMU_FILTER_ALPHA = 0.1f;          // suavizado de la lectura (0-1)
 
+// ─── LEDs WS2812 (6 SMD internos de la placa) ──────────────
+#define LED_PIN        46
+#define NUM_LEDS        6     // SÓLO los 6 LEDs internos de la placa
+#define LED_BRIGHT     250    // 0-255
+#define LED_TYPE       WS2812
+#define COLOR_ORDER    GRB
+const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
+
+CRGB leds[NUM_LEDS];
+
+// Métricas compartidas audio → LEDs (todo en el mismo hilo: sin volatile/locks)
+float g_energy   = 0.0f;   // energía del pad suavizada (0..~1)
+float g_arpFlash = 0.0f;   // intensidad del punto del arpegio (decae en cada render)
+int   g_arpPos   = 0;      // posición (0..5) del punto del arpegio; avanza por nota
+float flashLevel = 0.0f;   // flash blanco de cambio de panel (decae en cada render)
+
 // ─── Botones (INPUT_PULLUP) ────────────────────────────────
 #define BTN1_PIN   44
 #define BTN2_PIN   42
@@ -137,8 +146,6 @@ const unsigned long DEBOUNCE_MS = 200;
 #define POT4  10    // ADC10
 
 // ─── Polifonía ─────────────────────────────────────────────
-// Generoso: el detune duplica voces, el acorde nuevo entra mientras el anterior
-// se va con su cola (cross-fade) y encima suma el arpegio → muchas voces a la vez.
 #define NUM_VOICES   32
 
 struct Voice {
@@ -164,8 +171,6 @@ uint32_t voiceCounter = 0;
 const float BASE_FREQ = 130.81f;           // C3 (referencia de semitono 0)
 
 // ─── Tabla semitono → relación de frecuencia ───────────────
-// Evita llamar powf() al disparar acordes (un acorde dispara muchas voces de golpe;
-// el pico de powf provocaba glitches). Rango -72..+72 semitonos.
 #define SEMI_OFFSET 72
 #define SEMI_LUT_N  145
 float semiLUT[SEMI_LUT_N];
@@ -211,6 +216,11 @@ int soundingRoot = 0;                       // raíz (semitonos) del acorde que 
 #define PANEL_B 1
 #define PANEL_C 2
 int panel = PANEL_A;
+
+// Paleta por panel (hue FastLED 0-255): A=cian/azul · B=violeta · C=naranja
+inline uint8_t panelHue() {
+  return (panel == PANEL_A) ? 140 : (panel == PANEL_B ? 192 : 24);
+}
 
 // ─── Armonía (Panel B) — PERSISTENTE ───────────────────────
 int transpose        = 0;     // transposición fina en semitonos
@@ -275,13 +285,11 @@ float filtered_x = 0.0f, filtered_y = 0.0f;
 unsigned long lastIMURead = 0;
 
 // ─── Filtro biquad LPF resonante (estéreo: 2 estados) ──────
-// (struct BiqState está definido arriba del todo, junto a los demás tipos)
 float f_b0, f_b1, f_b2, f_a1, f_a2;
 BiqState bqL = {0, 0, 0, 0};
 BiqState bqR = {0, 0, 0, 0};
 
 // ─── Estado de botones ─────────────────────────────────────
-// (struct BtnState está definido arriba del todo, junto a los demás tipos)
 BtnState bBtn3 = {BTN3_PIN, HIGH, 0};
 bool b1Level = HIGH, b2Level = HIGH, b4Level = HIGH, b5Level = HIGH;
 bool combo15 = false;
@@ -310,15 +318,13 @@ bool buttonPressed(BtnState &b) {
 }
 
 // ─── Disparar UNA voz (libre o roba la menos audible) ──────
-// semi = semitonos desde C3 · gain = peso · pan = -1(L)..+1(R) · kind 0=pad 1=arp · layer = capa del pad.
+// semi = semitonos desde C3 · gain = peso · pan = -1(L)..+1(R) · kind 0=pad 1=arp.
 void spawnVoice(int semi, float gain, float pan, uint8_t kind, uint8_t layer) {
   int idx = -1;
   for (int i = 0; i < NUM_VOICES; i++) {
     if (!voices[i].active) { idx = i; break; }
   }
   if (idx < 0) {
-    // Ninguna libre → robar la voz MENOS AUDIBLE (env·gain mínimo), no la más vieja.
-    // Así se roban primero las colas casi apagadas → sin "clicks" de robo.
     float quietest = 1e30f;
     idx = 0;
     for (int i = 0; i < NUM_VOICES; i++) {
@@ -327,7 +333,7 @@ void spawnVoice(int semi, float gain, float pan, uint8_t kind, uint8_t layer) {
     }
   }
 
-  float det = exp2f((pan * detuneCents) / 1200.0f);       // detune según el pan
+  float det = exp2f((pan * detuneCents) / 1200.0f);
 
   Voice &v = voices[idx];
   v.active = true;
@@ -397,8 +403,6 @@ void triggerChord(int idx) {
   if (arpCount < 4) { arpNotes[arpCount] = root + 12; arpCount++; }
   arpStep = 0;
 
-  // Tríada/acorde base. Cada nota se duplica en 2 voces desafinadas (pan opuesto)
-  // → el detune del Panel C se vuelve un coro/ensemble claramente audible.
   const float pans[4] = { 0.0f, -0.7f, 0.7f, -0.35f };
   for (int n = 0; n < ch.n; n++) {
     int semi = root + ch.iv[n];
@@ -468,6 +472,10 @@ void arpTrigger() {
     capArp(1);
     spawnVoice(semi, arpVol, pan, 1, 0);
   }
+
+  // Aviso para los LEDs: cada paso del arp enciende y avanza el punto que corre.
+  g_arpFlash = 1.0f;
+  g_arpPos   = (g_arpPos + 1) % NUM_LEDS;
 
   arpStep++;
   if (arpStep >= 1000000) arpStep = 0;          // guarda contra overflow (realineación imperceptible)
@@ -561,6 +569,58 @@ inline float applyFilter(BiqState &st, float in) {
   return out;
 }
 
+// ─── Visualizador de 6 LEDs (throttle por LED_REFRESH_MS) ──
+// Corre en el mismo loop() que el audio. FastLED usa RMT (no I2S) → no choca.
+void renderLEDs() {
+  unsigned long t = millis();
+  static unsigned long lastFrame = 0;
+  if (t - lastFrame < LED_REFRESH_MS) return;
+  lastFrame = t;
+
+  // Flash de cambio de panel (confirma el cambio con un golpe de luz)
+  static int lastPanel = PANEL_A;
+  if (panel != lastPanel) { lastPanel = panel; flashLevel = 1.0f; }
+
+  // Tono base = panel; el filtro del IMU lo desplaza (filter sweep ↔ color sweep)
+  float cut = fabsf(filtered_x); if (cut > 1.0f) cut = 1.0f;
+  uint8_t hue = panelHue() + (uint8_t)(cut * 40.0f);
+
+  if (activeChord < 0) {
+    // Sin acorde → respiración lenta en el color del panel
+    static uint8_t breath = 0; static int8_t bdir = 1;
+    breath += bdir * 3;
+    if (breath >= 60) bdir = -1;
+    if (breath <= 4)  bdir =  1;
+    fill_solid(leds, NUM_LEDS, CHSV(hue, 220, breath));
+  } else {
+    // Pad sonando → barra VU = energía del pad
+    float lvl = g_energy * 1.6f; if (lvl > 1.0f) lvl = 1.0f;
+    float litf = lvl * NUM_LEDS;
+    for (int i = 0; i < NUM_LEDS; i++) {
+      float on = litf - i;                       // cuánto le toca a este LED (0..1)
+      if (on < 0.0f) on = 0.0f; if (on > 1.0f) on = 1.0f;
+      uint8_t v = 25 + (uint8_t)(on * 200.0f);   // piso tenue para que la barra "viva"
+      leds[i] = CHSV(hue + i * 6, 255, v);       // leve gradiente a lo largo de la barra
+    }
+  }
+
+  // Arpegio → punto que corre: LED brillante en g_arpPos, color de contraste (hue+128)
+  if (arpVol > 0.02f && activeChord >= 0 && g_arpFlash > 0.02f) {
+    uint8_t av = (uint8_t)(g_arpFlash * 255.0f);
+    leds[g_arpPos % NUM_LEDS] += CHSV(hue + 128, 255, av);
+  }
+  g_arpFlash *= 0.6f;                            // decae entre notas
+
+  // Destello blanco de cambio de panel: suma blanco a todos y decae
+  if (flashLevel > 0.02f) {
+    uint8_t w = (uint8_t)(flashLevel * 150.0f);
+    for (int i = 0; i < NUM_LEDS; i++) leds[i] += CRGB(w, w, w);
+    flashLevel *= 0.55f;                          // decae rápido (render ~22 ms)
+  }
+
+  FastLED.show();
+}
+
 // ─── Setup I2S ─────────────────────────────────────────────
 void i2s_init() {
   i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
@@ -607,6 +667,12 @@ void setup() {
   for (int i = 0; i < NUM_VOICES; i++)
     voices[i] = {false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+  // LEDs de placa
+  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  FastLED.setBrightness(LED_BRIGHT);
+  FastLED.clear();
+  FastLED.show();
+
   initIMU();
   delay(50);
   readIMU();
@@ -637,18 +703,16 @@ void applyPot(int i, float val) {
                 arpSamplesPerStep = (uint32_t)(SAMPLE_RATE / arpRate); } break;
       case 2: arpRange = 1 + (int)(val * 2.0f + 0.5f); break; // POT3 → 1–3 octavas
       case 3: { arpGate = 0.03f + val * 0.45f;               // POT4 → 30 ms – 480 ms
-                // -6.5 ≈ caída a -60 dB en arpGate segundos → el control ES el
-                // largo real de la nota (antes era la constante de tiempo → tail 7× más larga).
                 arpDecCoef = expf(-6.5f / (arpGate * SAMPLE_RATE)); } break;
     }
   } else {
     // PANEL C — timbre / síntesis
     switch (i) {
-      case 0: detuneCents = val * 40.0f;                      // POT1 → detune 0–40 cents
-              panWidth    = 0.30f + val * 0.60f;     break;   //        + ancho estéreo
-      case 1: toneCoef    = 0.015f + val * 0.985f;   break;   // POT2 → Tono oscuro→brillante
-      case 2: cutoffBase  = 200.0f + val * 4800.0f;  break;   // POT3 → piso cutoff
-      case 3: qBase       = 0.7f + val * 5.3f;       break;   // POT4 → resonancia base
+      case 0: detuneCents = val * 40.0f;
+              panWidth    = 0.30f + val * 0.60f;     break;
+      case 1: toneCoef    = 0.015f + val * 0.985f;   break;
+      case 2: cutoffBase  = 200.0f + val * 4800.0f;  break;
+      case 3: qBase       = 0.7f + val * 5.3f;       break;
     }
   }
 }
@@ -748,6 +812,15 @@ void loop() {
     if (potLive[pi]) applyPot(pi, pv);
   }
 
+  // — Energía del PAD para los LEDs: suma de envolventes de las voces del pad
+  //   (kind 0), independiente del volumen, con seguidor de envolvente. —
+  float vsum = 0.0f;
+  for (int i = 0; i < NUM_VOICES; i++)
+    if (voices[i].active && voices[i].kind == 0) vsum += voices[i].env;
+  vsum *= 0.16f;                                    // ~6 voces de pad a tope ≈ 1.0
+  if (vsum > g_energy) g_energy = vsum;             // ataque instantáneo
+  else                 g_energy = g_energy * 0.90f + vsum * 0.10f;  // release suave
+
   // — Generar buffer de audio (estéreo) —
   int16_t buffer[BUFFER_SAMPLES * 2];
 
@@ -760,8 +833,7 @@ void loop() {
       arpSampleCount = 0;
     }
 
-    // Dos buses independientes: PAD y ARPEGIO. El volumen del Panel A (g_volume)
-    // se aplica SOLO al pad; el arpegio lleva su propio volumen (arpVol, Panel B).
+    // Dos buses independientes: PAD y ARPEGIO.
     float padL = 0.0f, padR = 0.0f, arpL = 0.0f, arpR = 0.0f;
     for (int i = 0; i < NUM_VOICES; i++) {
       Voice &v = voices[i];
@@ -773,7 +845,6 @@ void loop() {
 
       float wave = osc(v.phase, dt);
 
-      // Envolvente: pad = AHR (attack→sustain→release) · arp = pluck (attack→decay)
       if (v.stage == 0) {                         // attack
         v.env += (v.kind == 1) ? arpAtkInc : attackInc;
         if (v.env >= 1.0f) { v.env = 1.0f; v.stage = (v.kind == 1) ? 3 : 1; }
@@ -783,7 +854,7 @@ void loop() {
       } else if (v.stage == 3) {                  // decay del arpegio
         v.env *= arpDecCoef;
         if (v.env < 0.0008f) { v.active = false; v.env = 0.0f; continue; }
-      }                                           // stage 1 = sustain del pad (mantiene)
+      }                                           // stage 1 = sustain del pad
 
       float a = wave * v.env * v.gain;
       if (v.kind == 0) { padL += a * v.lGain; padR += a * v.rGain; }  // pad
@@ -793,9 +864,7 @@ void loop() {
     // Volumen del Panel A solo al pad; el arpegio ya trae su arpVol baked-in.
     float mixL = (padL * g_volume + arpL) * 0.13f;
     float mixR = (padR * g_volume + arpR) * 0.13f;
-    // Anti-denormal: DC ínfimo (inaudible) para que los filtros nunca caigan a
-    // números denormales (que en el FPU del ESP32 son lentísimos → glitches).
-    mixL += 1.0e-18f;
+    mixL += 1.0e-18f;                             // anti-denormal
     mixR -= 1.0e-18f;
     float fL = applyFilter(bqL, mixL);
     float fR = applyFilter(bqR, mixR);
@@ -820,4 +889,7 @@ void loop() {
 
   size_t written;
   i2s_channel_write(tx_chan, buffer, sizeof(buffer), &written, portMAX_DELAY);
+
+  // — Visualizador de LEDs (throttled; tras volcar el buffer al DMA) —
+  renderLEDs();
 }

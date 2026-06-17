@@ -51,6 +51,7 @@
   .ch-cyan{ background:var(--cyan); } .ch-violet{ background:var(--violet); color:#fff; }
   .ch-orange{ background:var(--orange); }
 
+  .banks td,.banks th{ padding:3px 3px; font-size:8.1px; }
   .foot{ margin-top:10px; padding-top:7px; border-top:1px solid var(--line);
     color:var(--muted); font-size:8.8px; display:flex; justify-content:space-between; }
   .pill{ display:inline-block; background:var(--bg3); border:1px solid var(--line); color:var(--cyan);
@@ -126,30 +127,31 @@
       <table>
         <tr>
           <td style="border:none;width:50%">
-            <span class="key">BTN1</span> Forma de onda (Sierra→Cuadrada→Triangular)<br>
-            <span class="key">BTN2</span> Octava arriba (+12) on/off<br>
+            <span class="key">BTN1</span> Tipo de arpegio ◀ anterior<br>
+            <span class="key">BTN2</span> Forma de onda (Seno→Sierra→Cuadrada→Triangular)<br>
             <span class="key">BTN3</span> Sub-osc (−12, cuerpo) on/off
           </td>
           <td style="border:none;width:50%">
             <span class="key">BTN4</span> Quinta (+7, power/órgano) on/off<br>
-            <span class="key">BTN5</span> Shimmer (+24, etéreo) on/off<br>
+            <span class="key">BTN5</span> Tipo de arpegio ▶ siguiente<br>
             <span class="key">POTs</span> 1 Detune/ancho · 2 Tono · 3 Piso cutoff · 4 Resonancia
           </td>
         </tr>
       </table>
-      <div class="mut" style="margin-top:2px">El <b style="color:#fff">Tono</b> no satura (sólo oscurece→abre). El <b style="color:#fff">Detune</b> duplica voces → coro ancho.</div>
+      <div class="mut" style="margin-top:2px"><b style="color:#fff">Todo en vivo</b> (no reinicia el pad). Tipos de arpegio: UP · DOWN · UP-DOWN · DOWN-UP · RANDOM · CHORD.</div>
     </div>
 
     <!-- Bancos -->
     <div class="card">
-      <h2><span class="n c-violet">3</span> Bancos de acordes <span class="mut" style="font-weight:400;font-size:10px">(BTN3 en Panel B cicla)</span></h2>
-      <table>
-        <tr><th></th><th>Banco 0</th><th>Banco 1</th><th>Banco 2</th></tr>
-        <tr><td><span class="key">BTN1</span></td><td>Do M</td><td>Do M</td><td>Do M</td></tr>
-        <tr><td><span class="key">BTN2</span></td><td>Sol M</td><td>La m</td><td>La m</td></tr>
-        <tr><td><span class="key">BTN3</span></td><td>La m</td><td>Mi m</td><td><b>Mi7</b></td></tr>
-        <tr><td><span class="key">BTN4</span></td><td>Fa M</td><td>Fa M</td><td>Fa M</td></tr>
-        <tr><td><span class="key">BTN5</span></td><td>Re m</td><td>Sol M</td><td>Sol M</td></tr>
+      <h2><span class="n c-violet">3</span> Bancos <span class="mut" style="font-weight:400;font-size:9px">(BTN3 Panel B cicla los 5, sin reiniciar)</span></h2>
+      <table class="banks">
+        <tr><th></th><th>B0</th><th>B1</th><th>B2</th><th>B3</th><th>B4</th></tr>
+        <tr><td><span class="key">BTN1</span></td><td>Do M</td><td>Do M</td><td>Do M</td><td>Do M</td><td>Re m</td></tr>
+        <tr><td><span class="key">BTN2</span></td><td>Sol M</td><td>La m</td><td>La m</td><td>Mi M</td><td>Si♭ M</td></tr>
+        <tr><td><span class="key">BTN3</span></td><td>La m</td><td>Mi m</td><td><b>Mi7</b></td><td>Fa M</td><td>La M</td></tr>
+        <tr><td><span class="key">BTN4</span></td><td>Fa M</td><td>Fa M</td><td>Fa M</td><td>Fa m</td><td>Do M</td></tr>
+        <tr><td><span class="key">BTN5</span></td><td>Re m</td><td>Sol M</td><td>Sol M</td><td>Mi m</td><td>Fa M</td></tr>
+        <tr><td><span class="key" style="color:var(--orange)">BTN1+3</span></td><td>Mi m</td><td>Re m</td><td>Re m</td><td>Sol M</td><td>Sol m</td></tr>
       </table>
     </div>
 
