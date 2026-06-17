@@ -458,10 +458,10 @@ void arpTrigger() {
     int p, idx = arpStep % total;
     if      (arpType == ARP_UP)     p = idx;
     else if (arpType == ARP_DOWN)   p = total - 1 - idx;
-    else if (arpType == ARP_UPDOWN){ int period = (total > 1) ? (2 * total - 2) : 1;
-                                     int j = arpStep % period; p = (j < total) ? j : (period - j); }
-    else if (arpType == ARP_DOWNUP){ int period = (total > 1) ? (2 * total - 2) : 1;
-                                     int j = arpStep % period; int pu = (j < total) ? j : (period - j);
+    else if (arpType == ARP_UPDOWN){ int period = 2 * total;   // extremos repetidos → ciclo múltiplo de 4 (4/4)
+                                     int j = arpStep % period; p = (j < total) ? j : (period - 1 - j); }
+    else if (arpType == ARP_DOWNUP){ int period = 2 * total;
+                                     int j = arpStep % period; int pu = (j < total) ? j : (period - 1 - j);
                                      p = total - 1 - pu; }
     else if (arpType == ARP_RANDOM){ arpRng = arpRng * 1664525u + 1013904223u;   // LCG
                                      p = (int)((arpRng >> 8) % (uint32_t)total); }
