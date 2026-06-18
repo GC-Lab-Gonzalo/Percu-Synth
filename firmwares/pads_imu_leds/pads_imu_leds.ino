@@ -16,6 +16,7 @@
 // - DAC PCM5102 vía I2S — estéreo 44.1 kHz · 16-bit |LCK -> 39, DIN -> 40, BCK -> 41|
 // - IMU MPU6050 (acelerómetro I2C) |SDA -> 21, SCL -> 38, VCC -> 3.3V, GND -> GND|  (dirección 0x68)
 // - 6 LEDs WS2812 SMD internos de la placa |DATA -> 46| (índices 0..5 de la tira)
+// - LED RGB direccionable del módulo ESP32-S3 (DevKitC-1) |DATA -> 48| (refleja la tira)
 // - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
 // - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
 // ==============================================================================================================================================
@@ -126,7 +127,12 @@ const float IMU_FILTER_ALPHA = 0.1f;          // suavizado de la lectura (0-1)
 #define COLOR_ORDER    GRB
 const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
 
+// LED RGB direccionable del módulo ESP32-S3 (DevKitC-1 → GPIO48). Si tu placa lo
+// tiene en otro pin (algunas usan 38/48), cambia ONBOARD_PIN.
+#define ONBOARD_PIN    48
+
 CRGB leds[NUM_LEDS];
+CRGB onboard[1];             // el LED RGB de la placa (refleja la tira de 6)
 
 // Métricas compartidas audio → LEDs (todo en el mismo hilo: sin volatile/locks)
 float g_energy   = 0.0f;   // energía del pad suavizada (0..~1)
@@ -712,6 +718,12 @@ void renderLEDs() {
     flashLevel *= 0.55f;                          // decae rápido (render ~22 ms)
   }
 
+  // LED RGB del módulo = promedio de la tira (×1.5 para que se vea), mismo color/energía
+  uint16_t sr = 0, sg = 0, sb = 0;
+  for (int i = 0; i < NUM_LEDS; i++) { sr += leds[i].r; sg += leds[i].g; sb += leds[i].b; }
+  int or_ = (sr / NUM_LEDS) * 3 / 2, og_ = (sg / NUM_LEDS) * 3 / 2, ob_ = (sb / NUM_LEDS) * 3 / 2;
+  onboard[0] = CRGB(or_ > 255 ? 255 : or_, og_ > 255 ? 255 : og_, ob_ > 255 ? 255 : ob_);
+
   FastLED.show();
 }
 
@@ -761,8 +773,9 @@ void setup() {
   for (int i = 0; i < NUM_VOICES; i++)
     voices[i] = {false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-  // LEDs de placa
+  // LEDs de placa (6 SMD) + LED RGB del módulo
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  FastLED.addLeds<LED_TYPE, ONBOARD_PIN, COLOR_ORDER>(onboard, 1);
   FastLED.setBrightness(LED_BRIGHT);
   FastLED.clear();
   FastLED.show();

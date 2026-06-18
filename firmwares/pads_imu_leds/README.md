@@ -25,6 +25,10 @@ internos de la placa** (los que `test_leds` deja apagados a propósito).
 
 El filtro del IMU desplaza el tono (filter sweep ↔ color sweep).
 
+Además, el **LED RGB del módulo ESP32-S3** (GPIO48) enciende **igual que la tira**:
+muestra el **promedio de color/energía** de los 6 LEDs, así que late y cambia de color
+junto con ellos.
+
 ## Diferencia con `pads_imu`
 
 | | pads_imu | pads_imu_leds |
@@ -37,7 +41,7 @@ El filtro del IMU desplaza el tono (filter sweep ↔ color sweep).
 
 - ESP32-S3 + DAC **PCM5102** vía I2S (`LCK 39 · DIN 40 · BCK 41`)
 - **MPU6050** por I2C (`SDA 21 · SCL 38`, `0x68`) — controla el filtro
-- **6 LEDs WS2812** internos (`DATA 46`)
+- **6 LEDs WS2812** internos (`DATA 46`) + **LED RGB del módulo** ESP32-S3 (`DATA 48`, refleja la tira)
 - 5 botones (pull-up interno) · 4 potenciómetros
 
 ## Controles
@@ -64,3 +68,4 @@ paneles, los bancos de acordes y el arpegio. Resumen:
 | Colores invertidos | `COLOR_ORDER` GRB → RGB |
 | Brillo | `LED_BRIGHT` (0–255, def 250) |
 | LEDs "lentos" o glitch de audio | sube `LED_REFRESH_MS` (def 22 ms) |
+| El LED RGB del módulo no enciende / va a otro pin | `ONBOARD_PIN` (def 48; algunas placas usan otro) |
