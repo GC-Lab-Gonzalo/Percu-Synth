@@ -122,7 +122,7 @@ const float IMU_FILTER_ALPHA = 0.1f;          // suavizado de la lectura (0-1)
 // ─── LEDs WS2812 (6 SMD internos de la placa) ──────────────
 #define LED_PIN        46
 #define NUM_LEDS        6     // SÓLO los 6 LEDs internos de la placa
-#define LED_BRIGHT     150    // 0-255 (brillo global de la tira + LED del módulo)
+#define LED_BRIGHT     250    // 0-255 (brillo de la tira de 6 — apunta hacia abajo)
 #define LED_TYPE       WS2812
 #define COLOR_ORDER    GRB
 const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
@@ -130,6 +130,7 @@ const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
 // LED RGB direccionable del módulo ESP32-S3 (DevKitC-1 → GPIO48). Si tu placa lo
 // tiene en otro pin (algunas usan 38/48), cambia ONBOARD_PIN.
 #define ONBOARD_PIN    48
+#define ONBOARD_BRIGHT 45     // 0-255: brillo SOLO del LED frontal (bajo, apunta a la cara)
 
 CRGB leds[NUM_LEDS];
 CRGB onboard[1];             // el LED RGB de la placa (refleja la tira de 6)
@@ -718,11 +719,12 @@ void renderLEDs() {
     flashLevel *= 0.55f;                          // decae rápido (render ~22 ms)
   }
 
-  // LED RGB del módulo = promedio de la tira (×1.5 para que se vea), mismo color/energía
+  // LED RGB del módulo (apunta a la cara) = promedio de la tira pero MÁS TENUE.
+  // Se atenúa SOLO este LED por software (LED_BRIGHT es global y no sirve para esto).
   uint16_t sr = 0, sg = 0, sb = 0;
   for (int i = 0; i < NUM_LEDS; i++) { sr += leds[i].r; sg += leds[i].g; sb += leds[i].b; }
-  int or_ = (sr / NUM_LEDS) * 3 / 2, og_ = (sg / NUM_LEDS) * 3 / 2, ob_ = (sb / NUM_LEDS) * 3 / 2;
-  onboard[0] = CRGB(or_ > 255 ? 255 : or_, og_ > 255 ? 255 : og_, ob_ > 255 ? 255 : ob_);
+  onboard[0] = CRGB(sr / NUM_LEDS, sg / NUM_LEDS, sb / NUM_LEDS);
+  onboard[0].nscale8(ONBOARD_BRIGHT);
 
   FastLED.show();
 }
