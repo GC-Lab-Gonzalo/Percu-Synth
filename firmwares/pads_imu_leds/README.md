@@ -66,6 +66,6 @@ paneles, los bancos de acordes y el arpegio. Resumen:
 | Síntoma | Ajuste |
 |---|---|
 | Colores invertidos | `COLOR_ORDER` GRB → RGB |
-| Brillo | `LED_BRIGHT` (0–255, def 250) |
+| Brillo | `LED_BRIGHT` (0–255, def 150) |
 | LEDs "lentos" o glitch de audio | sube `LED_REFRESH_MS` (def 22 ms) |
 | El LED RGB del módulo no enciende / va a otro pin | `ONBOARD_PIN` (def 48; algunas placas usan otro) |

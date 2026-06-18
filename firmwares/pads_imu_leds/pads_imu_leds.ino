@@ -122,7 +122,7 @@ const float IMU_FILTER_ALPHA = 0.1f;          // suavizado de la lectura (0-1)
 // ─── LEDs WS2812 (6 SMD internos de la placa) ──────────────
 #define LED_PIN        46
 #define NUM_LEDS        6     // SÓLO los 6 LEDs internos de la placa
-#define LED_BRIGHT     250    // 0-255
+#define LED_BRIGHT     150    // 0-255 (brillo global de la tira + LED del módulo)
 #define LED_TYPE       WS2812
 #define COLOR_ORDER    GRB
 const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
