@@ -1,0 +1,74 @@
+name: Build pads_imu_leds firmware
+
+# Compila firmwares/pads_imu_leds/pads_imu_leds.ino para el ESP32-S3 y publica
+# el firmware.bin "merged" (flasheable a offset 0x0) como artifact y como Release.
+# Pensado para flashear desde el teléfono (Android + app OTG): descargas el .bin
+# desde la pestaña Releases del repo y lo cargas a 0x0.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/lucid-pasteur-s2beae
+    paths:
+      - 'firmwares/pads_imu_leds/**'
+      - '.github/workflows/build-pads-imu-leds.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core + FastLED
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install FastLED
+
+      - name: Compile (ESP32S3 Dev Module · CDC On Boot · Flash DIO · OPI PSRAM)
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=dio,FlashSize=4M,PSRAM=opi,PartitionScheme=default" \
+            --output-dir build \
+            firmwares/pads_imu_leds/pads_imu_leds.ino
+
+      - name: Stage merged firmware.bin
+        run: |
+          ls -la build
+          # arduino-esp32 ya genera un *.merged.bin flasheable a 0x0
+          cp build/pads_imu_leds.ino.merged.bin firmware.bin
+          echo "----"
+          ls -la firmware.bin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pads_imu_leds-firmware
+          path: |
+            firmware.bin
+            build/pads_imu_leds.ino.bin
+            build/pads_imu_leds.ino.bootloader.bin
+            build/pads_imu_leds.ino.partitions.bin
+
+      - name: Publish Release (download directo desde el teléfono)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pads_imu_leds-fw
+          name: pads_imu_leds firmware
+          body: |
+            firmware.bin "merged" para ESP32-S3 (flashear a offset 0x0).
+            Settings: ESP32S3 Dev Module · CDC On Boot Enabled · Flash Mode DIO · OPI PSRAM.
+            Flasheo desde Android (OTG): app ESP32_Flasher → chip ESP32-S3 → firmware.bin @ 0x0.
+          files: firmware.bin
