@@ -27,14 +27,20 @@ jobs:
       - name: Install arduino-cli
         uses: arduino/setup-arduino-cli@v2
 
-      - name: Install ESP32 core + FastLED
+      - name: Install ESP32 core + FastLED (versiones fijas estables)
         run: |
           arduino-cli config init
           arduino-cli config add board_manager.additional_urls \
             https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32
-          arduino-cli lib install FastLED
+          # Pin a versiones probadas: FastLED 3.9.x reescribió el driver RMT del
+          # ESP32-S3 y choca con el audio I2S (ni LEDs ni sonido). 3.7.0 + core
+          # 3.0.7 es la combinación estable que funciona con este firmware.
+          arduino-cli core install esp32:esp32@3.0.7
+          arduino-cli lib install FastLED@3.7.0
+          echo "--- versiones instaladas ---"
+          arduino-cli core list
+          arduino-cli lib list
 
       - name: Compile (ESP32S3 Dev Module · CDC On Boot · Flash DIO · OPI PSRAM)
         run: |
