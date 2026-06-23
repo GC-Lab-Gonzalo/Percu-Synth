@@ -51,23 +51,27 @@ jobs:
             --output-dir build \
             firmwares/pads_imu_leds/pads_imu_leds.ino
 
-      - name: Stage merged firmware.bin
+      - name: Stage firmware files (merged + separados con offset en el nombre)
         run: |
           ls -la build
-          # arduino-esp32 ya genera un *.merged.bin flasheable a 0x0
-          cp build/pads_imu_leds.ino.merged.bin firmware.bin
-          echo "----"
-          ls -la firmware.bin
+          mkdir -p dist
+          # Imagen merged completa (flasheable a 0x0)
+          cp build/pads_imu_leds.ino.merged.bin           dist/firmware.bin
+          # Archivos por separado, igual que Arduino IDE (offset en el nombre)
+          cp build/pads_imu_leds.ino.bootloader.bin       dist/bootloader_0x0.bin
+          cp build/pads_imu_leds.ino.partitions.bin       dist/partitions_0x8000.bin
+          cp build/pads_imu_leds.ino.bin                  dist/app_0x10000.bin
+          # boot_app0 (otadata) viene del core, no del compile
+          BA0=$(find "$HOME/.arduino15/packages/esp32" -name boot_app0.bin | head -1)
+          cp "$BA0" dist/boot_app0_0xe000.bin
+          echo "---- dist ----"
+          ls -la dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pads_imu_leds-firmware
-          path: |
-            firmware.bin
-            build/pads_imu_leds.ino.bin
-            build/pads_imu_leds.ino.bootloader.bin
-            build/pads_imu_leds.ino.partitions.bin
+          path: dist/*
 
       - name: Publish Release (download directo desde el teléfono)
         uses: softprops/action-gh-release@v2
@@ -75,7 +79,26 @@ jobs:
           tag_name: pads_imu_leds-fw
           name: pads_imu_leds firmware
           body: |
-            firmware.bin "merged" para ESP32-S3 (flashear a offset 0x0).
+            Firmware pads_imu_leds para ESP32-S3.
             Settings: ESP32S3 Dev Module · CDC On Boot Enabled · Flash Mode DIO · OPI PSRAM.
-            Flasheo desde Android (OTG): app ESP32_Flasher → chip ESP32-S3 → firmware.bin @ 0x0.
-          files: firmware.bin
+
+            FLASHEO DESDE ANDROID (app ESP32_Flasher, chip ESP32-S3, Compression OFF):
+
+            >>> RECOMENDADO si el equipo ya tiene bootloader (arranca pero dice
+                "invalid header"): flashear SOLO la app:
+                  - app_0x10000.bin            -> offset 0x10000
+
+            >>> COMPLETO (equivale a Arduino IDE), 4 archivos con su offset:
+                  - bootloader_0x0.bin         -> offset 0x0
+                  - partitions_0x8000.bin      -> offset 0x8000
+                  - boot_app0_0xe000.bin       -> offset 0xe000
+                  - app_0x10000.bin            -> offset 0x10000
+
+            >>> firmware.bin (merged, todo en uno) -> offset 0x0
+                (NO recomendado por OTG: son 4 MB y la escritura se corta).
+          files: |
+            dist/firmware.bin
+            dist/bootloader_0x0.bin
+            dist/partitions_0x8000.bin
+            dist/boot_app0_0xe000.bin
+            dist/app_0x10000.bin
