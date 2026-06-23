@@ -61,6 +61,12 @@ paneles, los bancos de acordes y el arpegio. Resumen:
 - PSRAM: **OPI PSRAM**
 - Librerías: ESP32 Arduino core ≥ 3.x + `Wire.h` (incluida) + **FastLED** (gestor de librerías)
 
+## Flashear desde el celular (sin PC) 📱
+
+Hay un `firmware.bin` precompilado en [`bin/`](bin/) listo para flashear con la
+app **ESPFlash** (Android + cable OTG): chip **ESP32-S3**, archivo `firmware.bin`
+a offset **`0x0`**. Guía paso a paso: [`FLASHEAR_DESDE_CELULAR.md`](../../FLASHEAR_DESDE_CELULAR.md).
+
 ## Ajustes rápidos (LEDs)
 
 | Síntoma | Ajuste |
