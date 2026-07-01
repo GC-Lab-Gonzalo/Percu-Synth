@@ -248,6 +248,8 @@ void leerAccel(float &x, float &y, float &z) {
 
 > Uso típico: mapear `accelX → cutoff` del filtro y `accelY → resonancia (Q)`, o usar el **pico de aceleración** como disparo de golpe (impact_chimes, MIDI_Drum) y como velocidad MIDI.
 
+> ⚠️ **Detección del IMU — la prueba real son los DATOS, no el `WHO_AM_I`.** Muchos MPU6050 **clones** devuelven un WHO_AM_I distinto de `0x68` (0x70/0x72/0x98…) y aun así funcionan perfecto. **NUNCA gatees la lectura ni muestres "no detectado" basándote en `WHO_AM_I == 0x68`.** Para saber si el IMU está vivo, intenta leer los 14 bytes desde `ACCEL_XOUT_H` (0x3B) y comprueba `Wire.available() >= 14`; trata el WHO_AM_I como **solo informativo** (acepta cualquier valor). Otros errores a evitar: (1) leer registros **antes** de despertarlo (`PWR_MGMT_1=0`); (2) guardar **una sola** lectura en un `bool imuOk` global y condicionar todo a él para siempre (reintenta en el `loop()` → auto-recuperación); (3) **revisar el retorno de `Wire.endTransmission(false)`** — en ESP32 ese repeated-start puede devolver `!= 0` aunque el IMU esté presente; `test_imu.ino` lo ignora, cópialo igual. Referencia que SÍ funciona: `firmwares/test_imu/test_imu.ino` muestra el acelerómetro en cada vuelta del loop sin mirar el WHO_AM_I. **Regla general: si ya existe un firmware de referencia para un periférico (test_imu, test_leds, impact_chimes…), copia su secuencia de init/lectura exacta en vez de reescribirla.**
+
 ### 6.5 USB-MIDI (salida)
 
 ```cpp
