@@ -206,7 +206,7 @@ void loop() {
                     (int)(ACCEL_MIN * 100),
                     (int)(ACCEL_MAX * 100), 40, 127);
       uint8_t velocidad = constrain(vel, 40, 127);
-      MIDI.noteOn(imu.notaPendiente, velocidad, 9);
+      MIDI.noteOn(imu.notaPendiente, velocidad, 1);
 
       Serial.print("BTN pin ");
       Serial.print(buttonPins[imu.botonPendiente]);
