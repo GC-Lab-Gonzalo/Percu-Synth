@@ -65,7 +65,8 @@
 // MODO DE USO:
 // 1. Apoya el equipo en el piso y elige una escala con un botón (arranca en Eólica).
 // 2. Golpea el piso cerca del equipo: cada golpe dispara una nota.
-// 3. Si no dispara o dispara solo, ajusta HIT_HIGH / HIT_LOW (sensibilidad) abajo.
+// 3. Si no dispara o dispara solo, ajusta HIT_HIGH (sensibilidad) abajo.
+//    Si un solo golpe suena 2 veces (rebote), sube RETRIG_RATIO o FLOOR_DECAY.
 // 4. Sube el Decay (POT2) para colas largas; baja el ataque (POT1) para notas secas.
 //
 // DIAGNÓSTICO (sin USB):
@@ -105,10 +106,14 @@ const uint8_t BTN_PINS[NUM_BTN] = {44, 42, 0, 45, 47};
 #define POT_TIMBRE  10    // ADC10 → morphing de onda
 
 // ─── Detección de golpe (acelerómetro, en g sobre la línea base) ──
-const float HIT_HIGH = 0.12f;     // g de "shock" para disparar una nota  (↓ = más sensible)
-const float HIT_LOW  = 0.05f;     // g para "rearmar" (histéresis)
+const float HIT_HIGH = 0.22f;     // g de "shock" para disparar una nota  (↓ = más sensible)
 const float HIT_MAX  = 1.20f;     // g que mapea a velocidad máxima
-const unsigned long TRIG_MIN_MS = 45;  // separación mínima entre notas
+const unsigned long TRIG_MIN_MS = 50;   // tiempo muerto MÍNIMO entre notas (descarta el rebote inmediato)
+// — Umbral dinámico (distingue REBOTE de GOLPE NUEVO por intensidad) —
+// Tras un golpe el umbral sube cerca del pico y baja solo con el tiempo. El rebote del MISMO
+// impacto es más débil → no supera el umbral (no dispara). Un golpe NUEVO sí es un pico fuerte.
+const float RETRIG_RATIO = 0.85f;  // el listón sube al 85% del pico. ↑ = más estricto (menos dobles).
+const float FLOOR_DECAY  = 0.970f; // cuánto baja el listón por buffer (~2.9 ms). ↓ = re-dispara antes.
 
 // ─── Polifonía ─────────────────────────────────────────────
 #define NUM_VOICES 10
@@ -145,7 +150,7 @@ float morph     = 0.30f;
 // ─── Acelerómetro / detección de impacto ───────────────────
 float accelBaseline = 1.0f;   // línea base lenta (≈ gravedad, 1 g)
 float shock = 0.0f;           // desviación instantánea respecto a la base (g)
-bool  hitArmed = true;
+float trigFloor = 0.0f;       // umbral dinámico: sube tras un golpe y decae con el tiempo
 unsigned long lastTrig = 0;
 
 bool    imuOK = false;        // ¿se detectó el MPU6050?
@@ -361,14 +366,15 @@ void loop() {
   unsigned long t = millis();
 
   if (imuOK) {
-    // — Acelerómetro: detectar golpe y disparar nota (histéresis) —
+    // — Acelerómetro: detectar golpe con umbral dinámico —
     readAccel();
-    if (hitArmed && shock > HIT_HIGH && (t - lastTrig) > TRIG_MIN_MS) {
+    trigFloor *= FLOOR_DECAY;                 // el listón baja solo con el tiempo
+    float thresh = (trigFloor > HIT_HIGH) ? trigFloor : HIT_HIGH;   // nunca por debajo del mínimo
+    if (shock > thresh && (t - lastTrig) > TRIG_MIN_MS) {
       onImpact(shock);
       lastTrig = t;
-      hitArmed = false;
+      trigFloor = shock * RETRIG_RATIO;        // sube el listón cerca del pico: el rebote (más débil) no lo supera
     }
-    if (shock < HIT_LOW) hitArmed = true;
   } else {
     // — Sin IMU: "latido" de error (nota grave cada ~1.2 s) para avisar audiblemente —
     if (t - lastBeat > 1200) { triggerNote(BASE_FREQ * 0.5f, 0.5f); lastBeat = t; }
