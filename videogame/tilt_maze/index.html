@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tilt Maze — GC Lab Chile</title>
+<style>
+  :root{
+    --bg1:#eef2fb; --bg2:#dbe4f5;
+    --ink:#26314a; --ink2:#5a6b8c; --faint:#9aa8c4;
+    --azul:#3b82f6; --rosa:#ec4899; --coral:#fb6f4c; --ambar:#f6b73c;
+    --verde:#22c55e; --verde-d:#15803d; --violeta:#8b5cf6; --rojo:#ef4444;
+    --sans:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+    --mono:'SF Mono','JetBrains Mono','Consolas',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;font-family:var(--sans);color:var(--ink);
+    background:radial-gradient(130% 120% at 50% -10%,var(--bg1),var(--bg2));overflow:hidden}
+
+  /* la pista ocupa toda la pantalla */
+  #stage{position:fixed;inset:0;overflow:hidden}
+  #lienzo{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  /* HUD discreto: una fila de chips translúcidos arriba */
+  #hud{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:6;
+    font-family:var(--mono);font-size:12px;pointer-events:none}
+  .chip{background:rgba(255,255,255,.66);border:1px solid rgba(40,55,90,.08);border-radius:999px;
+    padding:5px 12px;color:var(--ink);font-weight:600;backdrop-filter:blur(5px);display:flex;align-items:center;gap:6px}
+  .chip .k{color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:.6px}
+  #cVidas{color:var(--rojo);letter-spacing:2px}
+
+  /* solo la luz de conexión */
+  #connDot{position:absolute;top:12px;right:14px;width:11px;height:11px;border-radius:50%;z-index:6;
+    background:var(--rojo);box-shadow:0 0 0 3px rgba(239,68,68,.16)}
+  #connDot.ok{background:var(--verde);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+
+  /* overlays */
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;gap:14px;z-index:10;
+    background:rgba(238,242,251,.86);backdrop-filter:blur(4px)}
+  .overlay.hide{display:none}
+  .overlay h1{font-size:44px;font-weight:800;letter-spacing:-1px}
+  .overlay h1.brand{background:linear-gradient(90deg,var(--azul),var(--violeta),var(--rosa));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .overlay h1.win{color:var(--verde-d)} .overlay h1.lose{color:var(--rojo)}
+  .overlay p{font-size:15px;color:var(--ink2);max-width:460px;line-height:1.6}
+  .overlay .cont{font-size:13px;color:var(--ink2);font-family:var(--mono);
+    background:rgba(255,255,255,.6);border:1px solid rgba(40,55,90,.1);border-radius:999px;padding:8px 16px}
+  .overlay .cont b{color:var(--azul)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+  .btn{cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:700;border:none;
+    border-radius:12px;padding:12px 24px;color:#fff;box-shadow:0 6px 16px rgba(59,130,246,.32);
+    background:linear-gradient(90deg,var(--azul),var(--violeta));transition:transform .1s,filter .15s}
+  .btn:hover{filter:brightness(1.06)} .btn:active{transform:scale(.97)}
+  .btn.alt{background:#fff;color:var(--ink);border:1px solid #e2e8f6;box-shadow:0 4px 12px rgba(40,55,90,.08);font-weight:600}
+  .btn.small{padding:9px 14px;font-size:12px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="lienzo"></canvas>
+
+  <div id="hud">
+    <span class="chip"><span class="k">Nivel</span><span id="cNivel">1</span></span>
+    <span class="chip"><span class="k">Tiempo</span><span id="cTiempo">0.0</span></span>
+    <span class="chip"><span class="k">Pts</span><span id="cPunt">0</span></span>
+    <span class="chip" id="cVidas">♥♥♥</span>
+  </div>
+  <div id="connDot" title="PercuSynth"></div>
+
+  <div id="ovStart" class="overlay">
+    <h1 class="brand">TILT MAZE</h1>
+    <p>Inclina el PercuSynth para rodar la bola hasta la <b style="color:var(--verde-d)">meta</b>.
+       Evita los <b style="color:var(--ink)">hoyos</b> y las <b style="color:var(--rojo)">zonas rojas</b>,
+       y usa los <b style="color:var(--violeta)">portales</b>. ¡Pulso fino!</p>
+    <div class="row">
+      <button class="btn" id="btnJugar">Jugar</button>
+      <button class="btn alt" id="btnConectar">Conectar PercuSynth</button>
+      <button class="btn alt small" id="btnFirmware">⬇ Firmware (.ino)</button>
+    </div>
+    <div class="cont" id="startHint">Sin placa: inclina con W A S D o flechas</div>
+  </div>
+
+  <div id="ovMsg" class="overlay hide">
+    <h1 id="ovMsgTitle">—</h1>
+    <p id="ovMsgText">—</p>
+    <div class="cont">Pulsa <b>botón 1 o 5</b> para continuar</div>
+    <button class="btn" id="ovMsgBtn">Continuar</button>
+  </div>
+</div>
+
+<!-- ═══ FIRMWARE EMBEBIDO (descargable) — telemetría IMU del PercuSynth, NO se ejecuta ═══ -->
+<script type="text/plain" id="firmwareCode">// ==============================================================================================================================================
+// PERCU-SYNTH — IMU Telemetry para Tilt Maze (GC Lab Chile)
+// ==============================================================================================================================================
+// Lee el IMU (accel ±2g + gyro) + 4 pots + 5 botones y los envía por USB-Serial a 115200,
+// una linea CSV por frame (~60 Hz):
+//   A,accelX,accelY,accelZ,gyroX,gyroY,gyroZ,pot1,pot2,pot3,pot4,btn1,btn2,btn3,btn4,btn5
+// Tilt Maze usa accelX/accelY para inclinar la bola, y btn1 o btn5 para avanzar de nivel.
+// ----------------------------------------------------------------------------------------------------------------------------------------------
+// ARDUINO IDE: Board=ESP32S3 Dev Module · USB CDC On Boot=Enabled · Flash Mode=DIO · PSRAM=OPI PSRAM
+// LIBRERIAS: ESP32 core >=3.x + Wire.h (incluida)
+// ==============================================================================================================================================
+#include <Arduino.h>
+#include <Wire.h>
+
+#define SDA_PIN 21
+#define SCL_PIN 38
+#define ACCEL_LSB_PER_G  16384.0f   // +-2g
+#define GYRO_LSB_PER_DPS 131.0f     // +-250 dps
+
+#define NUM_BTN 5
+const uint8_t BTN_PINS[NUM_BTN] = {44, 42, 0, 45, 47};
+const uint8_t POT_PINS[4] = {1, 2, 8, 10};
+const unsigned long TELEMETRY_MS = 16;
+
+uint8_t imuAddr = 0x68;
+float accX=0,accY=0,accZ=0, gyrX=0,gyrY=0,gyrZ=0;
+
+int readPot(uint8_t pin){ uint32_t s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return (int)(s>>3); }
+
+bool imuPing(uint8_t a){ Wire.beginTransmission(a); return (Wire.endTransmission(true)==0); }
+
+void imuBegin(){
+  Wire.begin(SDA_PIN,SCL_PIN); Wire.setClock(400000); delay(50);
+  if(imuPing(0x68)) imuAddr=0x68; else if(imuPing(0x69)) imuAddr=0x69; else imuAddr=0x68;
+  Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // wake
+  Wire.beginTransmission(imuAddr); Wire.write(0x1A); Wire.write(0x03); Wire.endTransmission(true); // DLPF
+  Wire.beginTransmission(imuAddr); Wire.write(0x1B); Wire.write(0x00); Wire.endTransmission(true); // gyro +-250
+  Wire.beginTransmission(imuAddr); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); // accel +-2g
+  delay(100);
+}
+
+void readImu(){
+  Wire.beginTransmission(imuAddr); Wire.write(0x3B); Wire.endTransmission(false);
+  Wire.requestFrom((int)imuAddr,14,true);
+  if(Wire.available()>=14){
+    int16_t ax=(Wire.read()<<8)|Wire.read(); int16_t ay=(Wire.read()<<8)|Wire.read(); int16_t az=(Wire.read()<<8)|Wire.read();
+    Wire.read(); Wire.read();
+    int16_t gx=(Wire.read()<<8)|Wire.read(); int16_t gy=(Wire.read()<<8)|Wire.read(); int16_t gz=(Wire.read()<<8)|Wire.read();
+    accX=ax/ACCEL_LSB_PER_G; accY=ay/ACCEL_LSB_PER_G; accZ=az/ACCEL_LSB_PER_G;
+    gyrX=gx/GYRO_LSB_PER_DPS; gyrY=gy/GYRO_LSB_PER_DPS; gyrZ=gz/GYRO_LSB_PER_DPS;
+  }
+}
+
+void setup(){
+  Serial.begin(115200); delay(300);
+  for(int i=0;i<NUM_BTN;i++) pinMode(BTN_PINS[i], INPUT_PULLUP);
+  analogReadResolution(12); analogSetAttenuation(ADC_11db);
+  imuBegin();
+}
+
+void loop(){
+  static unsigned long last=0;
+  readImu();
+  unsigned long now=millis();
+  if(now-last>=TELEMETRY_MS){
+    last=now;
+    int p1=readPot(POT_PINS[0]),p2=readPot(POT_PINS[1]),p3=readPot(POT_PINS[2]),p4=readPot(POT_PINS[3]);
+    int b1=(digitalRead(BTN_PINS[0])==LOW)?1:0, b2=(digitalRead(BTN_PINS[1])==LOW)?1:0;
+    int b3=(digitalRead(BTN_PINS[2])==LOW)?1:0, b4=(digitalRead(BTN_PINS[3])==LOW)?1:0, b5=(digitalRead(BTN_PINS[4])==LOW)?1:0;
+    char line[160];
+    snprintf(line,sizeof(line),"A,%.2f,%.2f,%.2f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+      accX,accY,accZ,gyrX,gyrY,gyrZ,p1,p2,p3,p4,b1,b2,b3,b4,b5);
+    Serial.println(line);
+  }
+}
+</script>
+
+<script>
+"use strict";
+// ════════════════════════════════════════════════════════════════════════════
+//  TILT MAZE — laberinto de inclinación (IMU PercuSynth)
+//  Tiles: #=pared .=piso S=inicio G=meta O=hoyo X=zona mortal  p q r = portales (par)
+// ════════════════════════════════════════════════════════════════════════════
+const LEVELS = [
+  { name:"Calentamiento",
+    grid:[
+    "#############",
+    "#S........O.#",
+    "#...#...OOO.#",
+    "#.......X.X##",
+    "#..#O......O#",
+    "#........O..#",
+    "#...#.##....#",
+    "##...#..X#.G#",
+    "#############",
+  ]},
+  { name:"Primeros hoyos",
+    grid:[
+    "#############",
+    "#S.O.#O.X..##",
+    "#.....#O.O..#",
+    "#..........##",
+    "#O...XO.OO..#",
+    "#.O.X.OOO..##",
+    "#...#.O.....#",
+    "#O.#X......G#",
+    "#############",
+  ]},
+  { name:"Zona roja",
+    grid:[
+    "###############",
+    "#S.......O.OX.#",
+    "#...X#XX..O#..#",
+    "#O#..#XX....X.#",
+    "#....O...#XX..#",
+    "#...X.#......##",
+    "#....OO..X.#X##",
+    "#...XXO#...X..#",
+    "#....#.OOO..O.#",
+    "#XX#..#X..O..G#",
+    "###############",
+  ]},
+  { name:"Portal",
+    grid:[
+    "###############",
+    "#S.O.X.OO#O#..#",
+    "#.pX##..X##..O#",
+    "#..........X..#",
+    "#.XO...O..OX#.#",
+    "#....O.X.#.#.O#",
+    "##.X.........##",
+    "#O.##O.X#.O..O#",
+    "#.X..X.X...p#.#",
+    "#.OOX.#.O.O..G#",
+    "###############",
+  ]},
+  { name:"Serpenteo",
+    grid:[
+    "#################",
+    "#S.O...O..#.#X#.#",
+    "#..##O##..#...XO#",
+    "##.....#p.O.#.O##",
+    "#O.#.O#.#O....X##",
+    "#...OX.XX..O..OO#",
+    "#X..OO.#X.X...X.#",
+    "#.#.#....O..#..X#",
+    "#p#...XX...O.X..#",
+    "##...#X##.O.#..G#",
+    "#################",
+  ]},
+  { name:"Campo minado",
+    grid:[
+    "#################",
+    "#S.p.#X.#O.....O#",
+    "#.#X..XX#OX...OO#",
+    "#..O#....O.O##X.#",
+    "#...#OO.#...O.O.#",
+    "#O..O.O.OX.XO..##",
+    "#O..XXX.OX.X.OX.#",
+    "#.O.X....pX.O#.X#",
+    "#O#XO..X...X.OX.#",
+    "##XOXXXXOO.....G#",
+    "#################",
+  ]},
+  { name:"Doble portal",
+    grid:[
+    "###################",
+    "#S.....XX.O.##X.O##",
+    "#.#X.#..#q..O..O#O#",
+    "#.X.XXX..X...O#.###",
+    "#..O....X#....Op#O#",
+    "##X..##..X#...O##X#",
+    "##XO.X..O.O....OO##",
+    "#.OOX.#.....O.O.X.#",
+    "##OX#...X..X#XOO..#",
+    "#.O.#OO#.X...#X..X#",
+    "#OX..#X.XO........#",
+    "#pq.X..X#.O...O..G#",
+    "###################",
+  ]},
+  { name:"Trampa densa",
+    grid:[
+    "###################",
+    "#S.##OX...#X.O.X.O#",
+    "#..XOOXX.O...OO.OX#",
+    "#..qXpOOOXOO#OX...#",
+    "#O.O#.#.X.X#...O###",
+    "#X..X#O...XO....#.#",
+    "#XX..XX.X....OX...#",
+    "#X#O....#X.O#OOX#.#",
+    "##..##OOXX.XX.OO..#",
+    "#O##XO#...#..XXX.p#",
+    "#XXXO...OXX..OO.X.#",
+    "#X.#OOO.OO..#X#q.G#",
+    "###################",
+  ]},
+  { name:"El laberinto",
+    grid:[
+    "###################",
+    "#S.qO.#X#O.##..p###",
+    "#.O..###..##..O#O##",
+    "#OO.XXXO...O#OXXX.#",
+    "#X#..#O.##..#XX#..#",
+    "#O....#..#OX##XO.X#",
+    "#.OX#.#.O.#X###.#X#",
+    "#.X##.OXO.X#.#q#..#",
+    "####X..XX.OXO.XO..#",
+    "#OpX#....#....X#.O#",
+    "#X.###X....#O.....#",
+    "#.OO...O..OO.#.X.G#",
+    "###################",
+  ]},
+  { name:"La torre final",
+    grid:[
+    "#####################",
+    "#S.OXO#OOX.OO.O...#O#",
+    "#.....O##XOOXX..#.#q#",
+    "##.XX.X..XO#...#Or..#",
+    "##X#X..XX#XO.#X#OOO.#",
+    "#XX#.#..p.#...O#.##.#",
+    "#X.X.O.#qX#X.O#O.#O.#",
+    "#.O#XX.O.XOX..XO#...#",
+    "#.#.XOXO.....###X.OO#",
+    "#OO...###O#OXX.#X..p#",
+    "#XX#O##.#OOOX##.XXO.#",
+    "#OXr#O#..X#X....#X.G#",
+    "#####################",
+  ]},
+];
+
+// ── Canvas / escenario ──────────────────────────────────────────────────────
+const cv = document.getElementById('lienzo');
+const ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+let SW=0, SH=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  SW = stage.clientWidth; SH = stage.clientHeight;
+  cv.width = SW*DPR; cv.height = SH*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  computeBoard();
+}
+window.addEventListener('resize', resize);
+
+// ── Estado ──────────────────────────────────────────────────────────────────
+const game = {
+  levelIndex:0, lives:3, total:0, state:'menu', time:0,
+  grid:[], cols:0, rows:0, start:{x:0,y:0}, goal:{x:0,y:0}, portals:{},
+  ball:{x:0,y:0,vx:0,vy:0,r:0},
+  best:+(localStorage.getItem('tiltmaze_best')||0),
+};
+let board={ox:0,oy:0,T:0,w:0,h:0};
+let particles=[]; let portalCooldown=0; let shake=0;
+let staticCv=document.createElement('canvas'); let sg=staticCv.getContext('2d');
+let pendingAction=null;                  // acción del overlay (avanzar/reintentar)
+
+// ── Entrada: IMU + teclado ──────────────────────────────────────────────────
+const tieneSerial=('serial' in navigator);
+let port=null, reader=null, keepReading=false;
+const raw={ax:0,ay:0}, base={ax:0,ay:0}, tilt={x:0,y:0};
+let btn1Prev=0, btn5Prev=0; const keys={};
+function hardware(){ return port && keepReading; }
+
+async function conectar(){
+  if(!tieneSerial){ alert('Usa Chrome o Edge de escritorio (Web Serial).'); return; }
+  try{
+    port=await navigator.serial.requestPort(); await port.open({baudRate:115200});
+    keepReading=true; setConn(true); leer(); setTimeout(calibrar,400);
+  }catch(e){ setConn(false); }
+}
+async function leer(){
+  const dec=new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(()=>{});
+  reader=dec.readable.getReader(); let buf='';
+  try{ while(keepReading){ const {value,done}=await reader.read(); if(done)break;
+    buf+=value; let l=buf.split('\n'); buf=l.pop(); for(const ln of l) parse(ln.trim()); } }
+  catch(e){} finally{ setConn(false); keepReading=false; }
+}
+function parse(line){
+  if(!line || line[0]!=='A') return;
+  const p=line.split(','); if(p.length!==16) return;
+  const n=p.slice(1).map(Number); if(n.some(v=>!isFinite(v))) return;
+  raw.ax=-n[1]; raw.ay=-n[0];                 // remapeo ejes IMU -> pantalla
+  const b1=n[10], b5=n[14];
+  if((b1===1&&btn1Prev===0)||(b5===1&&btn5Prev===0)) confirmar();   // BTN1/BTN5 = continuar
+  btn1Prev=b1; btn5Prev=b5;
+}
+function calibrar(){ base.ax=raw.ax; base.ay=raw.ay; }
+function setConn(ok){ document.getElementById('connDot').classList.toggle('ok',ok); }
+
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase(); keys[k]=true;
+  if(k==='enter'||k===' ') { e.preventDefault(); confirmar(); }
+  if(k==='c') calibrar();
+});
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+
+function leerEntrada(){
+  let tx,ty;
+  if(hardware()){
+    tx=Math.max(-1.3,Math.min(1.3,(raw.ax-base.ax)*1.8));
+    ty=Math.max(-1.3,Math.min(1.3,(raw.ay-base.ay)*1.8));
+  } else {
+    tx=0; ty=0;
+    if(keys['a']||keys['arrowleft']) tx-=1;
+    if(keys['d']||keys['arrowright']) tx+=1;
+    if(keys['w']||keys['arrowup'])   ty-=1;
+    if(keys['s']||keys['arrowdown']) ty+=1;
+  }
+  tilt.x=tilt.x*0.5+tx*0.5; tilt.y=tilt.y*0.5+ty*0.5;
+}
+
+function confirmar(){ if(pendingAction){ const a=pendingAction; pendingAction=null; a(); } }
+
+// ── Carga de nivel ──────────────────────────────────────────────────────────
+function cargarNivel(i){
+  const lv=LEVELS[i];
+  game.grid=lv.grid.map(r=>r.split('')); game.rows=game.grid.length; game.cols=game.grid[0].length;
+  game.portals={};
+  for(let y=0;y<game.rows;y++) for(let x=0;x<game.cols;x++){
+    const c=game.grid[y][x];
+    if(c==='S') game.start={x,y};
+    else if(c==='G') game.goal={x,y};
+    else if('pqr'.includes(c)) (game.portals[c]=game.portals[c]||[]).push({x,y});
+  }
+  document.getElementById('cNivel').textContent=(i+1)+'/'+LEVELS.length;
+  computeBoard(); resetBall(); game.time=0;
+}
+function computeBoard(){
+  if(!game.cols) return;
+  const pad=16;
+  const T=Math.floor(Math.min((SW-pad*2)/game.cols,(SH-pad*2)/game.rows));
+  board.T=T; board.w=T*game.cols; board.h=T*game.rows;
+  board.ox=Math.round((SW-board.w)/2); board.oy=Math.round((SH-board.h)/2);
+  game.ball.r=T*0.30; buildStatic();
+}
+function resetBall(){ const T=board.T;
+  game.ball.x=(game.start.x+0.5)*T; game.ball.y=(game.start.y+0.5)*T;
+  game.ball.vx=0; game.ball.vy=0; portalCooldown=0; }
+function tileAt(px,py){ const x=Math.floor(px/board.T),y=Math.floor(py/board.T);
+  if(x<0||y<0||x>=game.cols||y>=game.rows) return '#'; return game.grid[y][x]; }
+
+// ── Validador de solucionabilidad (BFS piso+portales, evita O/X) ────────────
+function esSolucionable(grid){
+  const rows=grid.length, cols=grid[0].length; let s,g; const P={};
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const c=grid[y][x];
+    if(c==='S')s={x,y};else if(c==='G')g={x,y};else if('pqr'.includes(c))(P[c]=P[c]||[]).push({x,y});}
+  if(!s||!g) return false;
+  const pa=c=>c==='.'||c==='S'||c==='G'||'pqr'.includes(c); const k=(x,y)=>x+','+y;
+  const q=[s], seen=new Set([k(s.x,s.y)]);
+  while(q.length){ const u=q.shift(); if(u.x===g.x&&u.y===g.y) return true;
+    const c=grid[u.y][u.x]; const v=[{x:u.x+1,y:u.y},{x:u.x-1,y:u.y},{x:u.x,y:u.y+1},{x:u.x,y:u.y-1}];
+    if('pqr'.includes(c)&&P[c]) for(const p of P[c]) if(!(p.x===u.x&&p.y===u.y)) v.push(p);
+    for(const nn of v){ if(nn.x<0||nn.y<0||nn.x>=cols||nn.y>=rows) continue;
+      if(pa(grid[nn.y][nn.x])&&!seen.has(k(nn.x,nn.y))){ seen.add(k(nn.x,nn.y)); q.push(nn); } } }
+  return false;
+}
+
+// ── Física + colisiones ─────────────────────────────────────────────────────
+function update(dt){
+  if(game.state!=='play') return;
+  game.time+=dt;
+  const b=game.ball, T=board.T;
+  const GRAV=T*48;
+  b.vx+=tilt.x*GRAV*dt; b.vy+=tilt.y*GRAV*dt;
+  const fr=Math.pow(0.9,dt); b.vx*=fr; b.vy*=fr;
+  const maxv=T*16; let sp=Math.hypot(b.vx,b.vy); if(sp>maxv){ b.vx*=maxv/sp; b.vy*=maxv/sp; sp=maxv; }
+  const steps=Math.max(1,Math.ceil(sp*dt/(T*0.25)));
+  for(let s=0;s<steps;s++){ b.x+=b.vx*dt/steps; b.y+=b.vy*dt/steps; colisionParedes(); }
+
+  if(portalCooldown>0) portalCooldown-=dt;
+  const c=tileAt(b.x,b.y);
+  const cx=(Math.floor(b.x/T)+0.5)*T, cy=(Math.floor(b.y/T)+0.5)*T;
+  const dc=Math.hypot(b.x-cx,b.y-cy);
+  if(c==='O' && dc<T*0.32){ caer(); return; }
+  if(c==='X'){ morir('¡Tocaste una zona peligrosa!'); return; }
+  if('pqr'.includes(c) && portalCooldown<=0) teletransportar(c);
+  if(c==='G' && dc<T*0.42){ nivelCompletado(); return; }
+  if(shake>0) shake*=0.85;
+}
+function colisionParedes(){
+  const b=game.ball, T=board.T, r=b.r;
+  const minX=Math.floor((b.x-r)/T),maxX=Math.floor((b.x+r)/T),minY=Math.floor((b.y-r)/T),maxY=Math.floor((b.y+r)/T);
+  for(let ty=minY;ty<=maxY;ty++) for(let tx=minX;tx<=maxX;tx++){
+    if(tx<0||ty<0||tx>=game.cols||ty>=game.rows) continue;
+    if(game.grid[ty][tx]!=='#') continue;
+    const rx=tx*T,ry=ty*T;
+    const nx=Math.max(rx,Math.min(b.x,rx+T)), ny=Math.max(ry,Math.min(b.y,ry+T));
+    let dx=b.x-nx,dy=b.y-ny,d=Math.hypot(dx,dy);
+    if(d<r&&d>0){ const push=r-d; dx/=d; dy/=d; b.x+=dx*push; b.y+=dy*push;
+      const vn=b.vx*dx+b.vy*dy; b.vx-=vn*dx*1.3; b.vy-=vn*dy*1.3; }
+    else if(d===0){ b.x+=r; }
+  }
+}
+function teletransportar(c){
+  const ps=game.portals[c]; if(!ps||ps.length<2) return;
+  const b=game.ball,T=board.T;
+  const here=ps.find(p=>Math.floor(b.x/T)===p.x&&Math.floor(b.y/T)===p.y);
+  const dest=ps.find(p=>p!==here); if(!dest) return;
+  spawnParticles(b.x,b.y,'#8b5cf6',16);
+  b.x=(dest.x+0.5)*T; b.y=(dest.y+0.5)*T; spawnParticles(b.x,b.y,'#8b5cf6',16);
+  portalCooldown=0.5; beep(660,0.12,'sine');
+}
+function caer(){ spawnParticles(game.ball.x,game.ball.y,'#26314a',16); beep(140,0.25,'sawtooth'); morir('¡Caíste en un hoyo!'); }
+function morir(txt){
+  shake=14; beep(120,0.3,'square'); game.lives--; pintarVidas();
+  if(game.lives<=0){ gameOver(); }
+  else { game.state='dead'; mostrarMsg('lose','-1 vida',txt+'  Te quedan '+game.lives+'.','Reintentar',()=>{ resetBall(); ocultarMsg(); game.state='play'; }); }
+}
+function nivelCompletado(){
+  const bonus=Math.max(50,Math.round(2500-game.time*100));
+  game.total+=bonus+game.lives*200; document.getElementById('cPunt').textContent=game.total;
+  spawnParticles(game.ball.x,game.ball.y,'#22c55e',40);
+  beep(523,0.1,'sine'); setTimeout(()=>beep(784,0.18,'sine'),110);
+  if(game.levelIndex>=LEVELS.length-1){ ganarJuego(); return; }
+  game.state='levelclear';
+  const sig=LEVELS[game.levelIndex+1].name;
+  mostrarMsg('win','¡Nivel superado!','+'+bonus+' pts · bonus vidas +'+(game.lives*200)+'. Sigue: «'+sig+'»','Siguiente',()=>{
+    game.levelIndex++; cargarNivel(game.levelIndex); ocultarMsg(); game.state='play'; });
+}
+function gameOver(){
+  game.state='gameover';
+  if(game.total>game.best){ game.best=game.total; localStorage.setItem('tiltmaze_best',game.best); }
+  mostrarMsg('lose','Game Over','Llegaste al nivel '+(game.levelIndex+1)+'. Puntaje: '+game.total+' · Récord: '+game.best,'Reintentar',empezar);
+}
+function ganarJuego(){
+  game.state='win';
+  if(game.total>game.best){ game.best=game.total; localStorage.setItem('tiltmaze_best',game.best); }
+  for(let i=0;i<5;i++) setTimeout(()=>spawnParticles(SW*Math.random(),SH*0.35,'#'+['ec4899','3b82f6','22c55e','f6b73c','8b5cf6'][i%5],30),i*120);
+  mostrarMsg('win','¡Completaste Tilt Maze!','Puntaje final: '+game.total+' · Récord: '+game.best,'Jugar otra vez',empezar);
+}
+
+function pintarVidas(){ document.getElementById('cVidas').textContent='♥'.repeat(Math.max(0,game.lives))+'♡'.repeat(Math.max(0,3-game.lives)); }
+
+function mostrarMsg(kind,title,text,btnTxt,cb){
+  const ov=document.getElementById('ovMsg'), h=document.getElementById('ovMsgTitle');
+  h.textContent=title; h.className=(kind==='win'?'win':'lose');
+  document.getElementById('ovMsgText').textContent=text;
+  document.getElementById('ovMsgBtn').textContent=btnTxt;
+  pendingAction=cb;                       // BTN1/BTN5/Enter o clic ejecutan esto
+  ov.classList.remove('hide');
+}
+function ocultarMsg(){ document.getElementById('ovMsg').classList.add('hide'); }
+
+function empezar(){
+  game.levelIndex=0; game.lives=3; game.total=0;
+  document.getElementById('cPunt').textContent='0'; pintarVidas();
+  cargarNivel(0);
+  document.getElementById('ovStart').classList.add('hide'); ocultarMsg();
+  pendingAction=null; game.state='play';
+}
+
+// ── Partículas + sonido ─────────────────────────────────────────────────────
+function spawnParticles(x,y,color,n){ for(let i=0;i<n;i++){ const a=Math.random()*7,s=Math.random()*180+40;
+  particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color,r:Math.random()*4+2}); } }
+function updateParticles(dt){ for(const p of particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=300*dt; p.vx*=0.96; p.vy*=0.96; p.life-=dt*1.8; }
+  particles=particles.filter(p=>p.life>0); }
+let actx=null;
+function beep(f,d,type){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+  const o=actx.createOscillator(),g=actx.createGain(); o.type=type||'sine'; o.frequency.value=f;
+  o.connect(g); g.connect(actx.destination); const t=actx.currentTime;
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.18,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  o.start(t); o.stop(t+d+0.02); }catch(e){} }
+
+// ── Render (capa estática pre-renderizada + capa animada) ───────────────────
+let tAnim=0;
+function roundRectP(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y);
+  g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function buildStatic(){
+  if(!game.cols||!board.T) return; const T=board.T;
+  staticCv.width=Math.max(1,Math.round(board.w*DPR)); staticCv.height=Math.max(1,Math.round(board.h*DPR));
+  sg.setTransform(DPR,0,0,DPR,0,0); sg.clearRect(0,0,board.w,board.h);
+  roundRectP(sg,0,0,board.w,board.h,16); sg.fillStyle='#f7faff'; sg.fill();
+  for(let y=0;y<game.rows;y++) for(let x=0;x<game.cols;x++){ const c=game.grid[y][x],px=x*T,py=y*T;
+    if(c==='#') drawWall(sg,px,py,T); else if(c==='O') drawHole(sg,px,py,T);
+    else if(c==='X') drawDanger(sg,px,py,T); else if(c==='S') drawStart(sg,px,py,T); }
+}
+function draw(){
+  ctx.clearRect(0,0,SW,SH); if(!game.cols) return;
+  const T=board.T, ox=board.ox, oy=board.oy;
+  ctx.save();
+  const sx=ox+board.w/2, sy=oy+board.h/2;
+  ctx.translate(sx+(Math.random()-0.5)*shake, sy+(Math.random()-0.5)*shake);
+  ctx.rotate(tilt.x*0.01); ctx.translate(-sx,-sy); ctx.translate(ox,oy);
+  roundRectP(ctx,-10,-10,board.w+20,board.h+20,22); ctx.fillStyle='#dde6f6'; ctx.fill();
+  if(staticCv.width>1) ctx.drawImage(staticCv,0,0,board.w,board.h);
+  for(let y=0;y<game.rows;y++) for(let x=0;x<game.cols;x++){ const c=game.grid[y][x],px=x*T,py=y*T;
+    if(c==='G') drawGoal(ctx,px,py,T); else if('pqr'.includes(c)) drawPortal(ctx,px,py,T,c); }
+  drawBall(ctx);
+  for(const p of particles){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x-ox,p.y-oy,p.r,0,7); ctx.fill(); }
+  ctx.globalAlpha=1; ctx.restore();
+}
+function drawWall(g,px,py,T){
+  roundRectP(g,px+1,py+1,T-2,T-2,6);
+  const grad=g.createLinearGradient(px,py,px,py+T); grad.addColorStop(0,'#5b8def'); grad.addColorStop(1,'#3b6fd4');
+  g.fillStyle=grad; g.fill();
+  g.fillStyle='rgba(255,255,255,.22)'; roundRectP(g,px+3,py+3,T-6,(T-6)*0.4,4); g.fill();
+}
+function drawHole(g,px,py,T){ const cx=px+T/2,cy=py+T/2,r=T*0.34;
+  g.fillStyle='#39456a'; g.beginPath(); g.arc(cx,cy,r,0,7); g.fill();
+  g.fillStyle='#10182e'; g.beginPath(); g.arc(cx,cy+r*0.10,r*0.72,0,7); g.fill(); }
+function drawDanger(g,px,py,T){
+  roundRectP(g,px+1,py+1,T-2,T-2,6); g.fillStyle='#ef4444'; g.fill();
+  g.save(); roundRectP(g,px+1,py+1,T-2,T-2,6); g.clip();
+  g.strokeStyle='rgba(255,255,255,.35)'; g.lineWidth=4;
+  for(let i=-T;i<T*2;i+=14){ g.beginPath(); g.moveTo(px+i,py); g.lineTo(px+i-T,py+T); g.stroke(); }
+  g.restore();
+}
+function drawGoal(g,px,py,T){ const cx=px+T/2,cy=py+T/2; const pulse=0.5+0.5*Math.sin(tAnim*4);
+  for(let i=3;i>=1;i--){ g.beginPath(); g.arc(cx,cy,T*0.16*i*(0.9+pulse*0.12),0,7);
+    g.fillStyle='rgba(34,197,94,'+(0.10*i)+')'; g.fill(); }
+  g.beginPath(); g.arc(cx,cy,T*0.20,0,7); g.fillStyle='#22c55e'; g.fill();
+  g.fillStyle='#fff'; g.font='bold '+(T*0.26)+'px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('★',cx,cy+1); }
+function drawPortal(g,px,py,T,c){ const cx=px+T/2,cy=py+T/2; const col=c==='p'?'#8b5cf6':c==='q'?'#ec4899':'#22d3ee';
+  g.save(); g.translate(cx,cy); g.rotate(tAnim*3);
+  for(let i=0;i<3;i++){ g.beginPath(); g.arc(0,0,T*(0.30-i*0.07),i*2.1,i*2.1+3.6);
+    g.strokeStyle=col; g.lineWidth=T*0.07; g.lineCap='round'; g.globalAlpha=0.9-i*0.2; g.stroke(); }
+  g.restore(); g.globalAlpha=1; }
+function drawStart(g,px,py,T){ const cx=px+T/2,cy=py+T/2;
+  g.beginPath(); g.arc(cx,cy,T*0.22,0,7); g.fillStyle='rgba(59,130,246,.18)'; g.fill();
+  g.strokeStyle='#3b82f6'; g.lineWidth=2; g.setLineDash([4,3]); g.stroke(); g.setLineDash([]); }
+function drawBall(g){ const b=game.ball;
+  g.beginPath(); g.ellipse(b.x,b.y+b.r*0.55,b.r*0.85,b.r*0.4,0,0,7); g.fillStyle='rgba(40,55,90,.18)'; g.fill();
+  const grad=g.createRadialGradient(b.x-b.r*0.35,b.y-b.r*0.4,b.r*0.1,b.x,b.y,b.r);
+  grad.addColorStop(0,'#ffd9a0'); grad.addColorStop(0.4,'#fb8b4c'); grad.addColorStop(1,'#e05a2b');
+  g.beginPath(); g.arc(b.x,b.y,b.r,0,7); g.fillStyle=grad; g.fill();
+  g.beginPath(); g.arc(b.x-b.r*0.32,b.y-b.r*0.34,b.r*0.28,0,7); g.fillStyle='rgba(255,255,255,.7)'; g.fill(); }
+
+// ── Bucle ───────────────────────────────────────────────────────────────────
+let last=performance.now();
+function loop(now){ let dt=(now-last)/1000; last=now; if(dt>0.05) dt=0.05;
+  tAnim+=dt; leerEntrada(); update(dt); updateParticles(dt);
+  if(game.state==='play') document.getElementById('cTiempo').textContent=game.time.toFixed(1);
+  draw(); requestAnimationFrame(loop);
+}
+
+// ── Wiring + arranque ───────────────────────────────────────────────────────
+document.getElementById('btnJugar').onclick=empezar;
+document.getElementById('btnConectar').onclick=conectar;
+document.getElementById('btnFirmware').onclick=()=>{
+  const code=document.getElementById('firmwareCode').textContent;
+  const blob=new Blob([code],{type:'text/plain'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='percusynth_imu_telemetry.ino';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+document.getElementById('ovMsgBtn').onclick=confirmar;
+if(!tieneSerial){ document.getElementById('btnConectar').style.display='none';
+  document.getElementById('startHint').textContent='Sin Web Serial: juega con W A S D o flechas'; }
+pendingAction=empezar;                   // BTN1/BTN5/Enter en el menú = Jugar
+pintarVidas(); resize(); cargarNivel(0);
+LEVELS.forEach((lv,i)=>{ if(!esSolucionable(lv.grid)) console.warn('[validador] Nivel '+(i+1)+' ("'+lv.name+'") sin ruta segura'); });
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
