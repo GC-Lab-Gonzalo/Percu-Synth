@@ -2,11 +2,12 @@
 
 Hermano **autónomo** de [`pads_imu_leds`](../pads_imu_leds/): reutiliza su motor de
 voces estéreo (pads profundos con detune/paneo + filtro biquad resonante) y su
-visualizador de 6 LEDs, **pero quita todo el control manual salvo dos cosas**:
+visualizador de 6 LEDs, **pero quita todo el control manual salvo estas cosas**:
 
 - **BTN1 → PLAY / STOP**
 - **POT1 → VOLUMEN de los PADS**
 - **POT2 → VOLUMEN de la MELODÍA** (para mezclar pad ↔ melodía)
+- **POT3 → VOLUMEN de la PERCUSIÓN**
 
 Todo lo demás es **aleatorio pero coherente**. Al dar **PLAY** se sortea una **canción
 completa**; al dar **STOP** y volver a **PLAY** nace una **canción totalmente nueva**.
@@ -26,6 +27,7 @@ completa**; al dar **STOP** y volver a **PLAY** nace una **canción totalmente n
 | **Pad** | **Voicing** (tríada / tríada+octava / séptima / abierto) · **ritmo** (sostenido o **gate rítmico** sincronizado al clock) · onda · sub-osc · brillo · detune · ancho estéreo |
 | **Filtro** | Piso de cutoff · resonancia · **LFO autónomo** (respiración, sin IMU) |
 | **Envolvente pad** | Ataque (swells lentos ↔ ataques punchy) · release |
+| **Percusión** | **Patrón de 16 semicorcheas** (según arquetipo) · timbres (pitch/caída del bombo, mezcla tonal↔ruido de la caja, brillo/largo de los hats) · nivel · hats fantasma |
 
 ### Armonía modal (por qué suena coherente)
 
@@ -92,13 +94,41 @@ acorde**; las **cortas** pueden ser **de paso** (paso de un grado, vecinas de un
 nota sostenida queda colgada cuando **cambia el acorde**, **desliza** a la nota del acorde
 nuevo (suspensión→resolución). **Dinámica**: velocidad variada + acento en notas largas.
 
+## La percusión (aleatoria por canción)
+
+Sintetizada en tiempo real (sin samples), con un **motor propio de 6 voces one-shot**
+estilo `drum_machine_basic`:
+
+- **Bombo** = seno con barrido de pitch hacia abajo + pizca de ruido (click de pegada).
+- **Caja / rim** = seno corto que cae + ruido (la mezcla tonal↔ruido se sortea: en PLUCK
+  suena a rim, en DRIVE a caja).
+- **Hats** = ruido puro **pasa-altos** (cerrado corto · abierto largo); el hat cerrado
+  **alterna lados** en el estéreo.
+
+El **patrón de 16 semicorcheas** (1 compás de 4/4, el mismo grid del clock) se sortea en
+cada PLAY **según el arquetipo**:
+
+| Arquetipo | Groove |
+|---|---|
+| AMBIENT | **60 % sin percusión**; si hay: boom suave en el 1 (a veces el 3) + hat esporádico |
+| CINEMATIC | **35 % sin percusión**; booms escasos + golpe en el 4 + open hat aireado |
+| PULSE | Bombo 4-al-piso o en 1 y 3 · hats en contratiempo · backbeat opcional |
+| PLUCK | Shaker/hat en semicorcheas con acentos · rim en 2 y 4 · bombo escaso |
+| DRIVE | Groove completo: 4-al-piso (+ síncopa) · backbeat · hats en corcheas/semis · open hats |
+
+**Humanización**: acento en el beat, velocidad aleatoria por golpe, **hats "fantasma"**
+en pasos vacíos y un **mini-fill de caja** en los últimos 4 pasos de cada 4º compás.
+La percusión va **seca** (no pasa por el filtro resonante del pad → pegada firme) y su
+ruido usa un **LCG propio** (no altera los sorteos de armonía/melodía).
+
 ## Qué muestran los 6 LEDs
 
 1. **Color** = tonalidad de la canción; se desplaza con el **acorde** en curso y con el
    **LFO del filtro** (color sweep ↔ filter sweep).
 2. **Barra (VU)** = energía del **pad**.
 3. **Punto que corre** = avanza una posición por cada **nota** de la melodía (su pulso).
-4. Flash suave al **cambiar de acorde** · flash blanco al **arrancar** una canción nueva ·
+4. **Pulso con el bombo** = toda la barra "late" suavemente en cada golpe.
+5. Flash suave al **cambiar de acorde** · flash blanco al **arrancar** una canción nueva ·
    sin PLAY → **respiración lenta** (modo espera).
 
 El **LED RGB del módulo** (GPIO48) refleja el promedio de la tira.
@@ -107,7 +137,7 @@ El **LED RGB del módulo** (GPIO48) refleja el promedio de la tira.
 
 | | pads_imu_leds | cancion_aleatoria_leds |
 |---|---|---|
-| Control | 5 botones + 4 pots + 3 paneles + IMU | **1 botón (Play/Stop) + 2 pots (vol pad / vol melodía)** |
+| Control | 5 botones + 4 pots + 3 paneles + IMU | **1 botón (Play/Stop) + 3 pots (vol pad / melodía / percusión)** |
 | IMU / MPU6050 | sí (mueve el filtro) | **no** (filtro por LFO interno) |
 | Capa melódica | arpegio pre-configurado (6 tipos) | **melodía monofónica aleatoria** |
 | Armonía | bancos de acordes fijos | **generada** (tonalidad + modo + progresión) |
@@ -117,7 +147,7 @@ El **LED RGB del módulo** (GPIO48) refleja el promedio de la tira.
 
 - ESP32-S3 + DAC **PCM5102** vía I2S (`LCK 39 · DIN 40 · BCK 41`)
 - **6 LEDs WS2812** internos (`DATA 46`) + **LED RGB del módulo** ESP32-S3 (`DATA 48`)
-- **BTN1** (`44`, pull-up interno) = Play/Stop · **POT1** (`ADC1`) = volumen pads · **POT2** (`ADC2`) = volumen melodía
+- **BTN1** (`44`, pull-up interno) = Play/Stop · **POT1** (`ADC1`) = volumen pads · **POT2** (`ADC2`) = volumen melodía · **POT3** (`ADC8`) = volumen percusión
 - **Estéreo real**: filtro del pad con **LFO desfasado 90° en L/R** (barrido distinto por canal) + detune/paneo.
 - **No requiere MPU6050 / IMU.**
 
@@ -166,7 +196,11 @@ cuelgue, al reiniciar, verás algo como:
 | Melodía repite mucho / poca variedad | baja el `0.22f` de `forceChord` en `melodyStep()` |
 | Ondas de la melodía | `MEL_WAVES` (nunca metas la cuadrada = 2); se fija por canción en `startSong()` |
 | Ancho del estéreo del pad | desfase del LFO L/R (`+0.25f` en el loop) y `panWidth` por arquetipo |
-| Balance pad/melodía | en vivo con **POT1** (pad) y **POT2** (melodía) |
+| Balance pad/melodía/percusión | en vivo con **POT1** (pad), **POT2** (melodía) y **POT3** (percusión) |
+| Percusión muy fuerte/suave por defecto | rangos de `percLevel` por arquetipo en `genPercussion()` |
+| Más/menos canciones CON percusión | probabilidades de `percOn` en `genPercussion()` (AMBIENT 40 % · CINEMATIC 65 % · PLUCK 85 % · PULSE/DRIVE siempre) |
+| Groove más/menos denso | patrones (`patKick`/`patSnare`/`patHatC`/`patHatO`) y `ghostProb` por arquetipo |
+| Timbre del bombo/caja/hats | rangos de `kickF0/kickDec`, `snFreq/snNoise`, `hatTone/hatDec*` en `genPercussion()` |
 | Qué arquetipos aparecen | `songArche = rndI(5)` en `startSong()` (fija uno para probar) |
 | Ritmo del pad más/menos marcado | `padGateDepth` y `padGateSamples` en `startSong()` |
 | Canciones más lentas/rápidas | rangos de `songBPM` por arquetipo en `startSong()` |

@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NEBULA GP — PercuSynth FPV Drone Racing</title>
+<style>
+  :root{ --cyan:#00d4ff; --violet:#7c3aed; --orange:#ff6b35; --pink:#ff2bd6; --gold:#ffd23f; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:#000; overflow:hidden;
+    font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace; color:#cfe; }
+  #game{ position:fixed; inset:0; display:block; width:100vw; height:100vh; }
+  /* ---------- HUD ---------- */
+  #hud{ position:fixed; inset:0; pointer-events:none; z-index:5; text-shadow:0 0 8px currentColor; }
+  .corner{ position:absolute; padding:14px 18px; }
+  #tl{ top:0; left:0; }
+  #tr{ top:0; right:0; text-align:right; }
+  #bl{ bottom:0; left:0; }
+  #br{ bottom:0; right:0; text-align:right; }
+  .lbl{ font-size:11px; letter-spacing:3px; opacity:.55; color:var(--cyan); }
+  .big{ font-size:32px; font-weight:700; letter-spacing:2px; line-height:1.05; color:#fff; }
+  .pos{ color:var(--gold); }
+  .lapv{ color:var(--violet); font-size:20px; }
+  #speed{ font-size:44px; }
+  #speed small{ font-size:14px; color:var(--cyan); opacity:.8; }
+  #warn{ margin-top:6px; font-size:14px; letter-spacing:3px; color:#ff3355; font-weight:700;
+    opacity:0; transition:opacity .15s; animation:warnblink .5s infinite; }
+  @keyframes warnblink{ 50%{ filter:brightness(.5); } }
+  #mini{ position:absolute; right:16px; bottom:110px; width:150px; height:150px;
+    border:1px solid rgba(0,212,255,.35); border-radius:10px; background:rgba(3,2,12,.55);
+    box-shadow:0 0 14px rgba(0,212,255,.18); }
+  .pill{ display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:2px;
+    border:1px solid #234; border-radius:20px; padding:4px 10px; color:#7aa; }
+  .pill .dot{ width:8px; height:8px; border-radius:50%; background:#445; }
+  .pill.live{ color:var(--cyan); border-color:var(--cyan); box-shadow:0 0 10px rgba(0,212,255,.4); }
+  .pill.live .dot{ background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  #keysrow{ display:flex; gap:8px; justify-content:flex-end; margin-top:7px; }
+  .tg{ font-size:11px; letter-spacing:1px; border:1px solid #345; border-radius:6px;
+    padding:4px 8px; color:#789; transition:.06s; }
+  .tg.on{ color:#000; background:var(--cyan); box-shadow:0 0 14px var(--cyan); border-color:var(--cyan); }
+  .tg.brk.on{ background:var(--orange); box-shadow:0 0 14px var(--orange); border-color:var(--orange); }
+  #cd{ position:absolute; top:32%; left:0; right:0; text-align:center; font-size:110px; font-weight:800;
+    color:var(--gold); text-shadow:0 0 40px var(--gold); display:none; letter-spacing:8px; }
+  #lapmsg{ position:absolute; top:22%; left:0; right:0; text-align:center; font-size:34px; font-weight:800;
+    color:var(--cyan); text-shadow:0 0 26px var(--cyan); opacity:0; transition:opacity .4s; letter-spacing:6px; }
+  /* ---------- overlay ---------- */
+  #overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    background:radial-gradient(ellipse at center,rgba(14,4,34,.80),rgba(2,1,7,.97)); }
+  #overlay.hide{ display:none; }
+  h1{ font-size:clamp(34px,8vw,88px); letter-spacing:7px; font-weight:800;
+    background:linear-gradient(90deg,var(--cyan),var(--pink),var(--gold));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 24px rgba(124,58,237,.55)); }
+  .sub{ color:var(--cyan); letter-spacing:5px; font-size:13px; margin-top:-2px; opacity:.85; }
+  .card{ margin-top:24px; max-width:600px; padding:20px 26px; border:1px solid var(--violet);
+    border-radius:12px; background:rgba(124,58,237,.08); box-shadow:0 0 30px rgba(124,58,237,.25);
+    font-size:13px; line-height:1.85; text-align:left; }
+  .card b{ color:var(--orange); }
+  .k{ display:inline-block; min-width:20px; padding:1px 7px; border:1px solid #46c; border-radius:5px;
+    color:var(--cyan); font-size:12px; }
+  .btns{ margin-top:22px; display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  button{ font-family:inherit; cursor:pointer; font-size:14px; letter-spacing:2px; font-weight:700;
+    padding:13px 26px; border-radius:8px; border:1px solid var(--cyan); color:#021;
+    background:var(--cyan); box-shadow:0 0 18px rgba(0,212,255,.5); transition:.12s; }
+  button:hover{ transform:translateY(-2px); filter:brightness(1.12); }
+  button.ghost{ background:transparent; color:var(--cyan); }
+  button.pink{ background:var(--pink); border-color:var(--pink); color:#200; box-shadow:0 0 18px rgba(255,43,214,.5); }
+  #results{ display:none; margin-top:14px; font-size:15px; line-height:2; }
+  #results table{ border-collapse:collapse; margin:0 auto; }
+  #results td{ padding:2px 16px; text-align:left; }
+  #results .me{ color:var(--gold); font-weight:800; }
+  #toast{ position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:9;
+    font-size:13px; letter-spacing:2px; color:var(--cyan); opacity:0; transition:.3s;
+    background:rgba(0,0,0,.6); padding:8px 16px; border-radius:20px; border:1px solid #234; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="corner" id="tl">
+    <div class="lbl">POSICIÓN</div>
+    <div class="big pos" id="hPos">–</div>
+    <div class="lapv">VUELTA <span id="hLap">1</span>/3</div>
+  </div>
+  <div class="corner" id="tr">
+    <div class="lbl">TIEMPO VUELTA</div>
+    <div class="big" id="hTime">0:00.000</div>
+    <div class="lbl" style="color:var(--gold)">MEJOR <span id="hBest">—</span></div>
+    <div style="margin-top:8px"><span class="pill" id="pSerial"><span class="dot"></span>SIN CONEXIÓN</span></div>
+    <div id="keysrow">
+      <span class="tg brk" id="tgB1">BTN1 ▼</span>
+      <span class="tg" id="tgB2">◄ BTN2</span>
+      <span class="tg" id="tgB4">BTN4 ►</span>
+      <span class="tg" id="tgB5">BTN5 ▲</span>
+    </div>
+  </div>
+  <div class="corner" id="bl">
+    <div class="lbl">VELOCIDAD</div>
+    <div class="big" id="speed">0<small> km/h</small></div>
+    <div id="warn">◄ VUELVE AL CIRCUITO ►</div>
+  </div>
+  <canvas id="mini" width="150" height="150"></canvas>
+  <div id="cd">3</div>
+  <div id="lapmsg"></div>
+</div>
+
+<!-- START / RESULTS overlay -->
+<div id="overlay">
+  <h1>NEBULA GP</h1>
+  <div class="sub">PERCUSYNTH · FPV DRONE RACING</div>
+  <div class="card" id="howto">
+    Carrera FPV nocturna: 3 vueltas contra <b>4 drones rivales</b> en un circuito
+    de neón bajo un cielo galáctico. Cruza los arcos y no te salgas del corredor de energía.<br><br>
+    <b>IMU</b> — inclina la PercuSynth: izq/der <b>rota</b> (yaw) · adelante/atrás <b>cabecea</b> (pitch = bajar/subir).<br>
+    <b>BTN5</b> — avanzar (acelerador) · <b>BTN1</b> — retroceder / freno.<br>
+    <b>BTN2</b> — desplazarse a la izquierda · <b>BTN4</b> — a la derecha.<br>
+    <b>BTN3</b> — recentrar IMU (captura tu posición neutra).<br>
+    <b>POT1</b> — volumen · <b>POT2</b> — sensibilidad del IMU.<br><br>
+    <span style="opacity:.6">Sin hardware: <span class="k">mouse</span> rota/cabecea ·
+    <span class="k">W</span>/<span class="k">↑</span> avanza · <span class="k">S</span>/<span class="k">↓</span> retrocede ·
+    <span class="k">A</span>/<span class="k">D</span> izq/der · <span class="k">Z</span> centrar · <span class="k">M</span> sonido</span>
+  </div>
+  <div id="results"></div>
+  <div class="btns">
+    <button id="startBtn">▶ INICIAR CARRERA</button>
+    <button class="ghost" id="connBtn">🔌 CONECTAR PERCUSYNTH</button>
+    <button class="pink" id="fwBtn">⬇ FIRMWARE .ino</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+//=================================================================================
+//  NEBULA GP — simulador de carreras FPV de drones para PercuSynth
+//  Render 3D propio sobre Canvas 2D (proyección perspectiva + painter's algorithm)
+//  Protocolo Web Serial 115200 @50Hz: p0,p1,p2,p3,b1,b2,b3,b4,b5,imuX,imuY
+//  (mismo firmware de control que NEON STRIKE — compatible)
+//=================================================================================
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2;
+
+//---------------------------------------------------------------------------------
+// MAPEO DE BOTONES (índices 0..4 = BTN1..BTN5) — edítalo aquí si quieres otro orden
+//---------------------------------------------------------------------------------
+const BTN_BACK  =0;   // BTN1 = retroceder / freno
+const BTN_LEFT  =1;   // BTN2 = desplazamiento izquierda
+const BTN_UTIL  =2;   // BTN3 = recentrar IMU / iniciar
+const BTN_RIGHT =3;   // BTN4 = desplazamiento derecha
+const BTN_FWD   =4;   // BTN5 = avanzar
+
+//---------------------------------------------------------------------------------
+// canvas
+//---------------------------------------------------------------------------------
+const cv=$('game'), ctx=cv.getContext('2d');
+let W=0,H=0,W2=0,H2=0,FOCAL=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth; H=window.innerHeight; W2=W/2; H2=H/2;
+  cv.width=W*DPR; cv.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  FOCAL=H*0.95;
+}
+window.addEventListener('resize',resize); resize();
+
+//=================================================================================
+//  CIRCUITO — spline Catmull-Rom cerrada con alturas (colinas)
+//=================================================================================
+const HALFW=13;                 // semi-ancho de la pista
+const NSAMP=720;                // muestras del loop
+const CTRL=[                    // puntos de control [x, z, altura]
+  [   0,   0,  5],[ 130, -40,  9],[ 240,  10, 20],[ 300, 130, 30],
+  [ 230, 250, 20],[  80, 290, 10],[ -60, 250, 16],[-150, 330, 26],
+  [-270, 280, 30],[-320, 130, 18],[-250,  -10, 8],[-120, -70, 10]
+];
+const SMP=[];                   // {x,y,z, tx,tz (tangente xz), lx,lz (izquierda), s (arco)}
+(function buildTrack(){
+  const n=CTRL.length, per=NSAMP/n;
+  for(let i=0;i<n;i++){
+    const p0=CTRL[(i-1+n)%n], p1=CTRL[i], p2=CTRL[(i+1)%n], p3=CTRL[(i+2)%n];
+    for(let k=0;k<per;k++){
+      const t=k/per, t2=t*t, t3=t2*t;
+      const cr=(a,b,c,d)=>0.5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t2+(-a+3*b-3*c+d)*t3);
+      SMP.push({x:cr(p0[0],p1[0],p2[0],p3[0]), z:cr(p0[1],p1[1],p2[1],p3[1]),
+                y:cr(p0[2],p1[2],p2[2],p3[2]), tx:0,tz:0,lx:0,lz:0,s:0});
+    }
+  }
+  let s=0;
+  for(let i=0;i<NSAMP;i++){
+    const a=SMP[i], b=SMP[(i+1)%NSAMP];
+    let dx=b.x-a.x, dz=b.z-a.z;
+    const d=Math.hypot(dx,dz)||1e-6;
+    a.tx=dx/d; a.tz=dz/d;
+    a.lx=-a.tz; a.lz=a.tx;          // vector "izquierda" en xz
+    a.s=s; s+=Math.hypot(b.x-a.x,b.z-a.z,b.y-a.y);
+  }
+  SMP.total=s;
+})();
+const TRKLEN=SMP.total;
+// lookup arco → índice de muestra
+const S2I=new Uint16Array(2048);
+(function(){ let j=0;
+  for(let k=0;k<2048;k++){ const target=k/2048*TRKLEN;
+    while(j<NSAMP-1 && SMP[j+1].s<target) j++;
+    S2I[k]=j; }
+})();
+function sampleAt(s){ s=((s%TRKLEN)+TRKLEN)%TRKLEN; return SMP[S2I[Math.min(2047,(s/TRKLEN*2048)|0)]]; }
+function nearestIdx(x,z,hint){
+  let best=hint,bd=1e18;
+  for(let o=-28;o<=28;o++){
+    const i=((hint+o)%NSAMP+NSAMP)%NSAMP, p=SMP[i];
+    const d=(p.x-x)*(p.x-x)+(p.z-z)*(p.z-z);
+    if(d<bd){ bd=d; best=i; }
+  }
+  return best;
+}
+
+// arcos (puertas) — el 0 es la META
+const NGATES=16, GATES=[];
+for(let g=0;g<NGATES;g++){
+  const i=Math.round(g*NSAMP/NGATES)%NSAMP;
+  GATES.push({idx:i, s:SMP[i].s, col:g===0?'#ffd23f':['#00d4ff','#7c3aed','#ff2bd6'][g%3], flash:0});
+}
+// pilones de neón decorativos a los costados
+const DECOR=[];
+{ let rng=1234; const rnd=()=>{ rng=(rng*16807)%2147483647; return rng/2147483647; };
+  for(let k=0;k<100;k++){
+    const i=(k*7.2|0)%NSAMP, p=SMP[i];
+    const side=(k%2?1:-1)*(HALFW+8+rnd()*30);
+    DECOR.push({x:p.x+p.lx*side, z:p.z+p.lz*side, y0:p.y-2, h:5+rnd()*11,
+      col:['#00d4ff','#7c3aed','#ff2bd6','#ff6b35'][(rnd()*4)|0], ph:rnd()*TAU});
+  }
+  // HUMO: bancos de niebla flotando sobre la pista
+  window.FOGS=[];
+  for(let k=0;k<64;k++){
+    const i=(rnd()*NSAMP)|0, p=SMP[i];
+    FOGS.push({i, off:(rnd()*2-1)*(HALFW+12), y:p.y+1+rnd()*6, r:16+rnd()*24,
+      ph:rnd()*TAU, col:['106,59,216','10,168,204','192,43,168','58,74,122'][(rnd()*4)|0]});
+  }
+}
+
+//=================================================================================
+//  CIELO GALÁCTICO — panorama pre-renderizado (nebulosas + estrellas + galaxia)
+//=================================================================================
+const PANW=2048, PANH=760;
+const PAN=document.createElement('canvas'); PAN.width=PANW; PAN.height=PANH;
+const TWK=[];   // estrellas que titilan en vivo
+(function buildSky(){
+  const c=PAN.getContext('2d');
+  let rng=777; const rnd=()=>{ rng=(rng*48271)%2147483647; return rng/2147483647; };
+  const g=c.createLinearGradient(0,0,0,PANH);
+  g.addColorStop(0,'#020008'); g.addColorStop(0.55,'#070226');
+  g.addColorStop(0.85,'#140741'); g.addColorStop(1,'#2a0f52');
+  c.fillStyle=g; c.fillRect(0,0,PANW,PANH);
+  // banda galáctica diagonal (centrada en la zona visible del panorama)
+  c.save(); c.translate(PANW/2,PANH*0.60); c.rotate(-0.22);
+  for(let k=0;k<7;k++){
+    const gx=(k-3)*300, r=200+rnd()*160;
+    const gg=c.createRadialGradient(gx,0,0,gx,0,r);
+    gg.addColorStop(0,'rgba(180,150,255,0.16)'); gg.addColorStop(0.5,'rgba(120,80,220,0.07)');
+    gg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=gg; c.beginPath(); c.ellipse(gx,0,r*1.6,r*0.5,0,0,TAU); c.fill();
+  }
+  for(let k=0;k<420;k++){
+    const x=(rnd()-0.5)*PANW*1.1, y=(rnd()-0.5)*150*Math.exp(-rnd()*1.5);
+    c.fillStyle=`rgba(255,255,255,${0.25+rnd()*0.6})`;
+    c.fillRect(x,y,rnd()<0.85?1:2,1);
+  }
+  c.restore();
+  // nebulosas de colores (más densas y repartidas por TODO el panorama)
+  c.globalCompositeOperation='lighter';
+  const NEB=[['124,58,237',.34],['0,212,255',.24],['255,43,214',.26],['255,107,53',.19],['58,255,212',.16]];
+  for(let k=0;k<16;k++){
+    const [col,al]=NEB[k%NEB.length];
+    const x=rnd()*PANW, y=PANH*(0.25+rnd()*0.72), r=190+rnd()*320;
+    const gg=c.createRadialGradient(x,y,0,x,y,r);
+    gg.addColorStop(0,`rgba(${col},${al})`); gg.addColorStop(0.6,`rgba(${col},${al*0.35})`);
+    gg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=gg; c.beginPath(); c.arc(x,y,r,0,TAU); c.fill();
+  }
+  // resplandor de horizonte (borde inferior del panorama)
+  {
+    const hg=c.createLinearGradient(0,PANH-170,0,PANH);
+    hg.addColorStop(0,'rgba(0,0,0,0)');
+    hg.addColorStop(0.6,'rgba(124,58,237,0.30)');
+    hg.addColorStop(1,'rgba(255,43,214,0.45)');
+    c.fillStyle=hg; c.fillRect(0,PANH-170,PANW,170);
+  }
+  // planeta con anillo
+  {
+    const x=PANW*0.72,y=PANH*0.52,r=64;
+    const gg=c.createRadialGradient(x-r*0.4,y-r*0.4,r*0.1,x,y,r);
+    gg.addColorStop(0,'#9a6bff'); gg.addColorStop(0.55,'#4a1c96'); gg.addColorStop(1,'#170638');
+    c.globalCompositeOperation='source-over';
+    c.fillStyle=gg; c.beginPath(); c.arc(x,y,r,0,TAU); c.fill();
+    c.strokeStyle='rgba(0,212,255,0.5)'; c.lineWidth=4;
+    c.beginPath(); c.ellipse(x,y,r*1.7,r*0.42,-0.35,0,TAU); c.stroke();
+    c.strokeStyle='rgba(255,210,63,0.28)'; c.lineWidth=9;
+    c.beginPath(); c.ellipse(x,y,r*1.95,r*0.5,-0.35,0,TAU); c.stroke();
+  }
+  c.globalCompositeOperation='source-over';
+  // estrellas (todo el alto del panorama)
+  for(let k=0;k<820;k++){
+    const x=rnd()*PANW, y=rnd()*PANH*0.98, sz=rnd()<0.8?1:2;
+    const cols=['255,255,255','200,230,255','255,220,240','255,240,200'];
+    c.fillStyle=`rgba(${cols[(rnd()*4)|0]},${0.35+rnd()*0.65})`;
+    c.fillRect(x,y,sz,sz);
+  }
+  // estrellas brillantes con destello en cruz
+  for(let k=0;k<26;k++){
+    const x=rnd()*PANW, y=PANH*(0.2+rnd()*0.75), r=2+rnd()*2.5;
+    const cols=['#ffffff','#aee6ff','#ffc7ee','#ffe9b0'];
+    const col=cols[(rnd()*4)|0];
+    const gg=c.createRadialGradient(x,y,0,x,y,r*5);
+    gg.addColorStop(0,col); gg.addColorStop(0.25,col+'88'); gg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=gg; c.beginPath(); c.arc(x,y,r*5,0,TAU); c.fill();
+    c.strokeStyle=col; c.globalAlpha=0.75; c.lineWidth=1;
+    c.beginPath(); c.moveTo(x-r*6,y); c.lineTo(x+r*6,y); c.moveTo(x,y-r*6); c.lineTo(x,y+r*6); c.stroke();
+    c.globalAlpha=1;
+  }
+  for(let k=0;k<14;k++) TWK.push({u:rnd(),v:rnd()*0.8,ph:rnd()*TAU,
+    col:['#ffffff','#7de3ff','#ff9be8','#ffe08a'][(rnd()*4)|0]});
+})();
+
+//=================================================================================
+//  ESTADO — jugador, bots, carrera
+//=================================================================================
+const LAPS=3, VMAX=78;
+const input={ btn:[0,0,0,0,0], steer:0, pitch:0, connected:false,
+  imuCenterX:2048, imuCenterY:2048, _needCenter:true, sens:1, vol:0.8 };
+const D={};        // dron del jugador
+const BOTS=[];
+const BOTDEF=[
+  {name:'VOLT', col:'#00ff9d', spd:50.0},
+  {name:'NYX',  col:'#ff2bd6', spd:54.0},
+  {name:'KAJI', col:'#ffd23f', spd:47.0},
+  {name:'ORO',  col:'#ff6b35', spd:44.0},
+];
+const G={ mode:'menu', t:0, count:0, roll:0, shake:0, gateFlash:0, finishRank:0,
+  lapStartT:0, best:0, raceT:0, finished:[], paused:false };
+
+function resetRace(){
+  Object.assign(D,{x:0,y:0,z:0,yaw:0,pitch:0,vx:0,vy:0,vz:0,idx:0,sPrev:0,prog:-16,
+    lap:1, lapT:0, spd:0});
+  // grilla de partida: jugador al medio, bots adelante/atrás alternados
+  const grid=[[-8,-4.5],[-12,5],[-20,-5],[-24,4.5]];
+  BOTS.length=0;
+  BOTDEF.forEach((b,i)=>{
+    const [gs,lat]=grid[i], p=sampleAt(gs+TRKLEN);
+    BOTS.push({...b, prog:gs, lat, latPh:Math.random()*TAU, x:p.x,y:p.y+3,z:p.z,
+      trail:[], finished:false, fRank:0, hdx:p.tx, hdz:p.tz});
+  });
+  const st=sampleAt(-16+TRKLEN);
+  D.x=st.x; D.z=st.z; D.y=st.y+3.2;
+  D.yaw=Math.atan2(st.tx,st.tz);
+  D.idx=nearestIdx(D.x,D.z,NSAMP-8);
+  D.sPrev=SMP[D.idx].s;
+  G.best=0; G.raceT=0; G.finishRank=0; G.finished=[];
+  G.lapStartT=0; G.gateFlash=0;
+  GATES.forEach(g=>g.flash=0);
+}
+
+//=================================================================================
+//  FÍSICA del dron (arcade FPV)
+//=================================================================================
+function updatePlayer(dt){
+  const racing=G.mode==='race';
+  const thr=racing&&input.btn[BTN_FWD]?1:0, brk=racing&&input.btn[BTN_BACK]?1:0;
+  const lft=racing&&input.btn[BTN_LEFT]?1:0, rgt=racing&&input.btn[BTN_RIGHT]?1:0;
+
+  // rotación (yaw) y cabeceo (pitch) desde el IMU
+  const steer=clamp(input.steer*input.sens,-1,1);
+  D.yaw+=steer*2.1*dt;
+  const pitchT=clamp(input.pitch*input.sens,-1,1)*0.42;
+  D.pitch=lerp(D.pitch,pitchT,Math.min(1,8*dt));
+
+  const fx=Math.sin(D.yaw), fz=Math.cos(D.yaw);       // adelante
+  const rx=fz, rz=-fx;                                 // derecha
+  const acc=thr*88-brk*62;
+  D.vx+=(fx*acc+rx*(rgt-lft)*75)*dt;
+  D.vz+=(fz*acc+rz*(rgt-lft)*75)*dt;
+
+  // GRIP: la velocidad se alinea al rumbo — sin esto el dron sigue "pegado"
+  // viajando en la dirección vieja al girar con acelerador a fondo
+  {
+    const fwdV=D.vx*fx+D.vz*fz, latV=(D.vx*rx+D.vz*rz)*Math.exp(-5*dt);
+    D.vx=fx*fwdV+rx*latV;
+    D.vz=fz*fwdV+rz*latV;
+  }
+
+  // corredor de energía: fuera de pista frena y empuja de vuelta
+  D.idx=nearestIdx(D.x,D.z,D.idx);
+  const sp=SMP[D.idx];
+  const lat=(D.x-sp.x)*sp.lx+(D.z-sp.z)*sp.lz;         // desvío lateral
+  const off=Math.abs(lat)-(HALFW+6);
+  G.offTrack=off>0;
+  let drag=G.offTrack?3.1:1.06;
+  if(off>28){ const pull=clamp((off-28)*0.4,0,30);     // muro elástico suave
+    D.vx-=sp.lx*Math.sign(lat)*pull*dt*8; D.vz-=sp.lz*Math.sign(lat)*pull*dt*8; }
+  const dk=Math.exp(-drag*dt); D.vx*=dk; D.vz*=dk;
+
+  // velocidad y tope
+  D.spd=Math.hypot(D.vx,D.vz);
+  if(D.spd>VMAX){ const k=VMAX/D.spd; D.vx*=k; D.vz*=k; D.spd=VMAX; }
+  // marcha atrás limitada
+  const fwdSpd=D.vx*fx+D.vz*fz;
+  if(fwdSpd<-14){ const ex=-14-fwdSpd; D.vx+=fx*ex; D.vz+=fz*ex; }
+
+  // elevación: el cabeceo sube/baja el dron (nariz abajo = descender)
+  const vyT=D.pitch*52;
+  D.vy=lerp(D.vy,vyT,Math.min(1,5*dt));
+  D.x+=D.vx*dt; D.z+=D.vz*dt; D.y+=D.vy*dt;
+  const floor=sp.y+1.4, ceil=sp.y+65;
+  if(D.y<floor){ D.y=floor; D.vy=Math.max(0,D.vy); }
+  if(D.y>ceil){ D.y=ceil; D.vy=Math.min(0,D.vy); }
+
+  // choque suave con bots
+  for(const b of BOTS){
+    const dx=b.x-D.x, dy=b.y-D.y, dz=b.z-D.z, d2=dx*dx+dy*dy+dz*dz;
+    if(d2<16 && d2>0.01){ const d=Math.sqrt(d2), push=(4-d)*14;
+      D.vx-=dx/d*push*dt*10; D.vz-=dz/d*push*dt*10; G.shake=Math.min(1,G.shake+0.5); sfxThud(); }
+  }
+
+  // progreso de vuelta (arco continuo, tolera retrocesos)
+  if(racing){
+    const sNow=SMP[D.idx].s;
+    let ds=sNow-D.sPrev;
+    if(ds>TRKLEN/2) ds-=TRKLEN; if(ds<-TRKLEN/2) ds+=TRKLEN;
+    const prev=D.prog; D.prog+=ds; D.sPrev=sNow;
+    // paso por arcos (efecto + sonido)
+    for(const g of GATES){
+      const gp=g.s;   // ¿el tramo [prev,prog] cruzó gp (mód L) hacia adelante?
+      for(let l=Math.floor(prev/TRKLEN)-1;l<=Math.floor(D.prog/TRKLEN)+1;l++){
+        const gAbs=gp+l*TRKLEN;
+        if(prev<gAbs && D.prog>=gAbs && Math.abs(lat)<HALFW+4){
+          g.flash=1; G.gateFlash=1; sfxGate(); break;
+        }
+      }
+    }
+    // vueltas
+    const lapNow=Math.floor(D.prog/TRKLEN)+1;
+    if(lapNow>D.lap && lapNow<=LAPS+1){
+      const lt=G.raceT-G.lapStartT; G.lapStartT=G.raceT;
+      if(!G.best||lt<G.best) G.best=lt;
+      if(lapNow>LAPS){ finishRace(); return; }
+      D.lap=lapNow; lapMsg(lapNow===LAPS?'¡ÚLTIMA VUELTA!':'VUELTA '+lapNow, lt);
+      sfxLap();
+    }
+  }
+}
+
+function updateBots(dt){
+  const racing=G.mode==='race';
+  BOTS.forEach((b,i)=>{
+    if(racing && !b.finished){
+      // rubber-banding: se ajustan al progreso del jugador
+      let v=b.spd;
+      const gap=D.prog-b.prog;
+      if(gap>70) v*=1.18; else if(gap<-90) v*=0.86;
+      b.prog+=v*dt;
+      if(b.prog>=LAPS*TRKLEN){ b.finished=true; b.fRank=++G.finishRank; }
+    }
+    b.latPh+=dt*(0.25+i*0.07);
+    const latT=Math.sin(b.latPh)*HALFW*0.45;
+    b.lat=lerp(b.lat,latT,dt*0.8);
+    const p=sampleAt(b.prog), tx=p.tx, tz=p.tz;
+    const nx=p.x+p.lx*b.lat, nz=p.z+p.lz*b.lat;
+    b.hdx=lerp(b.hdx,tx,dt*4); b.hdz=lerp(b.hdz,tz,dt*4);
+    b.x=lerp(b.x,nx,Math.min(1,dt*6)); b.z=lerp(b.z,nz,Math.min(1,dt*6));
+    b.y=p.y+3+Math.sin(G.t*1.3+i*2)*1.2;
+    if((G.frame&1)===0){ b.trail.push({x:b.x,y:b.y,z:b.z}); if(b.trail.length>16) b.trail.shift(); }
+  });
+}
+
+function playerRank(){
+  let r=1;
+  for(const b of BOTS){ if(b.finished||b.prog>D.prog) r++; }
+  return r;
+}
+
+function finishRace(){
+  const rank=1+G.finishRank+BOTS.filter(b=>!b.finished&&b.prog>D.prog).length;
+  G.mode='finish';
+  sfxFinish(rank===1);
+  const rows=[];
+  const order=[...BOTS.map(b=>({name:b.name,col:b.col,prog:b.finished?1e9-b.fRank:b.prog,me:false})),
+               {name:'TÚ',col:'#ffffff',prog:1e9-rank+0.5,me:true}]
+    .sort((a,b)=>b.prog-a.prog);
+  // ordena: terminados por rank, resto por progreso; TÚ insertado en su rank real
+  const list=[]; let slot=1;
+  order.forEach(o=>list.push({...o,pos:slot++}));
+  const fmt=t=>{ const m=(t/60)|0, s=t%60; return m+':'+s.toFixed(3).padStart(6,'0'); };
+  let html='<table>';
+  list.forEach(o=>{ html+=`<tr class="${o.me?'me':''}"><td>${o.pos}º</td>`+
+    `<td style="color:${o.col}">${o.me?'★ TÚ':o.name}</td></tr>`; });
+  html+='</table>';
+  html+=`<div style="margin-top:10px">TIEMPO TOTAL <b style="color:var(--gold)">${fmt(G.raceT)}</b>`+
+    (G.best?` · MEJOR VUELTA <b style="color:var(--cyan)">${fmt(G.best)}</b>`:'')+'</div>';
+  const ov=$('overlay');
+  document.querySelector('#overlay h1').textContent=rank===1?'¡CAMPEÓN!':'CARRERA TERMINADA';
+  document.querySelector('#overlay .sub').textContent=`LLEGASTE EN ${rank}º LUGAR DE ${BOTS.length+1}`;
+  $('howto').style.display='none';
+  $('results').style.display='block'; $('results').innerHTML=html;
+  $('startBtn').textContent='▶ CORRER DE NUEVO';
+  ov.classList.remove('hide');
+}
+
+//=================================================================================
+//  RENDER
+//=================================================================================
+const cam={x:0,y:0,z:0,yaw:0,pitch:0};
+function project(wx,wy,wz){
+  const dx=wx-cam.x, dy=wy-cam.y, dz=wz-cam.z;
+  const sy=Math.sin(cam.yaw), cy=Math.cos(cam.yaw);
+  const zc=dx*sy+dz*cy, xc=dx*cy-dz*sy;
+  const sp=Math.sin(cam.pitch), cp=Math.cos(cam.pitch);
+  const z2=zc*cp+dy*sp;
+  if(z2<0.35) return null;
+  const y2=dy*cp-zc*sp;
+  return {x:W2+xc*FOCAL/z2, y:H2-y2*FOCAL/z2, z:z2};
+}
+const FAR=520;
+const fogK=z=>clamp(1-z/FAR,0,1);
+// coordenadas de cámara sin proyectar (para poder clipear líneas largas)
+function toCam(wx,wy,wz){
+  const dx=wx-cam.x, dy=wy-cam.y, dz=wz-cam.z;
+  const sy=Math.sin(cam.yaw), cy=Math.cos(cam.yaw);
+  const zc=dx*sy+dz*cy, xc=dx*cy-dz*sy;
+  const sp=Math.sin(cam.pitch), cp=Math.cos(cam.pitch);
+  return {x:xc, y:dy*cp-zc*sp, z:zc*cp+dy*sp};
+}
+// dibuja una línea de mundo clipeada al plano z=0.5 de cámara, con fade por distancia
+function gridLine(x1,y1,z1,x2,y2,z2){
+  let a=toCam(x1,y1,z1), b=toCam(x2,y2,z2);
+  if(a.z<0.5 && b.z<0.5) return;
+  if(a.z<0.5||b.z<0.5){
+    const t=(0.5-a.z)/(b.z-a.z),
+      p={x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t, z:0.5};
+    if(a.z<0.5) a=p; else b=p;
+  }
+  const am=clamp(1-Math.min(a.z,b.z)/(FAR*0.8),0,1)*0.16;
+  if(am<=0.01) return;
+  ctx.globalAlpha=am;
+  ctx.beginPath();
+  ctx.moveTo(W2+a.x*FOCAL/a.z, H2-a.y*FOCAL/a.z);
+  ctx.lineTo(W2+b.x*FOCAL/b.z, H2-b.y*FOCAL/b.z);
+  ctx.stroke();
+  ctx.globalAlpha=1;
+}
+
+function render(){
+  // cámara FPV con micro-vibración por velocidad
+  const shk=G.shake*3+D.spd/VMAX*0.6;
+  cam.x=D.x+Math.sin(G.t*31)*0.04*shk;
+  cam.y=D.y+Math.sin(G.t*47)*0.04*shk;
+  cam.z=D.z;
+  cam.yaw=D.yaw; cam.pitch=D.pitch*0.9;
+  // roll visual por giro + strafe
+  const rollT=-input.steer*0.16-((input.btn[BTN_RIGHT]?1:0)-(input.btn[BTN_LEFT]?1:0))*0.07;
+  G.roll=lerp(G.roll,rollT,0.08);
+
+  ctx.fillStyle='#010005'; ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(W2,H2); ctx.rotate(G.roll); ctx.translate(-W2,-H2);
+
+  //---- cielo panorámico (se desplaza con yaw y pitch)
+  const horY=H2+Math.tan(cam.pitch)*FOCAL;
+  const skyH=H*1.5, skyW=PANW*(skyH/PANH);
+  let u=((cam.yaw/TAU)*skyW)%skyW; if(u<0)u+=skyW;
+  const skyY=horY+70-skyH;
+  ctx.drawImage(PAN,-u,skyY,skyW,skyH);
+  ctx.drawImage(PAN,skyW-u,skyY,skyW,skyH);
+  // estrellas titilantes
+  for(const tw of TWK){
+    let sx=(tw.u*skyW-u); if(sx<-skyW/2) sx+=skyW; if(sx>W+40) sx-=skyW;
+    const sy2=skyY+tw.v*skyH*0.8;
+    if(sx<-20||sy2<-20||sy2>horY) continue;
+    const a=0.3+0.7*Math.abs(Math.sin(G.t*2.2+tw.ph));
+    ctx.fillStyle=tw.col; ctx.globalAlpha=a;
+    ctx.fillRect(sx,sy2,2,2); ctx.globalAlpha=a*0.4;
+    ctx.fillRect(sx-3,sy2,8,2); ctx.fillRect(sx,sy2-3,2,8);
+    ctx.globalAlpha=1;
+  }
+  // bruma de horizonte + suelo profundo
+  const gg=ctx.createLinearGradient(0,horY-40,0,H);
+  gg.addColorStop(0,'rgba(42,15,82,0.9)'); gg.addColorStop(0.25,'#0b0420');
+  gg.addColorStop(1,'#03010c');
+  ctx.fillStyle=gg; ctx.fillRect(-W*0.3,horY-40,W*1.6,H-horY+40+H*0.3);
+
+  //---- grilla de suelo synthwave (plano y=-2, con clipping en cámara)
+  {
+    const GS=45, GY=-2, R=FAR*0.85;
+    ctx.strokeStyle='#7c3aed'; ctx.lineWidth=1;
+    const gx0=Math.floor((cam.x-R)/GS)*GS, gz0=Math.floor((cam.z-R)/GS)*GS;
+    for(let gx=gx0;gx<=cam.x+R;gx+=GS)
+      gridLine(gx,GY,cam.z-R, gx,GY,cam.z+R);
+    for(let gz=gz0;gz<=cam.z+R;gz+=GS)
+      gridLine(cam.x-R,GY,gz, cam.x+R,GY,gz);
+  }
+
+  //---- pista (quads far→near a lo largo del circuito)
+  const STEP=3, AHEAD=58, BACK=3;
+  const base=D.idx;
+  for(let k=AHEAD;k>=-BACK;k--){
+    const ia=((base+k*STEP)%NSAMP+NSAMP)%NSAMP, ib=(ia+STEP)%NSAMP;
+    const a=SMP[ia], b=SMP[ib];
+    const aL=project(a.x+a.lx*HALFW,a.y,a.z+a.lz*HALFW),
+          aR=project(a.x-a.lx*HALFW,a.y,a.z-a.lz*HALFW),
+          bL=project(b.x+b.lx*HALFW,b.y,b.z+b.lz*HALFW),
+          bR=project(b.x-b.lx*HALFW,b.y,b.z-b.lz*HALFW);
+    if(!aL||!aR||!bL||!bR) continue;
+    const zm=Math.min(aL.z,bL.z), f=fogK(zm);
+    if(f<=0.01) continue;
+    // asfalto oscuro con franjas sutiles
+    const bright=(ia%12)<2?0.14:0.07;
+    ctx.fillStyle=`rgba(${18+bright*90|0},${20+bright*70|0},${44+bright*120|0},${0.94*f})`;
+    ctx.beginPath();
+    ctx.moveTo(aL.x,aL.y); ctx.lineTo(bL.x,bL.y); ctx.lineTo(bR.x,bR.y); ctx.lineTo(aR.x,aR.y);
+    ctx.closePath(); ctx.fill();
+    // bordes de neón (doble trazo = glow barato)
+    const edge=(x1,y1,x2,y2,col)=>{
+      ctx.strokeStyle=col; ctx.globalAlpha=0.20*f; ctx.lineWidth=7;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.globalAlpha=0.95*f; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.globalAlpha=1;
+    };
+    edge(aL.x,aL.y,bL.x,bL.y,'#00d4ff');
+    edge(aR.x,aR.y,bR.x,bR.y,'#ff2bd6');
+    // línea central discontinua
+    if((ia%8)<4){
+      const aC=project(a.x,a.y+0.05,a.z), bC=project(b.x,b.y+0.05,b.z);
+      if(aC&&bC){ ctx.strokeStyle='#7c3aed'; ctx.globalAlpha=0.5*f; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(aC.x,aC.y); ctx.lineTo(bC.x,bC.y); ctx.stroke(); ctx.globalAlpha=1; }
+    }
+  }
+
+  //---- objetos con profundidad (arcos, pilones, humo, bots) — painter
+  const objs=[];
+  for(const g of GATES){
+    const p=SMP[g.idx], c=project(p.x,p.y+8,p.z);
+    if(c&&c.z<FAR) objs.push({z:c.z, draw:()=>drawGate(g)});
+    g.flash=Math.max(0,g.flash-0.035);
+  }
+  for(const d of DECOR){
+    const c=project(d.x,d.y0+d.h/2,d.z);
+    if(c&&c.z<FAR*0.9) objs.push({z:c.z, draw:()=>drawPylon(d)});
+  }
+  for(const fg of FOGS){
+    const p=SMP[fg.i];
+    const wx=p.x+p.lx*fg.off+Math.sin(G.t*0.07+fg.ph)*5;
+    const wz=p.z+p.lz*fg.off+Math.cos(G.t*0.05+fg.ph)*5;
+    const c=project(wx,fg.y,wz);
+    if(c&&c.z<FAR*0.8) objs.push({z:c.z, draw:()=>drawFog(c,fg)});
+  }
+  for(const b of BOTS){
+    const c=project(b.x,b.y,b.z);
+    if(c&&c.z<FAR) objs.push({z:c.z, draw:()=>drawBot(b,c)});
+  }
+  objs.sort((a,b)=>b.z-a.z);
+  for(const o of objs) o.draw();
+
+  ctx.restore();   // fin transform con roll
+
+  //---- FX de pantalla
+  // líneas de velocidad
+  const sk=D.spd/VMAX;
+  if(sk>0.4){
+    ctx.strokeStyle='rgba(180,220,255,'+((sk-0.4)*0.5)+')'; ctx.lineWidth=1.5;
+    for(let i=0;i<12;i++){
+      const a=(i/12)*TAU+G.t*0.7, r1=Math.min(W,H)*0.42, r2=r1+60+sk*120;
+      ctx.beginPath();
+      ctx.moveTo(W2+Math.cos(a)*r1,H2+Math.sin(a)*r1);
+      ctx.lineTo(W2+Math.cos(a)*r2,H2+Math.sin(a)*r2); ctx.stroke();
+    }
+  }
+  // destello al cruzar arco
+  if(G.gateFlash>0){
+    ctx.fillStyle=`rgba(150,240,255,${G.gateFlash*0.16})`; ctx.fillRect(0,0,W,H);
+    G.gateFlash=Math.max(0,G.gateFlash-0.06);
+  }
+  // viñeta (+ roja fuera de pista)
+  const vg=ctx.createRadialGradient(W2,H2,Math.min(W,H)*0.42,W2,H2,Math.max(W,H)*0.75);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,G.offTrack?'rgba(120,0,20,0.55)':'rgba(0,0,5,0.5)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  G.shake=Math.max(0,G.shake-0.03);
+
+  drawMini();
+}
+
+function drawGate(g){
+  const p=SMP[g.idx], hw=HALFW+3, hh=15;
+  const bl=project(p.x+p.lx*hw,p.y,p.z+p.lz*hw),
+        tl=project(p.x+p.lx*hw,p.y+hh,p.z+p.lz*hw),
+        tr=project(p.x-p.lx*hw,p.y+hh,p.z-p.lz*hw),
+        br=project(p.x-p.lx*hw,p.y,p.z-p.lz*hw);
+  if(!bl||!tl||!tr||!br) return;
+  const f=fogK(bl.z), glow=0.25+g.flash*0.75;
+  const path=()=>{ ctx.beginPath(); ctx.moveTo(bl.x,bl.y); ctx.lineTo(tl.x,tl.y);
+    ctx.lineTo(tr.x,tr.y); ctx.lineTo(br.x,br.y); };
+  ctx.strokeStyle=g.col; ctx.globalAlpha=glow*0.35*f; ctx.lineWidth=10; path(); ctx.stroke();
+  ctx.globalAlpha=Math.min(1,(0.8+g.flash)*f); ctx.lineWidth=3; path(); ctx.stroke();
+  // luces sobre el travesaño
+  for(let k=0;k<=4;k++){
+    const t=k/4, x=lerp(tl.x,tr.x,t), y=lerp(tl.y,tr.y,t);
+    const on=((G.frame>>3)+k)%5===0;
+    ctx.fillStyle=on?'#ffffff':g.col; ctx.globalAlpha=(on?1:0.7)*f;
+    ctx.beginPath(); ctx.arc(x,y,on?3:2,0,TAU); ctx.fill();
+  }
+  if(g===GATES[0]){    // META
+    ctx.globalAlpha=f; ctx.fillStyle=g.col;
+    ctx.font='700 '+Math.max(9,140/bl.z*FOCAL/60|0)+'px JetBrains Mono,monospace';
+    ctx.textAlign='center';
+    ctx.fillText('META',(tl.x+tr.x)/2,(tl.y+tr.y)/2-8);
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPylon(d){
+  const a=project(d.x,d.y0,d.z), b=project(d.x,d.y0+d.h,d.z);
+  if(!a||!b) return;
+  const f=fogK(a.z), blink=0.55+0.45*Math.sin(G.t*2+d.ph);
+  ctx.strokeStyle=d.col; ctx.globalAlpha=0.5*f; ctx.lineWidth=Math.max(1,26/a.z*10);
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.globalAlpha=blink*f;
+  ctx.beginPath(); ctx.arc(b.x,b.y,Math.max(1.2,30/a.z*6),0,TAU); ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+function drawFog(c,fg){
+  let r=fg.r*FOCAL/c.z;
+  if(r<5) return;
+  r=Math.min(r,H*0.9);
+  const near=clamp(c.z/26,0.22,1);                  // cerca se hace translúcido
+  const breathe=0.8+0.2*Math.sin(G.t*0.4+fg.ph);
+  const a=0.15*fogK(c.z)*near*breathe;
+  const gg=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,r);
+  gg.addColorStop(0,`rgba(${fg.col},${a})`);
+  gg.addColorStop(0.6,`rgba(${fg.col},${a*0.5})`);
+  gg.addColorStop(1,`rgba(${fg.col},0)`);
+  ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(c.x,c.y,r,0,TAU); ctx.fill();
+}
+
+function drawBot(b,c){
+  const f=fogK(c.z), s=FOCAL/c.z;
+  // estela
+  if(b.trail.length>1){
+    for(let i=1;i<b.trail.length;i++){
+      const p1=project(b.trail[i-1].x,b.trail[i-1].y,b.trail[i-1].z);
+      const p2=project(b.trail[i].x,b.trail[i].y,b.trail[i].z);
+      if(!p1||!p2) continue;
+      ctx.strokeStyle=b.col; ctx.globalAlpha=(i/b.trail.length)*0.4*f;
+      ctx.lineWidth=Math.max(1,(i/b.trail.length)*s*0.5);
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  const R=s*1.6;
+  if(R<1.2) { ctx.fillStyle=b.col; ctx.globalAlpha=f; ctx.fillRect(c.x,c.y,2,2); ctx.globalAlpha=1; return; }
+  // halo
+  const gg=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,R*3);
+  gg.addColorStop(0,b.col+'55'); gg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.globalAlpha=f; ctx.fillStyle=gg;
+  ctx.beginPath(); ctx.arc(c.x,c.y,R*3,0,TAU); ctx.fill();
+  // cuerpo rombo
+  ctx.fillStyle='#0c0c1e'; ctx.strokeStyle=b.col; ctx.lineWidth=Math.max(1,R*0.16);
+  ctx.beginPath();
+  ctx.moveTo(c.x,c.y-R*0.55); ctx.lineTo(c.x+R,c.y); ctx.lineTo(c.x,c.y+R*0.55); ctx.lineTo(c.x-R,c.y);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  // 4 rotores girando
+  const spin=G.t*22;
+  for(let k=0;k<4;k++){
+    const ox=(k%2?1:-1)*R*1.25, oy=(k<2?-1:1)*R*0.42;
+    ctx.strokeStyle=b.col; ctx.globalAlpha=0.55*f; ctx.lineWidth=Math.max(1,R*0.1);
+    ctx.beginPath(); ctx.arc(c.x+ox,c.y+oy,R*0.45,0,TAU); ctx.stroke();
+    ctx.globalAlpha=f;
+    ctx.beginPath(); ctx.arc(c.x+ox,c.y+oy,R*0.45,spin+k,spin+k+1.6); ctx.stroke();
+  }
+  // baliza + cabina
+  ctx.fillStyle='#fff'; ctx.globalAlpha=(0.5+0.5*Math.sin(G.t*7+b.latPh))*f;
+  ctx.beginPath(); ctx.arc(c.x,c.y-R*0.25,R*0.14,0,TAU); ctx.fill();
+  // nombre
+  if(c.z<230){
+    ctx.globalAlpha=0.85*f; ctx.fillStyle=b.col;
+    ctx.font='700 11px JetBrains Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(b.name,c.x,c.y-R*1.7);
+  }
+  ctx.globalAlpha=1;
+}
+
+//---- minimapa
+const mini=$('mini'), mctx=mini.getContext('2d');
+let miniPath=null, miniFit=null;
+(function(){
+  let minx=1e9,maxx=-1e9,minz=1e9,maxz=-1e9;
+  for(const p of SMP){ minx=Math.min(minx,p.x); maxx=Math.max(maxx,p.x);
+    minz=Math.min(minz,p.z); maxz=Math.max(maxz,p.z); }
+  const pad=14, sc=Math.min((150-pad*2)/(maxx-minx),(150-pad*2)/(maxz-minz));
+  miniFit=p=>({x:pad+(p.x-minx)*sc+(150-pad*2-(maxx-minx)*sc)/2,
+               y:150-pad-(p.z-minz)*sc-(150-pad*2-(maxz-minz)*sc)/2});
+  miniPath=new Path2D();
+  SMP.forEach((p,i)=>{ const q=miniFit(p); i?miniPath.lineTo(q.x,q.y):miniPath.moveTo(q.x,q.y); });
+  miniPath.closePath();
+})();
+function drawMini(){
+  mctx.clearRect(0,0,150,150);
+  mctx.strokeStyle='rgba(124,58,237,0.9)'; mctx.lineWidth=3.5; mctx.stroke(miniPath);
+  mctx.strokeStyle='rgba(0,212,255,0.8)'; mctx.lineWidth=1; mctx.stroke(miniPath);
+  const st=miniFit(SMP[GATES[0].idx]);
+  mctx.fillStyle='#ffd23f'; mctx.fillRect(st.x-3,st.y-3,6,6);
+  for(const b of BOTS){ const q=miniFit(b);
+    mctx.fillStyle=b.col; mctx.beginPath(); mctx.arc(q.x,q.y,3,0,TAU); mctx.fill(); }
+  const q=miniFit(D);
+  mctx.fillStyle='#fff'; mctx.beginPath(); mctx.arc(q.x,q.y,4,0,TAU); mctx.fill();
+  mctx.strokeStyle='#fff'; mctx.lineWidth=1.5;
+  mctx.beginPath(); mctx.moveTo(q.x,q.y);
+  mctx.lineTo(q.x+Math.sin(D.yaw)*8,q.y-Math.cos(D.yaw)*8); mctx.stroke();
+}
+
+//=================================================================================
+//  HUD / mensajes
+//=================================================================================
+const ORD=['1º','2º','3º','4º','5º'];
+function fmtT(t){ const m=(t/60)|0, s=t%60; return m+':'+s.toFixed(3).padStart(6,'0'); }
+function refreshHUD(){
+  $('hPos').textContent=G.mode==='race'?ORD[playerRank()-1]:'–';
+  $('hLap').textContent=clamp(D.lap,1,LAPS);
+  $('hTime').textContent=G.mode==='race'?fmtT(G.raceT-G.lapStartT):'0:00.000';
+  $('hBest').textContent=G.best?fmtT(G.best):'—';
+  $('speed').innerHTML=(D.spd*3.4|0)+'<small> km/h</small>';
+  $('warn').style.opacity=G.offTrack?1:0;
+  [['tgB1',BTN_BACK],['tgB2',BTN_LEFT],['tgB4',BTN_RIGHT],['tgB5',BTN_FWD]]
+    .forEach(([id,i])=>$(id).classList.toggle('on',!!input.btn[i]));
+}
+let lapMsgT=null;
+function lapMsg(txt,lt){
+  const el=$('lapmsg');
+  el.textContent=txt+(lt?'  ·  '+fmtT(lt):''); el.style.opacity=1;
+  clearTimeout(lapMsgT); lapMsgT=setTimeout(()=>el.style.opacity=0,2200);
+}
+
+//=================================================================================
+//  AUDIO — motor + viento + FX (Web Audio, sin samples)
+//=================================================================================
+let AC=null, master=null, engA=null, engB=null, engGain=null, engFilt=null,
+    windSrc=null, windGain=null, windFilt=null, musicOn=true;
+function initAudio(){
+  if(AC) return;
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=input.vol; master.connect(AC.destination);
+  engFilt=AC.createBiquadFilter(); engFilt.type='lowpass'; engFilt.frequency.value=900;
+  engGain=AC.createGain(); engGain.gain.value=0;
+  engA=AC.createOscillator(); engA.type='sawtooth';
+  engB=AC.createOscillator(); engB.type='sawtooth'; engB.detune.value=9;
+  engA.connect(engFilt); engB.connect(engFilt); engFilt.connect(engGain); engGain.connect(master);
+  engA.start(); engB.start();
+  const len=AC.sampleRate*2, buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  windSrc=AC.createBufferSource(); windSrc.buffer=buf; windSrc.loop=true;
+  windFilt=AC.createBiquadFilter(); windFilt.type='bandpass'; windFilt.Q.value=0.7;
+  windGain=AC.createGain(); windGain.gain.value=0;
+  windSrc.connect(windFilt); windFilt.connect(windGain); windGain.connect(master);
+  windSrc.start();
+}
+function updateAudio(){
+  if(!AC) return;
+  master.gain.value=musicOn?input.vol:0;
+  const thr=input.btn[BTN_FWD]?1:0, sk=D.spd/VMAX;
+  engA.frequency.value=64+D.spd*2.7+thr*26;
+  engB.frequency.value=64.7+D.spd*2.7+thr*26;
+  engFilt.frequency.value=500+sk*1600;
+  engGain.gain.value=(G.mode==='race'||G.mode==='count')?(0.028+sk*0.05+thr*0.028):0;
+  windFilt.frequency.value=350+sk*1500;
+  windGain.gain.value=sk*sk*0.16;
+}
+function beep(f,dur,type='sine',g=0.22){
+  if(!AC) return;
+  const o=AC.createOscillator(), gn=AC.createGain();
+  o.type=type; o.frequency.value=f;
+  gn.gain.setValueAtTime(g,AC.currentTime);
+  gn.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+  o.connect(gn); gn.connect(master); o.start(); o.stop(AC.currentTime+dur);
+}
+function sfxGate(){ if(!AC)return; beep(1250,0.16,'triangle',0.16); beep(1875,0.12,'sine',0.08); }
+function sfxLap(){ beep(660,0.12); setTimeout(()=>beep(880,0.16),120); }
+function sfxThud(){ beep(90,0.14,'square',0.18); }
+function sfxCount(go){ go?(beep(880,0.5,'square',0.2),beep(1320,0.5,'sine',0.12)):beep(440,0.22,'square',0.16); }
+function sfxFinish(win){
+  const seq=win?[660,880,1100,1320]:[520,440,392];
+  seq.forEach((f,i)=>setTimeout(()=>beep(f,0.3,'triangle',0.2),i*160));
+}
+
+//=================================================================================
+//  WEB SERIAL (PercuSynth) — 115200, 50Hz: p0,p1,p2,p3,b1,b2,b3,b4,b5,imuX,imuY
+//=================================================================================
+let port=null, reader=null, serialOn=false, serBuf='';
+const decd=new TextDecoder();
+async function toggleSerial(){
+  if(serialOn){ await closeSerial(); return; }
+  if(!('serial' in navigator)){ toast('Web Serial no disponible — usa Chrome/Edge'); return; }
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    serialOn=true; input.connected=true;
+    setSerialPill(true,'PERCUSYNTH');
+    readLoop();
+  }catch(e){ toast('Conexión cancelada'); }
+}
+async function closeSerial(){
+  serialOn=false; input.connected=false;
+  try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch(e){}
+  try{ if(port) await port.close(); }catch(e){}
+  port=null; reader=null; setSerialPill(false,'SIN CONEXIÓN');
+}
+async function readLoop(){
+  reader=port.readable.getReader();
+  try{
+    while(serialOn){
+      const {value,done}=await reader.read();
+      if(done) break;
+      serBuf+=decd.decode(value,{stream:true});
+      let nl;
+      while((nl=serBuf.indexOf('\n'))>=0){
+        const line=serBuf.slice(0,nl).trim(); serBuf=serBuf.slice(nl+1);
+        if(line && line[0]!=='=') parseSerial(line);
+      }
+    }
+  }catch(e){}
+}
+let gotData=false, btnPrev=[0,0,0,0,0];
+function parseSerial(line){
+  const v=line.split(',').map(Number);
+  if(v.length<11 || v.some(isNaN)) return;
+  if(!gotData){ gotData=true; setSerialPill(true,'DATOS OK'); }
+  input.btn=[v[4]?1:0,v[5]?1:0,v[6]?1:0,v[7]?1:0,v[8]?1:0];
+  // POT1 = volumen · POT2 = sensibilidad IMU
+  input.vol=clamp(v[0]/4095,0,1);
+  input.sens=0.5+ (v[1]/4095)*1.5;
+  // IMU: accel Y (idx10) = inclinar izq/der → rotación · accel X (idx9) = adelante/atrás → cabeceo
+  if(input._needCenter){ input.imuCenterX=v[9]; input.imuCenterY=v[10]; input._needCenter=false; }
+  const ix=(v[9]-input.imuCenterX)/2048, iy=(v[10]-input.imuCenterY)/2048;
+  input.steer=clamp(-iy*2.2,-1,1);      // inclinar a la derecha → gira a la derecha
+  input.pitch=clamp(-ix*2.2,-1,1);      // inclinar adelante → nariz abajo (descender)
+  // BTN5: flanco → recentrar IMU (o iniciar desde el overlay)
+  if(input.btn[BTN_UTIL]&&!btnPrev[BTN_UTIL]){
+    if(G.mode==='menu'||G.mode==='finish') startRace();
+    else { input._needCenter=true; toast('IMU centrado'); }
+  }
+  btnPrev=[...input.btn];
+}
+function setSerialPill(on,txt){
+  const p=$('pSerial'); p.classList.toggle('live',on);
+  p.lastChild.textContent=txt;
+}
+
+//=================================================================================
+//  FALLBACK: mouse + teclado
+//=================================================================================
+window.addEventListener('mousemove',e=>{
+  if(input.connected) return;
+  input.steer=clamp((e.clientX/W-0.5)*2.6,-1,1);
+  input.pitch=clamp(-(e.clientY/H-0.5)*2.6,-1,1);
+});
+const keyMap={ 'w':BTN_FWD,'arrowup':BTN_FWD, 's':BTN_BACK,'arrowdown':BTN_BACK,
+  'a':BTN_LEFT,'arrowleft':BTN_LEFT, 'd':BTN_RIGHT,'arrowright':BTN_RIGHT };
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k in keyMap){ input.btn[keyMap[k]]=1; e.preventDefault(); }
+  else if(k==='z'){ input._needCenter=true; toast('IMU centrado'); }
+  else if(k==='m'){ initAudio(); musicOn=!musicOn; toast(musicOn?'Sonido ON':'Sonido OFF'); }
+  else if(k==='enter'&&(G.mode==='menu'||G.mode==='finish')) startRace();
+});
+window.addEventListener('keyup',e=>{
+  const k=e.key.toLowerCase();
+  if(k in keyMap) input.btn[keyMap[k]]=0;
+});
+
+//=================================================================================
+//  FLUJO de carrera
+//=================================================================================
+function startRace(){
+  initAudio(); if(AC.state==='suspended') AC.resume();
+  resetRace();
+  G.mode='count'; G.count=3.6; G.t=0; G.frame=0; G.cdLast=4;
+  $('overlay').classList.add('hide');
+  $('cd').style.display='block';
+}
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.style.opacity='1';
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.opacity='0',1400);
+}
+$('startBtn').addEventListener('click',startRace);
+$('connBtn').addEventListener('click',toggleSerial);
+$('fwBtn').addEventListener('click',downloadFirmware);
+
+//=================================================================================
+//  LOOP principal
+//=================================================================================
+let lastT=performance.now();
+G.frame=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  G.t+=dt; G.frame++;
+  if(G.mode==='count'){
+    G.count-=dt;
+    const n=Math.ceil(G.count);
+    if(n!==G.cdLast && n>=1){ G.cdLast=n; $('cd').textContent=n; sfxCount(false); }
+    if(G.count<=0){
+      G.mode='race'; G.raceT=0; G.lapStartT=0;
+      $('cd').textContent='¡GO!'; sfxCount(true);
+      setTimeout(()=>$('cd').style.display='none',700);
+    }
+    updatePlayer(dt); updateBots(0);        // en grilla, sin avance de bots
+  }else if(G.mode==='race'){
+    G.raceT+=dt;
+    updatePlayer(dt); updateBots(dt);
+  }else{
+    updateBots(dt*0.3);                     // fondo animado en menú/final
+  }
+  render(); refreshHUD(); updateAudio();
+}
+resetRace();
+requestAnimationFrame(frame);
+
+//=================================================================================
+//  FIRMWARE PercuSynth (.ino) — descarga embebida
+//  (idéntico protocolo al de NEON STRIKE: si ya lo flasheaste, sirve tal cual)
+//=================================================================================
+const FIRMWARE = String.raw`//==================================================================================
+//  NEBULA GP — CONTROL PERCUSYNTH  (firmware proto-synth-v2)
+//==================================================================================
+//  HARDWARE: ESP32-S3 + MPU6050 (IMU) + 5 botones + 4 pots
+//  ARDUINO IDE SETTINGS: Board "ESP32S3 Dev Module" · USB CDC On Boot = ENABLED
+//                        · Flash Mode = DIO  (¡no OPI! si no, falla el USB/Serial)
+//  LIBRERIAS REQUERIDAS: solo <Wire.h> (IMU por I2C crudo, sin libreria externa)
+//  DESCRIPCION: envia por USB-Serial el estado de botones, pots y los DOS ejes
+//               crudos del acelerometro para pilotar NEBULA GP
+//               (videogame/nebula_gp) en el navegador. Mismo protocolo que
+//               NEON STRIKE: si ya tienes ese firmware flasheado, sirve tal cual.
+//  FUNCIONAMIENTO: a 50 Hz imprime una linea CSV:
+//      p0,p1,p2,p3,b1,b2,b3,b4,b5,imuX,imuY
+//    - p0..p3  : pots (ADC 1/2/8/10) 0..4095 — POT1 volumen, POT2 sensibilidad IMU
+//    - b1..b5  : botones (44/42/0/45/47) -> 1 si presionado
+//    - imuX    : acelerometro eje X mapeado 0..4095 (centro ~2048)
+//    - imuY    : acelerometro eje Y mapeado 0..4095 (centro ~2048)
+//
+//    BTN1 = retroceder · BTN2 = izquierda · BTN4 = derecha · BTN5 = avanzar
+//    BTN3 = recentrar IMU / iniciar carrera
+//
+//  IMPORTANTE: conecta la webapp al USB NATIVO del ESP32-S3 (no al puerto UART
+//  de programar). El monitor del juego se pone verde cuando llegan datos.
+//==================================================================================
+#include <Wire.h>
+
+#define IMU_SDA 21
+#define IMU_SCL 38
+uint8_t imuAddr = 0x68;
+bool imuOk = false;
+
+const int POT_PIN[4] = {1, 2, 8, 10};
+const int BTN_PIN[5] = {44, 42, 0, 45, 47};   // orden fisico BTN1..BTN5
+
+const unsigned long INTERVALO = 20;            // 50 Hz
+unsigned long tEnvio = 0;
+float emaX = 2048, emaY = 2048;
+
+int leerPot(int pin){ uint32_t s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return (int)(s>>3); }
+
+bool imuPing(uint8_t a){ Wire.beginTransmission(a); return Wire.endTransmission()==0; }
+void imuInit(){
+  Wire.begin(IMU_SDA, IMU_SCL); Wire.setClock(400000);
+  if(imuPing(0x68)){ imuAddr=0x68; imuOk=true; }
+  else if(imuPing(0x69)){ imuAddr=0x69; imuOk=true; }     // AD0 en alto
+  if(imuOk){ Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); }
+}
+// lee acelerometro: devuelve ejes X e Y crudos (int16)
+void leerAccel(int16_t &ax, int16_t &ay){
+  ax=0; ay=0;
+  if(!imuOk) return;
+  Wire.beginTransmission(imuAddr); Wire.write(0x3B); Wire.endTransmission(false);
+  Wire.requestFrom((int)imuAddr, 6, (int)true);
+  if(Wire.available() < 6) return;
+  ax=(Wire.read()<<8)|Wire.read();
+  ay=(Wire.read()<<8)|Wire.read();
+  (void)((Wire.read()<<8)|Wire.read());   // az descartado
+}
+
+void setup(){
+  Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial.setTxTimeoutMs(0);
+#endif
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+  for(int i=0;i<5;i++) pinMode(BTN_PIN[i], INPUT_PULLUP);
+  imuInit();
+  Serial.println(imuOk ? "=IMU OK (0x68/0x69)" : "=IMU NO DETECTADO - revisa SDA21/SCL38/3V3/GND");
+}
+
+void loop(){
+  unsigned long ahora = millis();
+  if(ahora - tEnvio >= INTERVALO){
+    tEnvio = ahora;
+    int p0=leerPot(POT_PIN[0]), p1=leerPot(POT_PIN[1]), p2=leerPot(POT_PIN[2]), p3=leerPot(POT_PIN[3]);
+    int b0=!digitalRead(BTN_PIN[0]), b1=!digitalRead(BTN_PIN[1]), b2=!digitalRead(BTN_PIN[2]),
+        b3=!digitalRead(BTN_PIN[3]), b4=!digitalRead(BTN_PIN[4]);
+    int16_t ax, ay; leerAccel(ax, ay);
+    // map +-1g (~+-16384) a 0..4095 con centro 2048; filtro EMA para suavizar
+    int rawX = constrain(2048 + ax/8, 0, 4095);
+    int rawY = constrain(2048 + ay/8, 0, 4095);
+    emaX = 0.30f*rawX + 0.70f*emaX;
+    emaY = 0.30f*rawY + 0.70f*emaY;
+    Serial.print(p0); Serial.print(','); Serial.print(p1); Serial.print(','); Serial.print(p2); Serial.print(',');
+    Serial.print(p3); Serial.print(','); Serial.print(b0); Serial.print(','); Serial.print(b1); Serial.print(',');
+    Serial.print(b2); Serial.print(','); Serial.print(b3); Serial.print(','); Serial.print(b4); Serial.print(',');
+    Serial.print((int)emaX); Serial.print(','); Serial.println((int)emaY);
+  }
+}
+`;
+function downloadFirmware(){
+  const blob=new Blob([FIRMWARE],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='nebula_gp_control_percusynth.ino';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('Firmware descargado');
+}
+refreshHUD();
+</script>
+</body>
+</html>

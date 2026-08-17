@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de Estilos — GC Lab Chile</title>
+<style>
+/* ============================================================================
+   GENERADOR DE ESTILOS — GC Lab Chile
+   Motor generativo de canciones por estilo (blues / techno / synthwave / grunge)
+   El estilo es DATOS: el JSON del panel derecho define toda la gramática.
+   Flujo de trabajo: pegar un JSON de parámetros → GENERAR → PLAY.
+   ============================================================================ */
+:root {
+  --bg: #101216;
+  --panel: #181b21;
+  --panel2: #1f232b;
+  --border: #2c313b;
+  --text: #e8eaee;
+  --dim: #8b93a1;
+  --acc: #d4ff3a;          /* chartreuse GC Lab v2 */
+  --c-bat: #ff6b35;        /* naranja  = batería  */
+  --c-bajo: #00d4ff;       /* cian     = bajo     */
+  --c-arm: #a78bfa;        /* violeta  = armonía  */
+  --c-mel: #d4ff3a;        /* chartreuse = melodía */
+  --err: #ff5470;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh; padding: 18px;
+}
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+header h1 { font-size: 21px; letter-spacing: 0.5px; }
+header h1 b { color: var(--acc); }
+header .sub { color: var(--dim); font-size: 13px; }
+.layout { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.card + .card { margin-top: 14px; }
+.card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--dim); margin-bottom: 10px; }
+.estilos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.estilos button {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 10px 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+  transition: border-color .12s, transform .06s;
+}
+.estilos button:hover { border-color: var(--acc); }
+.estilos button.sel { border-color: var(--acc); color: var(--acc); }
+.fila { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.fila label { color: var(--dim); font-size: 12px; min-width: 52px; }
+input[type="text"], input[type="number"], select {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 90px;
+}
+select { width: auto; }
+.btn {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 9px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.btn:hover { border-color: var(--acc); }
+.btn.primario { background: var(--acc); color: #10130a; border-color: var(--acc); font-size: 15px; padding: 11px 18px; }
+.btn.primario:hover { filter: brightness(1.08); }
+.transporte { display: flex; gap: 10px; margin-top: 4px; }
+.pistas { display: grid; gap: 8px; }
+.pista { display: flex; align-items: center; gap: 10px; background: var(--panel2); border-radius: 8px; padding: 8px 10px; }
+.pista .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); flex: 0 0 auto; transition: box-shadow .05s; }
+.pista.p-bateria .dot.on { background: var(--c-bat);  box-shadow: 0 0 8px var(--c-bat); }
+.pista.p-bajo    .dot.on { background: var(--c-bajo); box-shadow: 0 0 8px var(--c-bajo); }
+.pista.p-comping .dot.on { background: var(--c-arm);  box-shadow: 0 0 8px var(--c-arm); }
+.pista.p-melodia .dot.on { background: var(--c-mel);  box-shadow: 0 0 8px var(--c-mel); }
+.pista .nom { flex: 1; font-size: 13px; }
+.pista input[type="range"] { width: 90px; accent-color: var(--acc); }
+.pista .mute { width: 30px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--dim); cursor: pointer; font-weight: 700; }
+.pista .mute.activo { background: var(--err); border-color: var(--err); color: #fff; }
+#estado { font-family: "Consolas", monospace; font-size: 13px; color: var(--acc); min-height: 40px; white-space: pre-line; }
+#infoCancion { font-family: "Consolas", monospace; font-size: 12px; color: var(--dim); white-space: pre-wrap; margin-top: 8px; }
+#jsonParams {
+  width: 100%; height: 520px; background: #0d0f13; color: #cdd6e4;
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+  font: 12px/1.5 "Consolas", "Courier New", monospace; resize: vertical;
+  white-space: pre; overflow: auto;
+}
+#jsonParams:focus { outline: none; border-color: var(--acc); }
+#jsonError { color: var(--err); font-size: 12px; min-height: 18px; margin-top: 6px; font-family: monospace; }
+.ayuda { color: var(--dim); font-size: 12px; margin-top: 8px; line-height: 1.6; }
+.vumaster { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 12px; }
+.vumaster > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--c-bajo), var(--acc), var(--c-bat)); transition: width .06s; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GENERADOR DE <b>ESTILOS</b></h1>
+  <span class="sub">GC Lab Chile · el estilo es datos · pega un JSON de parámetros → Generar → Play</span>
+</header>
+
+<div class="layout">
+  <!-- ============ COLUMNA IZQUIERDA: CONTROL ============ -->
+  <div>
+    <div class="card">
+      <h2>Estilo (carga sus parámetros al editor)</h2>
+      <div class="estilos" id="botonesEstilo"></div>
+      <div class="fila">
+        <label>Seed</label>
+        <input type="number" id="inSeed" value="1234">
+        <button class="btn" id="btnDado" title="seed aleatoria">🎲</button>
+      </div>
+      <div class="fila">
+        <label>Raíz</label>
+        <select id="inRaiz">
+          <option value="">auto</option>
+          <option>C</option><option>C#</option><option>D</option><option>D#</option>
+          <option>E</option><option>F</option><option>F#</option><option>G</option>
+          <option>G#</option><option>A</option><option>A#</option><option>B</option>
+        </select>
+        <label>BPM</label>
+        <input type="number" id="inBpm" placeholder="auto" style="width:70px">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Transporte</h2>
+      <div class="transporte">
+        <button class="btn primario" id="btnPlay">▶ GENERAR + PLAY</button>
+        <button class="btn" id="btnStop">■ STOP</button>
+      </div>
+      <div class="vumaster"><div id="vu"></div></div>
+      <div class="fila">
+        <label>Master</label>
+        <input type="range" id="inMaster" min="0" max="100" value="80" style="width:150px; accent-color: var(--acc);">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Pistas</h2>
+      <div class="pistas" id="pistasUI"></div>
+    </div>
+
+    <div class="card">
+      <h2>Ahora suena</h2>
+      <div id="estado">—</div>
+      <div id="infoCancion"></div>
+    </div>
+  </div>
+
+  <!-- ============ COLUMNA DERECHA: EL JSON ============ -->
+  <div class="card">
+    <h2>Parámetros de la canción (JSON editable — aquí pegas lo que te genere la IA)</h2>
+    <textarea id="jsonParams" spellcheck="false"></textarea>
+    <div id="jsonError"></div>
+    <div class="ayuda">
+      Flujo: elige un estilo base (o pega un JSON completo) → edita lo que quieras → <b>▶ GENERAR + PLAY</b>.
+      Mismo JSON + misma seed = exactamente la misma canción. Barra espaciadora = play/stop.
+      Acordes en cifrado romano con calidad: <code>I7 im7 bVI V7 i5 bIII5 maj7 sus4…</code>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   1. PRNG DETERMINISTA (mulberry32) — misma seed = misma canción
+   ============================================================================ */
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+class Rng {
+  constructor(seed) { this.f = mulberry32(seed >>> 0); }
+  next() { return this.f(); }
+  range(a, b) { return a + this.f() * (b - a); }
+  int(a, b) { return Math.floor(this.range(a, b + 1)); }   // inclusivo
+  pick(arr) { return arr[Math.floor(this.f() * arr.length)]; }
+  chance(p) { return this.f() < p; }
+  pickPeso(items) {   // items: [{peso, ...}]
+    const tot = items.reduce((s, x) => s + (x.peso || 1), 0);
+    let r = this.f() * tot;
+    for (const x of items) { r -= (x.peso || 1); if (r <= 0) return x; }
+    return items[items.length - 1];
+  }
+}
+
+/* ============================================================================
+   2. TEORÍA — notas, escalas, acordes en cifrado romano con calidad
+   ============================================================================ */
+const NOTAS = { C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11 };
+const NOMBRE_NOTA = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const ESCALAS = {
+  mayor:          [0,2,4,5,7,9,11],
+  menor:          [0,2,3,5,7,8,10],
+  dorica:         [0,2,3,5,7,9,10],
+  frigia:         [0,1,3,5,7,8,10],
+  mixolidia:      [0,2,4,5,7,9,10],
+  armonica_menor: [0,2,3,5,7,8,11],
+  penta_menor:    [0,3,5,7,10],
+  penta_blues:    [0,3,5,6,7,10]     // penta menor + blue note (b5)
+};
+const CALIDADES = {
+  maj:[0,4,7], m:[0,3,7], '5':[0,7,12], '7':[0,4,7,10], m7:[0,3,7,10],
+  maj7:[0,4,7,11], '9':[0,4,7,10,14], m9:[0,3,7,10,14], sus2:[0,2,7],
+  sus4:[0,5,7], dim:[0,3,6], m7b5:[0,3,6,10], add9:[0,4,7,14], '7#9':[0,4,7,10,15]
+};
+const GRADOS = { I:0, II:2, III:4, IV:5, V:7, VI:9, VII:11 };
+
+// "bVI7" → { semi: 8, calidad: '7', intervalos: [...] }
+function parsearAcorde(txt) {
+  const m = txt.trim().match(/^(b|#)?([iIvV]+)(.*)$/);
+  if (!m) throw new Error("Acorde inválido: " + txt);
+  const alt = m[1] === 'b' ? -1 : (m[1] === '#' ? 1 : 0);
+  const rom = m[2], mayus = rom === rom.toUpperCase();
+  const semi = ((GRADOS[rom.toUpperCase()] + alt) % 12 + 12) % 12;
+  let cal = m[3];
+  if (!cal) cal = mayus ? 'maj' : 'm';
+  else if (cal === '7' && !mayus) cal = 'm7';   // "i7" = menor con 7ª
+  if (!CALIDADES[cal]) throw new Error("Calidad desconocida en: " + txt);
+  return { txt, semi, calidad: cal, intervalos: CALIDADES[cal] };
+}
+function midiAFrec(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+// clases de altura absolutas del acorde (para anclar la melodía)
+function pcsAcorde(raizPc, ac) { return ac.intervalos.map(i => (raizPc + ac.semi + i) % 12); }
+// lleva un midi al rango [lo, hi]
+function alRango(m, lo, hi) { while (m < lo) m += 12; while (m > hi) m -= 12; return m; }
+
+/* ============================================================================
+   3. ESTILOS SEMILLA — cada estilo es un objeto de datos (editable en el panel)
+   ============================================================================ */
+const ESTILOS = {
+
+/* ---------------- BLUES: 12 compases, ternario, dominantes, call&response --- */
+blues: {
+  nombre: "Blues",
+  tempo: { bpm: [58, 96], grid: 12, swing: 0.5, beats: 4 },
+  tonalidades: ["E", "A", "G", "C"],
+  escala_melodia: "penta_blues",
+  humanizacion: { timing_ms: 14, velocidad: 0.28 },
+  armonia: {
+    progresiones: [
+      { id: "blues_12_clasico", peso: 10,
+        acordes: ["I7","I7","I7","I7","IV7","IV7","I7","I7","V7","IV7","I7","V7"] },
+      { id: "blues_12_quick_change", peso: 5,
+        acordes: ["I7","IV7","I7","I7","IV7","IV7","I7","I7","V7","IV7","I7","V7"] },
+      { id: "blues_menor_12", peso: 5,
+        acordes: ["im7","im7","im7","im7","ivm7","ivm7","im7","im7","bVI7","V7","im7","V7"] }
+    ],
+    voicing: "shell"
+  },
+  bateria: {
+    kit: "acustico",
+    patrones: {
+      kick:  [10,0,0, 0,0,2, 8,0,0, 0,0,3],
+      snare: [0,0,0, 10,0,0, 0,0,0, 10,0,0],
+      ride:  [10,0,7, 10,0,7, 10,0,7, 10,0,7]
+    },
+    acentos: [10,2,5, 8,2,5, 9,2,5, 8,2,6],
+    ghosts: { voz: "snare", prob: 0.22 },
+    fill: true
+  },
+  bajo: { patron: "walking", cromatismo: 0.5, rango: [28, 45],
+          timbre: { onda: "sine", onda2: "triangle", cutoff: 750, ataque: 0.006, caida: 0.15, sustain: 0.75, rel: 0.1, drive: 0 } },
+  comping: { patron: "shuffle",
+             timbre: { onda: "triangle", onda2: "sine", cutoff: 1600, ataque: 0.004, caida: 0.35, sustain: 0.15, rel: 0.25, drive: 0.1 } },
+  melodia: {
+    gramatica: "call_response", registro: { centro: 62, rango: 15 },
+    densidad: 0.55, silencio_frases: 0.55, bend: 0.35,
+    timbre: { onda: "sawtooth", cutoff: 2300, ataque: 0.006, caida: 0.3, sustain: 0.45, rel: 0.18, drive: 0.5, vibrato: 5 }
+  },
+  forma: [
+    { id: "intro",      compases: 4,  intensidad: 0.35, capas: ["bajo","bateria"] },
+    { id: "tema A",     compases: 12, intensidad: 0.55, capas: ["bajo","bateria","comping","melodia"] },
+    { id: "tema B",     compases: 12, intensidad: 0.70, capas: ["bajo","bateria","comping","melodia"] },
+    { id: "solo",       compases: 12, intensidad: 0.90, capas: ["bajo","bateria","comping","melodia"], melodia_modo: "solo" },
+    { id: "tema final", compases: 12, intensidad: 0.60, capas: ["bajo","bateria","comping","melodia"] },
+    { id: "outro",      compases: 1,  intensidad: 0.40, capas: ["bajo","comping","melodia"] }
+  ],
+  mezcla: { bateria: 0.65, bajo: 0.85, comping: 0.4, melodia: 0.8,
+            reverb: { bateria: 0.12, bajo: 0.02, comping: 0.15, melodia: 0.2 },
+            delay:  { bateria: 0, bajo: 0, comping: 0, melodia: 0 } }
+},
+
+/* ---------------- TECHNO: four-on-floor, armonía estática, terraza ---------- */
+techno: {
+  nombre: "Techno",
+  tempo: { bpm: [126, 138], grid: 16, swing: 0.5, beats: 4 },
+  tonalidades: ["A", "F", "C", "D#"],
+  escala_melodia: "frigia",
+  humanizacion: { timing_ms: 0, velocidad: 0.06 },
+  armonia: {
+    progresiones: [
+      { id: "estatico",     peso: 8, acordes: ["im","im","im","im"] },
+      { id: "im_bVI",       peso: 6, acordes: ["im","im","bVI","bVI"] },
+      { id: "im_bVII",      peso: 4, acordes: ["im","im","im","bVII"] }
+    ],
+    voicing: "triada"
+  },
+  bateria: {
+    kit: "909",
+    patrones: {
+      kick:  [10,0,0,0, 10,0,0,0, 10,0,0,0, 10,0,0,0],
+      clap:  [0,0,0,0, 10,0,0,0, 0,0,0,0, 10,0,0,0],
+      hat:   [2,0,9,2, 2,0,9,2, 2,0,9,3, 2,0,9,4],
+      hat_o: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,6,0]
+    },
+    acentos: [10,3,6,3, 8,3,6,3, 9,3,6,3, 8,3,6,4],
+    ghosts: null,
+    fill: false
+  },
+  bajo: { patron: "offbeat_8", cromatismo: 0, rango: [26, 40],
+          timbre: { onda: "sawtooth", cutoff: 520, resonancia: 6, ataque: 0.003, caida: 0.12, sustain: 0.5, rel: 0.05, drive: 0.25 } },
+  comping: { patron: "stab",
+             timbre: { onda: "sawtooth", detune: 14, cutoff: 1300, ataque: 0.003, caida: 0.16, sustain: 0, rel: 0.08, drive: 0.2 } },
+  melodia: {
+    gramatica: "hook", registro: { centro: 55, rango: 12 },
+    densidad: 0.6, silencio_frases: 0.2, bend: 0,
+    timbre: { onda: "square", cutoff: 1900, ataque: 0.003, caida: 0.14, sustain: 0.1, rel: 0.08, drive: 0.15 }
+  },
+  forma: [
+    { id: "intro", compases: 8,  intensidad: 0.40, capas: ["bateria"] },
+    { id: "build", compases: 8,  intensidad: 0.55, capas: ["bateria","bajo"] },
+    { id: "main",  compases: 16, intensidad: 0.75, capas: ["bateria","bajo","comping","melodia"] },
+    { id: "break", compases: 8,  intensidad: 0.50, capas: ["comping","melodia"], comping_modo: "pad" },
+    { id: "drop",  compases: 16, intensidad: 0.95, capas: ["bateria","bajo","comping","melodia"] },
+    { id: "outro", compases: 8,  intensidad: 0.50, capas: ["bateria","bajo"] }
+  ],
+  mezcla: { bateria: 0.9, bajo: 0.8, comping: 0.45, melodia: 0.55,
+            reverb: { bateria: 0.06, bajo: 0, comping: 0.22, melodia: 0.12 },
+            delay:  { bateria: 0, bajo: 0, comping: 0.15, melodia: 0.35 } }
+},
+
+/* ---------------- SYNTHWAVE: lazos 80s, arpegio 16avos, snare gigante ------- */
+synthwave: {
+  nombre: "Synthwave",
+  tempo: { bpm: [84, 108], grid: 16, swing: 0.5, beats: 4 },
+  tonalidades: ["A", "F#", "D", "E"],
+  escala_melodia: "menor",
+  humanizacion: { timing_ms: 4, velocidad: 0.12 },
+  armonia: {
+    progresiones: [
+      { id: "i_VI_III_VII", peso: 8, acordes: ["im","bVI","bIII","bVII"] },
+      { id: "VI_VII_i_i",   peso: 5, acordes: ["bVI","bVII","im","im"] },
+      { id: "i_VII_VI_VII", peso: 5, acordes: ["im","bVII","bVI","bVII"] }
+    ],
+    voicing: "abierto"
+  },
+  bateria: {
+    kit: "80s",
+    patrones: {
+      kick:  [10,0,0,0, 0,0,0,6, 10,0,0,0, 0,0,4,0],
+      snare: [0,0,0,0, 10,0,0,0, 0,0,0,0, 10,0,0,0],
+      hat:   [7,0,5,0, 7,0,5,0, 7,0,5,0, 7,0,5,2]
+    },
+    acentos: [10,3,5,3, 9,3,5,3, 9,3,5,3, 9,3,5,4],
+    ghosts: null,
+    fill: true
+  },
+  bajo: { patron: "octavas", cromatismo: 0, rango: [28, 43],
+          timbre: { onda: "sawtooth", cutoff: 850, ataque: 0.004, caida: 0.1, sustain: 0.55, rel: 0.07, drive: 0.15 } },
+  comping: { patron: "pad",
+             timbre: { onda: "sawtooth", detune: 12, cutoff: 1350, ataque: 0.35, caida: 0.5, sustain: 0.8, rel: 0.7, drive: 0 } },
+  melodia: {
+    gramatica: "arpegio", registro: { centro: 64, rango: 14 },
+    densidad: 0.85, silencio_frases: 0.1, bend: 0,
+    timbre: { onda: "square", cutoff: 2600, ataque: 0.003, caida: 0.16, sustain: 0.1, rel: 0.1, drive: 0.1 },
+    timbre_lirica: { onda: "sawtooth", detune: 8, cutoff: 3000, ataque: 0.02, caida: 0.3, sustain: 0.6, rel: 0.3, drive: 0.2, vibrato: 5 }
+  },
+  forma: [
+    { id: "intro",  compases: 4, intensidad: 0.40, capas: ["melodia"], melodia_modo: "arpegio" },
+    { id: "verso",  compases: 8, intensidad: 0.55, capas: ["bateria","bajo","melodia"], melodia_modo: "arpegio" },
+    { id: "coro",   compases: 8, intensidad: 0.85, capas: ["bateria","bajo","comping","melodia"], melodia_modo: "lirica" },
+    { id: "verso 2",compases: 8, intensidad: 0.60, capas: ["bateria","bajo","comping","melodia"], melodia_modo: "arpegio" },
+    { id: "coro 2", compases: 8, intensidad: 0.95, capas: ["bateria","bajo","comping","melodia"], melodia_modo: "lirica" },
+    { id: "outro",  compases: 4, intensidad: 0.45, capas: ["comping","melodia"], melodia_modo: "arpegio" }
+  ],
+  mezcla: { bateria: 0.8, bajo: 0.75, comping: 0.5, melodia: 0.7,
+            reverb: { bateria: 0.35, bajo: 0.03, comping: 0.3, melodia: 0.25 },
+            delay:  { bateria: 0, bajo: 0, comping: 0, melodia: 0.22 } }
+},
+
+/* ---------------- GRUNGE: power chords, verso quieto / coro fuerte ---------- */
+grunge: {
+  nombre: "Grunge",
+  tempo: { bpm: [88, 122], grid: 16, swing: 0.53, beats: 4 },
+  tonalidades: ["E", "D", "F#", "G"],
+  escala_melodia: "penta_menor",
+  humanizacion: { timing_ms: 12, velocidad: 0.25 },
+  armonia: {
+    progresiones: [
+      { id: "i_bIII_bVII_IV", peso: 8, acordes: ["i5","bIII5","bVII5","IV5"] },
+      { id: "i_bVI_bIII_bVII",peso: 6, acordes: ["i5","bVI5","bIII5","bVII5"] },
+      { id: "i_i_bVI_V",      peso: 4, acordes: ["i5","i5","bVI5","V5"] }
+    ],
+    voicing: "power"
+  },
+  bateria: {
+    kit: "acustico",
+    patrones: {
+      kick:  [10,0,0,3, 0,0,7,0, 10,0,0,0, 0,4,0,0],
+      snare: [0,0,0,0, 10,0,0,0, 0,0,0,0, 10,0,0,0],
+      hat:   [8,0,7,0, 8,0,7,0, 8,0,7,0, 8,0,7,0],
+      crash: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+    },
+    acentos: [10,3,6,3, 9,3,6,3, 9,3,6,3, 9,3,7,4],
+    ghosts: { voz: "snare", prob: 0.15 },
+    fill: true
+  },
+  bajo: { patron: "riff_8", cromatismo: 0.2, rango: [28, 43],
+          timbre: { onda: "sawtooth", cutoff: 800, ataque: 0.004, caida: 0.12, sustain: 0.7, rel: 0.06, drive: 0.35 } },
+  comping: { patron: "power_8",
+             timbre: { onda: "sawtooth", onda2: "square", cutoff: 2800, ataque: 0.004, caida: 0.2, sustain: 0.6, rel: 0.07, drive: 0.85 } },
+  melodia: {
+    gramatica: "riff", registro: { centro: 55, rango: 12 },
+    densidad: 0.6, silencio_frases: 0.3, bend: 0.2,
+    timbre: { onda: "square", cutoff: 2000, ataque: 0.005, caida: 0.25, sustain: 0.5, rel: 0.12, drive: 0.5, vibrato: 4 },
+    timbre_lirica: { onda: "sawtooth", cutoff: 2400, ataque: 0.008, caida: 0.3, sustain: 0.6, rel: 0.15, drive: 0.6, vibrato: 6 }
+  },
+  forma: [
+    { id: "intro",   compases: 4, intensidad: 0.50, capas: ["comping"] },
+    { id: "verso",   compases: 8, intensidad: 0.45, capas: ["bajo","bateria","melodia"], melodia_modo: "riff" },
+    { id: "coro",    compases: 8, intensidad: 0.95, capas: ["bajo","bateria","comping","melodia"], melodia_modo: "lirica" },
+    { id: "verso 2", compases: 8, intensidad: 0.50, capas: ["bajo","bateria","melodia"], melodia_modo: "riff" },
+    { id: "coro 2",  compases: 8, intensidad: 1.00, capas: ["bajo","bateria","comping","melodia"], melodia_modo: "lirica" },
+    { id: "outro",   compases: 2, intensidad: 0.60, capas: ["comping","bateria"] }
+  ],
+  mezcla: { bateria: 0.75, bajo: 0.8, comping: 0.55, melodia: 0.65,
+            reverb: { bateria: 0.12, bajo: 0.02, comping: 0.08, melodia: 0.15 },
+            delay:  { bateria: 0, bajo: 0, comping: 0, melodia: 0 } }
+}
+};
+
+/* ============================================================================
+   4. GENERACIÓN DE LA CANCIÓN — determinista: (estilo, seed) → lista de eventos
+   Cada evento: { pista, step (absoluto), time (seg, con swing+humanización),
+                  midi | voz, dur (seg), vel, ...extras }
+   ============================================================================ */
+function generarCancion(st, seed, opts) {
+  const rng = new Rng(seed);
+  const grid = st.tempo.grid, beats = st.tempo.beats || 4;
+  const bpm = opts.bpm || Math.round(rng.range(st.tempo.bpm[0], st.tempo.bpm[1]));
+  const raiz = opts.raiz !== "" ? NOTAS[opts.raiz] : NOTAS[rng.pick(st.tonalidades)];
+  const beatDur = 60 / bpm, barDur = beats * beatDur, stepDur = barDur / grid;
+  const swing = st.tempo.swing || 0.5;
+  const humMs = (st.humanizacion?.timing_ms || 0), humVel = (st.humanizacion?.velocidad || 0);
+
+  // --- tiempo de un step dentro de la canción (swing MPC sobre 16avos impares)
+  function tStep(stepAbs) {
+    const bar = Math.floor(stepAbs / grid), i = stepAbs - bar * grid;
+    const ent = Math.floor(i), frac = i - ent;
+    let t;
+    if (grid === 16 && swing > 0.5 && ent % 2 === 1) t = (ent - 1 + 2 * swing) * stepDur;
+    else t = ent * stepDur;
+    return bar * barDur + t + frac * stepDur;
+  }
+  const jit = () => (rng.next() * 2 - 1) * humMs / 1000;
+  const vHum = v => Math.max(0.05, Math.min(1, v * (1 + (rng.next() * 2 - 1) * humVel)));
+
+  // --- progresión y plan de compases
+  const prog = rng.pickPeso(st.armonia.progresiones);
+  const acordes = prog.acordes.map(parsearAcorde);
+  const bars = [];
+  for (const sec of st.forma) {
+    for (let sb = 0; sb < sec.compases; sb++) {
+      // la progresión se reinicia en cada sección (el chorus de 12 siempre parte en el I)
+      const ac = acordes[sb % acordes.length];
+      bars.push({ sec, secBar: sb, ac, idx: bars.length });
+    }
+  }
+  const nBars = bars.length;
+  const eventos = [];
+  const emitir = (pista, stepAbs, extra) => {
+    const ev = Object.assign({ pista, step: stepAbs, time: tStep(stepAbs) + jit() }, extra);
+    if (ev.time < 0) ev.time = 0;
+    eventos.push(ev);
+  };
+
+  /* ---------- BATERÍA: máscaras probabilísticas + acentos + ghosts + fills --- */
+  const pat = st.bateria.patrones, acentos = st.bateria.acentos || [];
+  for (const bar of bars) {
+    if (!bar.sec.capas.includes("bateria")) continue;
+    const inten = bar.sec.intensidad;
+    const esFill = st.bateria.fill && bar.secBar === bar.sec.compases - 1 && inten > 0.4 && bar.idx < nBars - 1;
+    for (const voz in pat) {
+      const mask = pat[voz];
+      for (let i = 0; i < grid; i++) {
+        const w = mask[i % mask.length] * (0.45 + 0.65 * inten);
+        if (rng.next() * 10 < w) {
+          const acc = (acentos[i % acentos.length] || 5) / 10;
+          emitir("bateria", bar.idx * grid + i, { voz, vel: vHum((0.45 + 0.55 * acc) * (0.6 + 0.4 * inten)) });
+        }
+      }
+    }
+    // ghosts
+    const g = st.bateria.ghosts;
+    if (g) for (let i = 0; i < grid; i++)
+      if (i % Math.round(grid / 4) !== 0 && rng.chance(g.prob * inten * 0.5))
+        emitir("bateria", bar.idx * grid + i, { voz: g.voz, vel: vHum(0.18) });
+    // fill: redoble de snare en el último beat del último compás de la sección
+    if (esFill) {
+      const nFill = grid === 12 ? 3 : 4, ini = grid - nFill;
+      for (let k = 0; k < nFill; k++)
+        emitir("bateria", bar.idx * grid + ini + k, { voz: pat.snare ? "snare" : "clap", vel: vHum(0.4 + 0.5 * (k / nFill)) });
+    }
+    // crash al inicio de secciones fuertes
+    if (bar.secBar === 0 && inten >= 0.7 && bar.sec.capas.includes("bateria"))
+      emitir("bateria", bar.idx * grid, { voz: "crash", vel: vHum(0.7) });
+  }
+
+  /* ---------- BAJO: patrones idiomáticos --------------------------------- */
+  const bj = st.bajo, rangoB = bj.rango || [28, 44];
+  const rootB = bar => alRango(24 + ((raiz + bar.ac.semi) % 12), rangoB[0], rangoB[1]);
+  for (let b = 0; b < nBars; b++) {
+    const bar = bars[b];
+    if (!bar.sec.capas.includes("bajo")) continue;
+    const root = rootB(bar), iv = bar.ac.intervalos;
+    const inten = bar.sec.intensidad;
+    const nota = (step, midi, durSteps, vel) =>
+      emitir("bajo", b * grid + step, { midi, dur: durSteps * stepDur * 0.92, vel: vHum(vel * (0.7 + 0.3 * inten)) });
+    switch (bj.patron) {
+      case "walking": {   // negras: fundamental, 3ª, 5ª, aproximación cromática
+        const q = grid / 4;
+        const sig = bars[b + 1] ? rootB(bars[b + 1]) : root;
+        let apr = sig + (rng.chance(0.5) ? -1 : 1);
+        if (bj.cromatismo < rng.next()) apr = alRango(root + iv[2], rangoB[0], rangoB[1]);
+        const linea = [root, alRango(root + iv[1], rangoB[0], rangoB[1]),
+                       alRango(root + iv[2], rangoB[0], rangoB[1]), alRango(apr, rangoB[0], rangoB[1])];
+        for (let k = 0; k < 4; k++) nota(k * q, linea[k], q, 0.8);
+        break;
+      }
+      case "offbeat_8":   // techno rolling: corcheas a contratiempo
+        for (let k = 2; k < grid; k += 4) nota(k, root, 1.6, 0.85);
+        if (rng.chance(0.3)) nota(grid - 1, root, 1, 0.6);   // pickup 16avo
+        break;
+      case "octavas":     // corcheas alternando fundamental / octava
+        for (let k = 0; k < grid; k += 2) nota(k, root + (k % 4 === 2 ? 12 : 0), 1.7, k % 4 === 0 ? 0.9 : 0.75);
+        break;
+      case "riff_8": {    // corcheas en fundamental con notas de paso (5ª / b7)
+        for (let k = 0; k < grid; k += 2) {
+          let m = root;
+          if (k === grid - 4 && rng.chance(0.4)) m = alRango(root + 7, rangoB[0], rangoB[1]);
+          if (k === grid - 2 && rng.chance(0.35)) m = alRango(root + 10, rangoB[0], rangoB[1]);
+          nota(k, m, 1.7, k % 4 === 0 ? 0.9 : 0.7);
+        }
+        break;
+      }
+      default:            // fundamental_quinta
+        nota(0, root, grid / 4, 0.9);
+        nota(grid / 2, alRango(root + 7, rangoB[0], rangoB[1]), grid / 4, 0.75);
+    }
+  }
+
+  /* ---------- COMPING (armonía): voicing + patrón ------------------------- */
+  function vocesAcorde(bar, voicing) {
+    const base = alRango(48 + ((raiz + bar.ac.semi) % 12), 48, 59);
+    const iv = bar.ac.intervalos;
+    switch (voicing) {
+      case "power":   return [base, base + 7, base + 12];
+      case "shell":   return [base, base + iv[1], base + (iv[3] !== undefined ? iv[3] : iv[2])];
+      case "abierto": return [base - 12, base + iv[2], base + iv[1] + 12, base + (iv[3] !== undefined ? iv[3] : 12) + 12];
+      default:        return iv.slice(0, 4).map(x => base + x);   // triada / cerrada
+    }
+  }
+  for (let b = 0; b < nBars; b++) {
+    const bar = bars[b];
+    if (!bar.sec.capas.includes("comping")) continue;
+    const modo = bar.sec.comping_modo || st.comping.patron;
+    const voces = vocesAcorde(bar, st.armonia.voicing);
+    const inten = bar.sec.intensidad;
+    const golpe = (step, durSteps, vel) => {
+      for (const m of voces)
+        emitir("comping", b * grid + step, { midi: m, dur: durSteps * stepDur, vel: vHum(vel * (0.6 + 0.4 * inten)) });
+    };
+    switch (modo) {
+      case "pad":     golpe(0, grid * 0.98, 0.55); break;
+      case "shuffle": {  // acordes en 2 y 4 (estilo comping de blues) + push ocasional
+        const q = grid / 4;
+        golpe(q, 1.6, 0.6); golpe(3 * q, 1.6, 0.6);
+        if (rng.chance(0.3)) golpe(grid - 1, 1, 0.4);
+        break;
+      }
+      case "stab":    // stabs sincopados techno
+        golpe(2, 1, 0.7); if (rng.chance(0.6)) golpe(10, 1, 0.6); if (rng.chance(0.3)) golpe(7, 1, 0.5);
+        break;
+      case "power_8": // guitarra grunge: corcheas con acento
+        for (let k = 0; k < grid; k += 2) golpe(k, 1.6, k % 4 === 0 ? 0.8 : 0.6);
+        break;
+    }
+  }
+
+  /* ---------- MELODÍA: motor de motivos / gramáticas de frase -------------- */
+  const mel = st.melodia;
+  const escala = ESCALAS[st.escala_melodia] || ESCALAS.menor;
+  const L = escala.length;
+  // referencia: índice 0 de la escala = raíz más cercana al centro del registro
+  const centro = mel.registro.centro, rango = mel.registro.rango;
+  let refRoot = raiz + 60; refRoot = alRango(refRoot, centro - 6, centro + 6);
+  const midiDeIdx = idx => {
+    const o = Math.floor(idx / L), d = ((idx % L) + L) % L;
+    return refRoot + o * 12 + escala[d];
+  };
+  const clampIdx = idx => {
+    let m = midiDeIdx(idx);
+    while (m > centro + rango) { idx -= L; m -= 12; }
+    while (m < centro - rango) { idx += L; m += 12; }
+    return idx;
+  };
+  // ancla un midi a la nota del acorde más cercana (tiempos fuertes)
+  function anclar(midi, bar) {
+    const pcs = pcsAcorde(raiz, bar.ac);
+    for (const d of [0, -1, 1, -2, 2, -3, 3])
+      if (pcs.includes(((midi + d) % 12 + 12) % 12)) return midi + d;
+    return midi;
+  }
+  const notaMel = (b, step, midi, durSteps, vel, extra) =>
+    emitir("melodia", b * grid + step, Object.assign(
+      { midi, dur: durSteps * stepDur * 0.88, vel: vHum(vel) }, extra || {}));
+
+  // ----- generador de frase (para call_response / solo / lirica) -----
+  // devuelve lista {step (0..2*grid), idx, durSteps}
+  const onsetsPermitidos = grid === 12 ? [0,2,3,5,6,8,9,11] : [0,2,4,6,8,10,12,14];
+  function nuevaFrase(dens, compases) {
+    const cand = [];
+    for (let c = 0; c < compases; c++) for (const o of onsetsPermitidos) cand.push(c * grid + o);
+    const n = Math.max(2, Math.round(cand.length * dens * 0.45));
+    const pasos = [];
+    let p = 0;
+    while (pasos.length < n && p < cand.length) {
+      if (rng.chance(n / cand.length * 1.4)) pasos.push(cand[p]);
+      p++;
+    }
+    if (pasos.length < 2) pasos.push(0, grid);
+    let idx = clampIdx(rng.int(-2, 4));
+    let dir = rng.chance(0.5) ? 1 : -1;
+    const notas = pasos.map((s, i) => {
+      if (rng.chance(0.25)) dir = -dir;
+      idx = clampIdx(idx + dir * rng.int(0, 2));
+      const durS = (i < pasos.length - 1 ? pasos[i + 1] - s : grid / 2) * rng.range(0.6, 0.95);
+      return { step: s, idx, durSteps: Math.max(0.8, durS) };
+    });
+    // la frase aterriza: última nota tiende a la fundamental
+    if (rng.chance(0.6)) notas[notas.length - 1].idx = clampIdx(Math.round(notas[notas.length - 1].idx / L) * L);
+    return notas;
+  }
+  function variarFrase(fr) {
+    const nf = fr.map(n => ({ ...n }));
+    const op = rng.int(0, 2);
+    if (op === 0) for (const n of nf) n.idx = clampIdx(n.idx + rng.pick([-1, 1]));          // transponer diatónico
+    else if (op === 1) { const u = nf[nf.length - 1]; u.idx = clampIdx(u.idx + rng.pick([-2, -1, 1, 2])); } // mutar final
+    else for (const n of nf) n.step = Math.min(grid * 2 - 1, n.step + (grid === 12 ? 1 : 2)); // desplazar ritmo
+    return nf;
+  }
+  function emitirFrase(fr, b0, esBlues) {
+    for (const n of fr) {
+      const b = b0 + Math.floor(n.step / grid);
+      if (b >= nBars) break;
+      const bar = bars[b];
+      if (!bar.sec.capas.includes("melodia")) continue;
+      const stepEn = n.step % grid;
+      let midi = midiDeIdx(n.idx);
+      if (stepEn % (grid / 4) === 0) midi = anclar(midi, bar);   // fuerte → nota del acorde
+      const bend = esBlues && rng.chance(mel.bend || 0);
+      notaMel(b, stepEn, midi, n.durSteps, 0.55 + 0.35 * rng.next(), bend ? { bend: true } : null);
+    }
+  }
+
+  // ----- recorrido por compases según gramática/modo de la sección -----
+  let riff = null, hook = null, ultimaFrase = null;
+  let b = 0;
+  while (b < nBars) {
+    const bar = bars[b];
+    if (!bar.sec.capas.includes("melodia")) { b++; continue; }
+    const modo = bar.sec.melodia_modo || mel.gramatica;
+
+    if (modo === "arpegio") {
+      // 16avos recorriendo las notas del acorde en 2 octavas
+      const base = alRango(48 + ((raiz + bar.ac.semi) % 12), centro - 10, centro + 2);
+      const tonos = bar.ac.intervalos.slice(0, 4);
+      const ciclo = tonos.concat(tonos.map(x => x + 12));
+      for (let i = 0; i < grid; i++) {
+        if (!rng.chance(mel.densidad)) continue;
+        notaMel(b, i, base + ciclo[i % ciclo.length], 0.9, i % 4 === 0 ? 0.7 : 0.5);
+      }
+      b++; continue;
+    }
+    if (modo === "riff") {
+      // riff pentatónico de 1 compás fijado por canción, transpuesto al acorde
+      if (!riff) riff = nuevaFrase(mel.densidad, 1).map(n => ({ ...n, rel: midiDeIdx(n.idx) - refRoot }));
+      const rootM = alRango(refRoot + bar.ac.semi, centro - rango - 12, centro + 2);
+      for (const n of riff) {
+        let midi = rootM + n.rel;
+        if (n.step % (grid / 4) === 0) midi = anclar(midi, bar);
+        notaMel(b, n.step, midi - 12, n.durSteps, 0.7);
+      }
+      b++; continue;
+    }
+    if (modo === "hook") {
+      // motivo de 1 compás repetido, mutación cada 4 compases
+      if (!hook) hook = nuevaFrase(mel.densidad, 1);
+      if (bar.secBar % 4 === 3 && rng.chance(0.5)) hook = variarFrase(hook).map(n => ({ ...n, step: n.step % grid }));
+      emitirFrase(hook.map(n => ({ ...n })), b, false);
+      b++; continue;
+    }
+    if (modo === "lirica") {
+      // 2-3 notas largas por compás, notas del acorde
+      const nn = rng.int(2, 3);
+      const posiciones = grid === 12 ? [0, 5, 8] : [0, 6, 10];
+      for (let k = 0; k < nn; k++) {
+        let idx = clampIdx(rng.int(2, 8));
+        let midi = anclar(midiDeIdx(idx), bar);
+        notaMel(b, posiciones[k], midi, (grid / nn) * 0.9, 0.75, { vibrato: true });
+      }
+      b++; continue;
+    }
+    // call_response / solo: frases de 2 compases con respiros
+    const esSolo = modo === "solo";
+    const dens = mel.densidad * (esSolo ? 1.7 : 1);
+    if (!esSolo && ultimaFrase && rng.chance(mel.silencio_frases)) { b += 2; continue; }  // respiro
+    let fr;
+    if (ultimaFrase && rng.chance(esSolo ? 0.35 : 0.5)) fr = variarFrase(ultimaFrase);   // respuesta
+    else { fr = nuevaFrase(Math.min(1, dens), 2); ultimaFrase = fr; }                     // llamada nueva
+    emitirFrase(fr, b, true);
+    b += 2;
+  }
+
+  eventos.sort((a, z) => a.time - z.time);
+  return {
+    eventos, bars, bpm, raiz, grid, barDur, stepDur,
+    dur: nBars * barDur, prog: prog.id,
+    resumen:
+      `tonalidad: ${NOMBRE_NOTA[raiz]} · ${bpm} BPM · progresión: ${prog.id}\n` +
+      `[${prog.acordes.join(" ")}]\n` +
+      `forma: ${st.forma.map(s => s.id + "(" + s.compases + ")").join(" → ")} · ` +
+      `${nBars} compases · ${Math.round(nBars * barDur)} s · ${eventos.length} eventos`
+  };
+}
+
+/* ============================================================================
+   5. AUDIO — Web Audio: buses por pista, reverb/delay compartidos, sintes
+   ============================================================================ */
+let ctx = null, master, comp, vuAnalyser;
+let buses = {};          // pista → { in, gain, rev, dly }
+let reverb, delayNode, delayFb;
+
+function initAudio() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 4;
+  master = ctx.createGain();
+  master.gain.value = document.getElementById("inMaster").value / 100 * 0.9;
+  vuAnalyser = ctx.createAnalyser(); vuAnalyser.fftSize = 512;
+  master.connect(comp); comp.connect(vuAnalyser); vuAnalyser.connect(ctx.destination);
+
+  // reverb: impulso generado (2.2 s, decaimiento exponencial)
+  reverb = ctx.createConvolver();
+  const len = Math.floor(ctx.sampleRate * 2.2);
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+  }
+  reverb.buffer = ir;
+  const revOut = ctx.createGain(); revOut.gain.value = 0.9;
+  reverb.connect(revOut); revOut.connect(master);
+
+  // delay con feedback (el tiempo se sincroniza al tempo en cada Play)
+  delayNode = ctx.createDelay(2);
+  delayFb = ctx.createGain(); delayFb.gain.value = 0.38;
+  const dlyFilt = ctx.createBiquadFilter(); dlyFilt.type = "lowpass"; dlyFilt.frequency.value = 2800;
+  const dlyOut = ctx.createGain(); dlyOut.gain.value = 0.7;
+  delayNode.connect(dlyFilt); dlyFilt.connect(delayFb); delayFb.connect(delayNode);
+  dlyFilt.connect(dlyOut); dlyOut.connect(master);
+
+  for (const p of ["bateria", "bajo", "comping", "melodia"]) {
+    const inp = ctx.createGain(), g = ctx.createGain(), rev = ctx.createGain(), dly = ctx.createGain();
+    rev.gain.value = 0; dly.gain.value = 0;
+    inp.connect(g); g.connect(master); inp.connect(rev); rev.connect(reverb); inp.connect(dly); dly.connect(delayNode);
+    buses[p] = { in: inp, gain: g, rev, dly, nivel: 1, mute: false };
+  }
+}
+function nivelPista(p) {
+  const b = buses[p];
+  b.gain.gain.value = b.mute ? 0 : b.nivel * (pistasUIState[p]?.vol ?? 1);
+}
+function curvaDrive(k) {
+  const n = 256, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh((1 + k * 6) * x); }
+  return c;
+}
+
+// ------- sinte genérico por nota (osc + detune + sub + drive + LPF + ADSR) ---
+function notaSynth(pista, tb, midi, t, dur, vel, extra) {
+  const b = buses[pista]; if (!b) return;
+  const f = midiAFrec(midi);
+  const nodos = [];
+  const mk = (tipo, frec, det) => {
+    const o = ctx.createOscillator(); o.type = tipo; o.frequency.value = frec;
+    if (det) o.detune.value = det;
+    nodos.push(o); return o;
+  };
+  const o1 = mk(tb.onda || "sawtooth", f, 0);
+  if (extra && extra.bend) {   // bend blues: entra desde un semitono abajo
+    o1.frequency.setValueAtTime(f * Math.pow(2, -1 / 12), t);
+    o1.frequency.exponentialRampToValueAtTime(f, t + Math.min(0.12, dur * 0.4));
+  }
+  if (tb.onda2) mk(tb.onda2, f, 0);
+  if (tb.detune) { mk(tb.onda || "sawtooth", f, tb.detune); mk(tb.onda || "sawtooth", f, -tb.detune); }
+  if (tb.sub) { const s = mk("sine", f / 2, 0); }
+
+  // vibrato (LFO → detune en cents)
+  let lfo = null;
+  if (tb.vibrato || (extra && extra.vibrato)) {
+    lfo = ctx.createOscillator(); lfo.frequency.value = 5.2;
+    const lg = ctx.createGain(); lg.gain.value = (tb.vibrato || 5) * 3;
+    lfo.connect(lg); for (const o of nodos) lg.connect(o.detune);
+    lfo.start(t + 0.1);
+  }
+  const pre = ctx.createGain(); pre.gain.value = 1 / Math.max(1, nodos.length - (lfo ? 1 : 0));
+  for (const o of nodos) o.connect(pre);
+
+  let cadena = pre;
+  if (tb.drive) {
+    const sh = ctx.createWaveShaper(); sh.curve = curvaDrive(tb.drive); sh.oversample = "2x";
+    cadena.connect(sh); cadena = sh;
+  }
+  const filt = ctx.createBiquadFilter(); filt.type = "lowpass";
+  filt.frequency.value = Math.min(16000, (tb.cutoff || 2000) * (0.55 + 0.7 * vel));
+  filt.Q.value = tb.resonancia || 0.8;
+  cadena.connect(filt);
+
+  const env = ctx.createGain(); env.gain.value = 0;
+  filt.connect(env); env.connect(b.in);
+  const a = tb.ataque ?? 0.005, d = tb.caida ?? 0.15, s = tb.sustain ?? 0.6, r = tb.rel ?? 0.1;
+  const pico = 0.32 * vel;
+  env.gain.setValueAtTime(0, t);
+  env.gain.linearRampToValueAtTime(pico, t + a);
+  env.gain.setTargetAtTime(pico * s, t + a, Math.max(0.01, d / 3));
+  const tFin = t + Math.max(dur, a + 0.01);
+  env.gain.setTargetAtTime(0.0001, tFin, Math.max(0.01, r / 3));
+  const tStop = tFin + r + 0.25;
+  for (const o of nodos) { o.start(t); o.stop(tStop); }
+  if (lfo) lfo.stop(tStop);
+}
+
+// ------- batería sintetizada (sin samples) ----------------------------------
+function golpeBateria(voz, kit, t, vel) {
+  const b = buses.bateria;
+  const g = ctx.createGain(); g.connect(b.in);
+  const noise = (dur) => {
+    const n = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    n.buffer = buf; return n;
+  };
+  const es909 = kit === "909", es80s = kit === "80s";
+  switch (voz) {
+    case "kick": {
+      const o = ctx.createOscillator(); o.type = "sine";
+      const f0 = es909 ? 160 : 130, f1 = es909 ? 48 : 52, dec = es909 ? 0.30 : (es80s ? 0.26 : 0.22);
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + dec * 0.6);
+      g.gain.setValueAtTime(0.85 * vel, t);
+      g.gain.setTargetAtTime(0.0001, t + 0.005, dec / 3);
+      o.connect(g); o.start(t); o.stop(t + dec + 0.2);
+      const cl = noise(0.01); const cg = ctx.createGain(); cg.gain.setValueAtTime(0.25 * vel, t);
+      cg.gain.setTargetAtTime(0.0001, t, 0.004); cl.connect(cg); cg.connect(b.in); cl.start(t);
+      break;
+    }
+    case "snare": case "clap": {
+      const dec = es80s ? 0.38 : (voz === "clap" ? 0.16 : 0.14);
+      const reps = voz === "clap" ? [0, 0.012, 0.026] : [0];
+      for (const off of reps) {
+        const n = noise(dec + 0.1);
+        const bp = ctx.createBiquadFilter(); bp.type = "bandpass";
+        bp.frequency.value = es80s ? 1400 : 1900; bp.Q.value = 0.8;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime((voz === "clap" ? 0.5 : 0.6) * vel / reps.length * 1.6, t + off);
+        ng.gain.setTargetAtTime(0.0001, t + off + 0.004, dec / 3);
+        n.connect(bp); bp.connect(ng); ng.connect(b.in); n.start(t + off);
+      }
+      if (voz === "snare") {   // cuerpo tonal
+        const o = ctx.createOscillator(); o.type = "triangle"; o.frequency.value = es80s ? 175 : 195;
+        const og = ctx.createGain(); og.gain.setValueAtTime(0.35 * vel, t);
+        og.gain.setTargetAtTime(0.0001, t + 0.004, 0.035);
+        o.connect(og); og.connect(b.in); o.start(t); o.stop(t + 0.25);
+      }
+      break;
+    }
+    case "hat": case "hat_o": case "ride": {
+      const abierto = voz === "hat_o", ride = voz === "ride";
+      const dec = ride ? 0.16 : (abierto ? 0.3 : 0.045);
+      const n = noise(dec + 0.05);
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass";
+      hp.frequency.value = ride ? 5500 : 7500;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime((ride ? 0.28 : 0.32) * vel, t);
+      ng.gain.setTargetAtTime(0.0001, t + 0.002, dec / 3);
+      n.connect(hp); hp.connect(ng); ng.connect(b.in); n.start(t);
+      if (ride) {   // ping metálico
+        const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = 5200;
+        const og = ctx.createGain(); og.gain.setValueAtTime(0.05 * vel, t);
+        og.gain.setTargetAtTime(0.0001, t, 0.1);
+        o.connect(og); og.connect(b.in); o.start(t); o.stop(t + 0.4);
+      }
+      break;
+    }
+    case "crash": {
+      const n = noise(1.4);
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 4200;
+      const ng = ctx.createGain(); ng.gain.setValueAtTime(0.4 * vel, t);
+      ng.gain.setTargetAtTime(0.0001, t + 0.01, 0.45);
+      n.connect(hp); hp.connect(ng); ng.connect(b.in); n.start(t);
+      break;
+    }
+  }
+}
+
+/* ============================================================================
+   6. TRANSPORTE — scheduler con lookahead, loop infinito de la canción
+   ============================================================================ */
+let cancion = null, estiloActivo = null;
+let sonando = false, tInicio = 0, punteroEv = 0, offLoop = 0, timerSched = null, timerUI = null;
+
+function play() {
+  initAudio();
+  if (ctx.state === "suspended") ctx.resume();
+  stop(false);
+
+  // 1. leer y validar el JSON del editor
+  let st;
+  const errBox = document.getElementById("jsonError");
+  errBox.textContent = "";
+  try {
+    st = JSON.parse(document.getElementById("jsonParams").value);
+    // validación mínima
+    for (const k of ["tempo", "armonia", "bateria", "bajo", "comping", "melodia", "forma", "mezcla"])
+      if (!st[k]) throw new Error("Falta el campo \"" + k + "\"");
+    st.armonia.progresiones.forEach(p => p.acordes.forEach(parsearAcorde));
+  } catch (e) {
+    errBox.textContent = "✖ JSON inválido: " + e.message;
+    return;
+  }
+  estiloActivo = st;
+
+  // 2. generar la canción (determinista)
+  const seed = parseInt(document.getElementById("inSeed").value) || 1;
+  const raiz = document.getElementById("inRaiz").value;
+  const bpmIn = parseInt(document.getElementById("inBpm").value) || 0;
+  cancion = generarCancion(st, seed, { raiz, bpm: bpmIn });
+  document.getElementById("infoCancion").textContent = "seed " + seed + " · " + cancion.resumen;
+
+  // 3. mezclas y efectos
+  for (const p in buses) {
+    buses[p].nivel = st.mezcla[p] ?? 0.8;
+    buses[p].rev.gain.value = (st.mezcla.reverb?.[p] ?? 0) * 1.2;
+    buses[p].dly.gain.value = (st.mezcla.delay?.[p] ?? 0) * 1.2;
+    nivelPista(p);
+  }
+  delayNode.delayTime.value = (60 / cancion.bpm) * 0.75;   // corchea con puntillo
+
+  // 4. arrancar scheduler
+  tInicio = ctx.currentTime + 0.2;
+  punteroEv = 0; offLoop = 0; sonando = true;
+  timerSched = setInterval(schedule, 25);
+  timerUI = setInterval(refrescarUI, 80);
+  document.getElementById("btnPlay").textContent = "▶ REGENERAR";
+}
+
+function schedule() {
+  if (!sonando) return;
+  const horizonte = ctx.currentTime - tInicio + 0.15;
+  const evs = cancion.eventos;
+  let seguros = 0;
+  while (seguros++ < 4000) {
+    if (punteroEv >= evs.length) { offLoop += cancion.dur; punteroEv = 0; }
+    const ev = evs[punteroEv];
+    const tRel = ev.time + offLoop;
+    if (tRel > horizonte) break;
+    punteroEv++;
+    const t = tInicio + tRel;
+    if (t < ctx.currentTime - 0.02) continue;
+    if (buses[ev.pista].mute) { marcarDot(ev.pista); continue; }
+    if (ev.pista === "bateria") golpeBateria(ev.voz, estiloActivo.bateria.kit, t, ev.vel);
+    else {
+      let tb = estiloActivo[ev.pista].timbre;
+      if (ev.pista === "melodia" && ev.vibrato && estiloActivo.melodia.timbre_lirica)
+        tb = estiloActivo.melodia.timbre_lirica;
+      notaSynth(ev.pista, tb, ev.midi, t, ev.dur, ev.vel, ev);
+    }
+    marcarDot(ev.pista);
+  }
+}
+
+function stop(reset = true) {
+  sonando = false;
+  clearInterval(timerSched); clearInterval(timerUI);
+  if (ctx) { try { master.disconnect(); } catch (e) {} initMasterChain(); }
+  if (reset) {
+    document.getElementById("estado").textContent = "—";
+    document.getElementById("btnPlay").textContent = "▶ GENERAR + PLAY";
+  }
+}
+// al parar cortamos todo reconectando el master (mata las colas largas)
+function initMasterChain() {
+  master = ctx.createGain();
+  master.gain.value = document.getElementById("inMaster").value / 100 * 0.9;
+  master.connect(comp);
+  // reconectar buses y efectos al nuevo master
+  for (const p in buses) { try { buses[p].gain.disconnect(); } catch (e) {} buses[p].gain.connect(master); }
+  try { reverb.disconnect(); } catch (e) {}
+  const revOut = ctx.createGain(); revOut.gain.value = 0.9; reverb.connect(revOut); revOut.connect(master);
+  try { delayFb.disconnect(); } catch (e) {}
+  // el delay interno se mantiene; reconectar su salida
+  delayFb.connect(delayNode);
+  delayNode.disconnect();
+  const dlyFilt = ctx.createBiquadFilter(); dlyFilt.type = "lowpass"; dlyFilt.frequency.value = 2800;
+  const dlyOut = ctx.createGain(); dlyOut.gain.value = 0.7;
+  delayNode.connect(dlyFilt); dlyFilt.connect(delayFb); dlyFilt.connect(dlyOut); dlyOut.connect(master);
+}
+
+/* ============================================================================
+   7. UI
+   ============================================================================ */
+const pistasDef = [
+  ["bateria", "Batería"], ["bajo", "Bajo"], ["comping", "Armonía"], ["melodia", "Melodía"]
+];
+const pistasUIState = {};
+const dotsTimeout = {};
+function construirPistas() {
+  const cont = document.getElementById("pistasUI");
+  for (const [id, nom] of pistasDef) {
+    pistasUIState[id] = { vol: 1 };
+    const el = document.createElement("div");
+    el.className = "pista p-" + id;
+    el.innerHTML = `<div class="dot" id="dot-${id}"></div><div class="nom">${nom}</div>
+      <input type="range" min="0" max="120" value="100" id="vol-${id}">
+      <button class="mute" id="mute-${id}">M</button>`;
+    cont.appendChild(el);
+    el.querySelector(`#vol-${id}`).addEventListener("input", e => {
+      pistasUIState[id].vol = e.target.value / 100;
+      if (ctx) nivelPista(id);
+    });
+    el.querySelector(`#mute-${id}`).addEventListener("click", e => {
+      if (!ctx) initAudio();
+      buses[id].mute = !buses[id].mute;
+      e.target.classList.toggle("activo", buses[id].mute);
+      nivelPista(id);
+    });
+  }
+}
+function marcarDot(p) {
+  const d = document.getElementById("dot-" + p);
+  d.classList.add("on");
+  clearTimeout(dotsTimeout[p]);
+  dotsTimeout[p] = setTimeout(() => d.classList.remove("on"), 90);
+}
+function refrescarUI() {
+  if (!sonando || !cancion) return;
+  const tRel = (ctx.currentTime - tInicio) % cancion.dur;
+  if (tRel < 0) return;
+  const nb = Math.floor(tRel / cancion.barDur);
+  const bar = cancion.bars[Math.min(nb, cancion.bars.length - 1)];
+  const beat = Math.floor((tRel - nb * cancion.barDur) / (cancion.barDur / 4)) + 1;
+  document.getElementById("estado").textContent =
+    `sección: ${bar.sec.id}  (compás ${bar.secBar + 1}/${bar.sec.compases})\n` +
+    `acorde: ${bar.ac.txt} sobre ${NOMBRE_NOTA[cancion.raiz]}  ·  beat ${beat}  ·  compás ${nb + 1}/${cancion.bars.length}`;
+  // VU
+  if (vuAnalyser) {
+    const d = new Uint8Array(vuAnalyser.frequencyBinCount);
+    vuAnalyser.getByteTimeDomainData(d);
+    let max = 0; for (let i = 0; i < d.length; i++) max = Math.max(max, Math.abs(d[i] - 128));
+    document.getElementById("vu").style.width = Math.min(100, max / 128 * 160) + "%";
+  }
+}
+
+// botones de estilo → cargan el preset al editor
+function construirBotonesEstilo() {
+  const cont = document.getElementById("botonesEstilo");
+  for (const id in ESTILOS) {
+    const btn = document.createElement("button");
+    btn.textContent = ESTILOS[id].nombre;
+    btn.addEventListener("click", () => {
+      document.getElementById("jsonParams").value = JSON.stringify(ESTILOS[id], null, 2);
+      document.querySelectorAll(".estilos button").forEach(x => x.classList.remove("sel"));
+      btn.classList.add("sel");
+      document.getElementById("jsonError").textContent = "";
+    });
+    cont.appendChild(btn);
+  }
+  cont.firstChild.click();
+}
+
+document.getElementById("btnPlay").addEventListener("click", play);
+document.getElementById("btnStop").addEventListener("click", () => stop());
+document.getElementById("btnDado").addEventListener("click", () => {
+  document.getElementById("inSeed").value = Math.floor(Math.random() * 99999);
+});
+document.getElementById("inMaster").addEventListener("input", e => {
+  if (master) master.gain.value = e.target.value / 100 * 0.9;
+});
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && document.activeElement.tagName !== "TEXTAREA"
+      && document.activeElement.tagName !== "INPUT") {
+    e.preventDefault();
+    sonando ? stop() : play();
+  }
+});
+construirPistas();
+construirBotonesEstilo();
+</script>
+</body>
+</html>

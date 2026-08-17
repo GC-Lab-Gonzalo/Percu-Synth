@@ -9,8 +9,8 @@ Se apoya el PercuSynth en el **piso**: al golpear cerca, el acelerómetro detect
 | Control | Acción |
 |---|---|
 | **Golpe en el piso** (IMU) | Dispara nota + luz. Más fuerte = más volumen y brillo. |
-| **BTN1** (44) | Efecto de luz **anterior** |
-| **BTN5** (47) | Efecto de luz **siguiente** |
+| **BTN1** (44) | Efecto de luz **anterior** (desde **Apagado** salta al último, *Barrido*) |
+| **BTN5** (47) | Efecto de luz **siguiente** (desde *Barrido* vuelve a **Apagado**) |
 | **BTN2** (42) | Timbre **CAMPANA** (el clásico de impact_chimes) |
 | **BTN3** (0)  | Timbre **MARIMBA** (fundamental + 4º armónico, ataque seco, cola corta leñosa) |
 | **BTN4** (45) | Timbre **GUITARRA ELÉCTRICA** (sierra + overdrive + vibrato, sostenido largo) |
@@ -19,15 +19,22 @@ Se apoya el PercuSynth en el **piso**: al golpear cerca, el acelerómetro detect
 | **POT3** (ADC8)  | Brillo (cutoff del filtro paso-bajos) |
 | **POT4** (ADC10) | Timbre: morph (campana) · dureza del mazo (marimba) · drive (guitarra) |
 
-## Efectos de luz (5, ciclables con BTN1/BTN5)
+## Efectos de luz (6 estados en ciclo circular, con BTN1 ◀ / BTN5 ▶)
 
-0. **Onda** — onda simétrica que se expande desde el centro a cada golpe (estilo de la referencia de Omar).
-1. **Cometa** — cabezas brillantes que vuelan del centro a los extremos con estela.
-2. **Pulso** — toda la tira late con el color de la nota; respiración suave en reposo.
-3. **Chispas** — polvo mágico en posiciones aleatorias a cada golpe.
-4. **Arcoíris** — arcoíris que se desplaza; brillo y velocidad pulsan con la energía.
+0. **Apagado** — tira negra. **Es el estado inicial**: al encender no hay luces hasta que elijas un efecto.
+1. **Onda** — onda simétrica que se expande desde el centro a cada golpe (estilo de la referencia de Omar).
+2. **Cometa** — cabezas brillantes que vuelan del centro a los extremos con estela.
+3. **Pulso** — toda la tira late a cada nota; respiración suave en reposo.
+4. **Chispas** — polvo mágico en posiciones aleatorias a cada golpe (brillo aleatorio).
+5. **Barrido** — onda de brillo que recorre la tira; nivel y velocidad pulsan con la energía.
 
-El **color** de cada nota va por una paleta mágica (cian → violeta → magenta) según la altura tocada.
+El ciclo **rebota en los dos extremos**: `0 —BTN1→ 5` y `5 —BTN5→ 0`. Cada cambio confirma con un parpadeo magenta corto (también al entrar en Apagado, para saber que el botón se registró). Mientras está apagado, el sonido sigue funcionando normal; al salir del apagado no se descarga de golpe lo acumulado (las ondas y chispas pendientes se vacían).
+
+Ojo: al **encender** sí hay un barrido de luz de ~0.4 s — es el diagnóstico de arranque (confirma tira + audio sin necesidad de USB) y termina en negro, dejando la tira en Apagado.
+
+Toda la luz es **magenta puro**: no hay ningún otro color en el firmware. Los efectos varían **brillo**, posición y velocidad, nunca el tono — incluidos los flashes de confirmación (el de timbre se distingue por brillo: tenue/medio/fuerte) y el aviso de "IMU no detectado" (antes rojo, ahora magenta tenue).
+
+El magenta se pinta en RGB directo con el helper `magenta(v)` → `CRGB(v, 0, v)`, **no** con `CHSV`: el mapa "rainbow" de FastLED desatura el magenta (lo baja a ~128,0,128). Con RGB directo también las mezclas aditivas (`leds[i] += c`) se mantienen exactamente en magenta.
 
 ## Hardware
 

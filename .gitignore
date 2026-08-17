@@ -1,5 +1,8 @@
 # Claude Code state (worktrees, logs, etc. — local only)
-.claude/
+# (git no puede "des-ignorar" dentro de una carpeta ignorada: por eso es .claude/* y no .claude/)
+.claude/*
+# ...menos la skill del repo, que SÍ se publica para la comunidad
+!.claude/skills/
 
 # Editor settings (personal, not project-wide)
 .vscode/
@@ -7,8 +10,49 @@
 # Arduino IDE build artifacts — el .bin que importa ya está en firmware/
 tools/percu_control/build/
 
+# Python (herramientas locales)
+__pycache__/
+*.pyc
+
 # Sistema operativo
 .DS_Store
 Thumbs.db
 
 build_pdf.py
+
+# Empaquetados locales (el código fuente ya está en el repo)
+*.rar
+*.zip
+# ...menos los gerbers, que son el entregable para fabricar la placa
+!Hardware/*.zip
+
+# ============================================================
+# CREDENCIALES — nunca subir
+# ============================================================
+
+# Cabecera con las claves reales (WiFi, OpenAI, ElevenLabs).
+# La plantilla secretos.example.h SÍ se sube: no coincide con este patrón.
+secretos.h
+credenciales.h
+
+# ============================================================
+# PROYECTOS PRIVADOS — se quedan solo en local
+# ============================================================
+# No son secretos técnicos: son trabajos que no se comparten con la comunidad.
+# Si algún día quieres publicar uno, borra su línea de aquí y revisa antes que
+# no lleve claves ni datos personales.
+
+# Atmos Visual (instalación Dolby Atmos + TouchDesigner) y su controlador
+atmos_visual/
+firmwares/secuenciador_atmos/
+
+# EL RELOJ (firmware + web)
+firmwares/el_reloj_leds/
+web/el_reloj/
+
+# Asistente de community manager de Instagram (contenido y marca de GC Lab)
+tools/instagram_cm/
+
+# PULSE SEQ — el secuenciador que corre con el pulso del oxímetro
+# (estuvo publicado hasta el commit 56877c4: sigue en el historial de GitHub)
+tools/oximeter_midi_sync/

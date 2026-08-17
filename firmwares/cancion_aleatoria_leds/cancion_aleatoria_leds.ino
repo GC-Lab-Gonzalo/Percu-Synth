@@ -17,8 +17,9 @@
 // - 6 LEDs WS2812 SMD internos de la placa |DATA -> 46| (índices 0..5 de la tira)
 // - LED RGB direccionable del módulo ESP32-S3 (DevKitC-1) |DATA -> 48| (refleja la tira)
 // - 1 Botón con pull-up |BTN1 -> 44|  (PLAY / STOP)
-// - 2 Potenciómetros analógicos |POT1 -> ADC1| (VOLUMEN de los PADS)
+// - 3 Potenciómetros analógicos |POT1 -> ADC1| (VOLUMEN de los PADS)
 //                               |POT2 -> ADC2| (VOLUMEN de la MELODÍA)  → mezcla pad/melodía
+//                               |POT3 -> ADC8| (VOLUMEN de la PERCUSIÓN)
 //   (el resto de botones/pots queda inerte a propósito — este instrumento es autónomo)
 // ==============================================================================================================================================
 // ARDUINO IDE — settings críticos
@@ -46,6 +47,7 @@
 //     · BTN1  → PLAY / STOP
 //     · POT1  → VOLUMEN de los PADS
 //     · POT2  → VOLUMEN de la MELODÍA   (para mezclar pad ↔ melodía)
+//     · POT3  → VOLUMEN de la PERCUSIÓN
 //
 // Al dar PLAY se sortea una CANCIÓN COMPLETA y coherente, todo aleatorio:
 //     · Tonalidad (12) + MODO/escala (jónico, dórico, frigio, lidio, mixolidio, eólico,
@@ -55,6 +57,10 @@
 //     · CLOCK: BPM y estado de ánimo (calmo / medio / movido) → densidad y duraciones.
 //     · Parámetros de síntesis: formas de onda del pad, detune, ancho estéreo, tono,
 //       piso de cutoff, resonancia, LFO de filtro (respiración), ataque/release del pad.
+//     · PERCUSIÓN sintetizada (bombo/caja/hats — sin samples): el patrón de 16 semicorcheas,
+//       los timbres y el nivel se SORTEAN por canción según el arquetipo. AMBIENT a veces va
+//       sin percusión (o con un boom suave); PULSE/DRIVE llevan groove completo (4-al-piso,
+//       backbeat, hats con acentos y "fantasmas", mini-fill cada 4 compases). Siempre al clock.
 //
 // La MELODÍA (reemplaza al arpegio pre-configurado): es una LÍNEA MONOFÓNICA generada
 // nota a nota en tiempo real. NO hay patrón fijo. Cada nota sortea:
@@ -78,6 +84,7 @@
 //      del filtro (color sweep ↔ filter sweep).
 //   2. BARRA (VU) = energía del PAD (cuántos acordes/cola suenan).
 //   3. PUNTO que CORRE = avanza una posición por cada NOTA de la melodía (su "pulso").
+//   4. PULSO con el BOMBO = toda la barra "late" suavemente en cada golpe de bombo.
 //   · Flash suave al cambiar de acorde · flash al arrancar una canción nueva.
 //   · Sin PLAY → respiración lenta y tenue (modo espera).
 // ==============================================================================================================================================
@@ -128,6 +135,7 @@ float g_filtLfoVal = 0.0f; // -1..1 del LFO de filtro (color sweep)
 #define BTN1_PIN   44
 #define POT1        1    // ADC1 → volumen de los PADS
 #define POT2        2    // ADC2 → volumen de la MELODÍA
+#define POT3        8    // ADC8 → volumen de la PERCUSIÓN
 const unsigned long DEBOUNCE_MS = 220;
 BtnState bPlay = {BTN1_PIN, HIGH, 0};
 
@@ -314,6 +322,55 @@ bool  lastWasPassing = false;    // la nota previa fue de PASO → la siguiente 
 float melVibDepth = 0.010f;      // profundidad (ratio de pitch) — por nota
 float melVibR0    = 4.0f;        // Hz al empezar la nota (más lento)
 float melVibR1    = 6.5f;        // Hz al final de la nota (más rápido) → rate dinámico
+
+// ─── PERCUSIÓN sintetizada (aleatoria por canción) ─────────
+// Motor aparte y liviano: voces percusivas de un golpe (sin ataque — la envolvente arranca
+// en 1 y solo decae). Síntesis estilo drum_machine_basic, sin samples:
+//   · BOMBO = seno con barrido de pitch hacia abajo (+ pizca de ruido = click de pegada)
+//   · CAJA/RIM = seno corto con caída + ruido (la mezcla tonal↔ruido se sortea por canción)
+//   · HAT = ruido puro PASA-ALTOS (cerrado corto · abierto largo; alterna lados en el estéreo)
+// El PATRÓN (16 semicorcheas = 1 compás de 4/4, el mismo grid del clock) se sortea por
+// canción según el ARQUETIPO → cada canción tiene su propio groove (o ninguno: AMBIENT
+// muchas veces va sin percusión). Humanización: acentos en el beat, velocidad aleatoria
+// por golpe, hats "fantasma" en pasos vacíos y mini-fill de caja cada 4 compases.
+#define PERC_VOICES 6
+#define PK_KICK  0
+#define PK_SNARE 1
+#define PK_HATC  2
+#define PK_HATO  3
+struct PercVoice {
+  bool  active;
+  float phase, freq, freqEnd, sweepCoef;  // barrido de pitch (bombo/caja)
+  float env, decCoef;
+  float noiseMix;                         // 0 = tonal · 1 = solo ruido
+  float lp, lpA;                          // "tono" (LPF un polo)
+  bool  hipass;                           // hats: usar (x - lp) → pasa-altos
+  float gain, lGain, rGain;
+};
+PercVoice pvoices[PERC_VOICES];
+
+// Ruido con LCG PROPIO → no consume el rng de la composición (la armonía/melodía no se altera)
+uint32_t noiseRng = 0x9E3779B9u;
+inline float noiseSample() {
+  noiseRng = noiseRng * 1664525u + 1013904223u;
+  return (float)(int32_t)noiseRng * (1.0f / 2147483648.0f);
+}
+
+// Patrón por canción (bitmask de 16 pasos por instrumento; bit s = semicorchea s)
+uint16_t patKick = 0, patSnare = 0, patHatC = 0, patHatO = 0;
+bool    percOn      = false;   // ¿esta canción lleva percusión? (algunas van sin)
+float   percLevel   = 0.5f;    // nivel de la percusión (se sortea por canción)
+float   ghostProb   = 0.0f;    // prob. de hat "fantasma" en pasos vacíos
+int     percStep    = 0;
+int32_t percSamplesToNext = 0;
+int     percBar     = 0;       // compás actual (para el mini-fill cada 4)
+float   g_percVol   = 0.7f;    // POT3 → volumen de la percusión
+float   g_kickFlash = 0.0f;    // pulso de LEDs con el bombo
+
+// Timbres de la percusión (se sortean por canción)
+float kickF0 = 95.0f, kickF1 = 42.0f, kickDec = 0.22f;
+float snFreq = 190.0f, snDec = 0.14f, snNoise = 0.8f;
+float hatDecC = 0.045f, hatDecO = 0.20f, hatTone = 0.55f;
 
 // ─── Timbre / síntesis (por canción) ───────────────────────
 uint8_t padWave = 3;            // forma de onda del pad
@@ -692,6 +749,145 @@ void melodyStep() {
   g_melPos   = (g_melPos + 1) % NUM_LEDS;
 }
 
+// ─── Disparar UNA voz de percusión ─────────────────────────
+void triggerPerc(uint8_t type, float vel) {
+  int idx = -1;
+  for (int i = 0; i < PERC_VOICES; i++) if (!pvoices[i].active) { idx = i; break; }
+  if (idx < 0) {                                  // roba la menos audible
+    float lo = 1e30f; idx = 0;
+    for (int i = 0; i < PERC_VOICES; i++) {
+      float a = pvoices[i].env * pvoices[i].gain;
+      if (a < lo) { lo = a; idx = i; }
+    }
+  }
+  PercVoice &v = pvoices[idx];
+  v.active = true; v.phase = 0.0f; v.env = 1.0f;
+  v.lp = 0.0f; v.hipass = false;
+  v.freqEnd = 0.0f; v.sweepCoef = 0.0f;
+  float pan = 0.0f, dec = 0.1f;
+  switch (type) {
+    case PK_KICK:                                 // seno con barrido de pitch + click
+      v.freq = kickF0; v.freqEnd = kickF1;
+      v.sweepCoef = 1.0f / (0.045f * SAMPLE_RATE);
+      v.noiseMix = 0.05f; v.lpA = 0.60f;
+      dec = kickDec; v.gain = 1.15f * vel; pan = 0.0f;
+      g_kickFlash = 1.0f;
+      break;
+    case PK_SNARE:                                // seno corto que cae + ruido
+      v.freq = snFreq; v.freqEnd = snFreq * 0.6f;
+      v.sweepCoef = 1.0f / (0.030f * SAMPLE_RATE);
+      v.noiseMix = snNoise; v.lpA = 0.55f;
+      dec = snDec; v.gain = 0.75f * vel; pan = 0.12f;
+      break;
+    case PK_HATC:                                 // ruido pasa-altos corto
+      v.freq = 0.0f; v.noiseMix = 1.0f; v.lpA = hatTone; v.hipass = true;
+      dec = hatDecC; v.gain = 0.34f * vel;
+      pan = (percStep & 2) ? 0.35f : -0.35f;      // alterna lados → el hat "camina"
+      break;
+    default:                                      // PK_HATO — ruido pasa-altos largo
+      v.freq = 0.0f; v.noiseMix = 1.0f; v.lpA = hatTone * 0.8f; v.hipass = true;
+      dec = hatDecO; v.gain = 0.28f * vel; pan = -0.25f;
+      break;
+  }
+  v.decCoef = expf(-6.5f / (dec * SAMPLE_RATE));
+  float p = pan; if (p > 1.0f) p = 1.0f; if (p < -1.0f) p = -1.0f;
+  float phr = (p + 1.0f) * 0.125f;
+  v.rGain = oscSine(phr);
+  v.lGain = oscSine(phr + 0.25f);
+}
+
+// ─── Disparar los instrumentos del paso actual ─────────────
+// Humanización: acento en el beat, velocidad aleatoria por golpe, hat "fantasma" en pasos
+// vacíos y mini-fill de cajas suaves en los últimos 4 pasos de cada 4º compás.
+void percStepFire() {
+  uint16_t bit = (uint16_t)1 << percStep;
+  bool  onBeat = (percStep & 3) == 0;
+  float acc    = onBeat ? 1.0f : 0.82f;
+  bool  fill   = ((percBar & 3) == 3) && percStep >= 12;
+
+  if (patKick & bit)  triggerPerc(PK_KICK,  acc * (0.85f + rndF() * 0.15f));
+  if (patSnare & bit) triggerPerc(PK_SNARE, acc * (0.80f + rndF() * 0.20f));
+  else if (fill && rndF() < 0.35f) triggerPerc(PK_SNARE, 0.35f + rndF() * 0.25f);
+  if (patHatO & bit)      triggerPerc(PK_HATO, 0.7f + rndF() * 0.3f);
+  else if (patHatC & bit) triggerPerc(PK_HATC, acc * (0.65f + rndF() * 0.35f));
+  else if (ghostProb > 0.0f && rndF() < ghostProb)
+    triggerPerc(PK_HATC, 0.25f + rndF() * 0.20f);
+
+  percStep = (percStep + 1) & 15;
+  if (percStep == 0) percBar++;
+}
+
+// ─── Sortear la PERCUSIÓN de la canción (según arquetipo) ──
+void genPercussion() {
+  patKick = patSnare = patHatC = patHatO = 0;
+  percStep = 0; percSamplesToNext = 0; percBar = 0;
+  ghostProb = 0.0f; percOn = false;
+
+  // Timbres por canción (cada canción tiene SU bombo/caja/hats)
+  kickF0  = 70.0f  + rndF() * 55.0f;   kickF1  = 36.0f  + rndF() * 14.0f;
+  kickDec = 0.14f  + rndF() * 0.22f;
+  snFreq  = 160.0f + rndF() * 70.0f;   snNoise = 0.60f  + rndF() * 0.30f;
+  snDec   = 0.09f  + rndF() * 0.11f;
+  hatDecC = 0.030f + rndF() * 0.040f;  hatDecO = 0.14f  + rndF() * 0.16f;
+  hatTone = 0.45f  + rndF() * 0.35f;
+
+  switch (songArche) {
+    case 0:  // AMBIENT — a menudo SIN percusión; si hay: boom suave en el 1 + hat esporádico
+      percOn = (rndF() < 0.40f);
+      if (percOn) {
+        patKick = 0x0001;                                    // solo el 1 (boom)
+        if (rndF() < 0.5f) patKick |= 0x0100;                // a veces también el 3
+        for (int s = 2; s < 16; s += 2) if (rndF() < 0.18f) patHatC |= (1u << s);
+        kickDec   = 0.30f + rndF() * 0.25f;                  // boom largo
+        percLevel = 0.22f + rndF() * 0.12f;
+      }
+      break;
+    case 1:  // CINEMATIC — pulso épico escaso: booms + golpe en el 4 + hat abierto aireado
+      percOn = (rndF() < 0.65f);
+      if (percOn) {
+        patKick = 0x0001 | ((rndF() < 0.6f) ? 0x0100 : 0x0400);
+        if (rndF() < 0.4f) patSnare |= 0x1000;               // golpe en el beat 4
+        for (int s = 2; s < 16; s += 4) if (rndF() < 0.35f) patHatO |= (1u << s);
+        percLevel = 0.30f + rndF() * 0.15f;
+      }
+      break;
+    case 2:  // PULSE — bombo constante + hats en contratiempo + backbeat opcional
+      percOn  = true;
+      patKick = (rndF() < 0.6f) ? 0x1111 : 0x0101;           // 4-al-piso o en 1 y 3
+      if (rndF() < 0.5f) patSnare = 0x1010;                  // backbeat (2 y 4)
+      for (int s = 2; s < 16; s += 4) patHatC |= (1u << s);  // contratiempos de corchea
+      for (int s = 0; s < 16; s++) if (rndF() < 0.15f) patHatC |= (1u << s);
+      if (rndF() < 0.5f) patHatO |= 0x4000;                  // open hat al final del compás
+      ghostProb = 0.06f + rndF() * 0.10f;
+      percLevel = 0.45f + rndF() * 0.20f;
+      break;
+    case 3:  // PLUCK — shaker/hat en semicorcheas con acentos, bombo escaso, rim en 2 y 4
+      percOn = (rndF() < 0.85f);
+      if (percOn) {
+        patKick = 0x0001;
+        if (rndF() < 0.5f) patKick |= (rndF() < 0.5f) ? 0x0400 : 0x0040;   // síncopa
+        if (rndF() < 0.7f) patSnare = 0x1010;                // rim suave en 2 y 4
+        for (int s = 0; s < 16; s++) if (rndF() < 0.55f) patHatC |= (1u << s);
+        snNoise = 0.35f + rndF() * 0.20f;                    // rim: más tonal y corto
+        snDec   = 0.05f + rndF() * 0.05f;
+        ghostProb = 0.10f + rndF() * 0.12f;
+        percLevel = 0.35f + rndF() * 0.18f;
+      }
+      break;
+    default: // 4 DRIVE — groove completo: 4-al-piso, backbeat, hats en corcheas/semis
+      percOn  = true;
+      patKick = 0x1111;
+      if (rndF() < 0.35f) patKick |= (rndF() < 0.5f) ? 0x0040 : 0x4000;    // síncopa extra
+      patSnare = 0x1010;
+      for (int s = 0; s < 16; s += 2) patHatC |= (1u << s);  // corcheas
+      for (int s = 1; s < 16; s += 2) if (rndF() < 0.30f) patHatC |= (1u << s);
+      if (rndF() < 0.6f) patHatO |= 0x0404;                  // open hats en contratiempos
+      ghostProb = 0.05f + rndF() * 0.08f;
+      percLevel = 0.55f + rndF() * 0.25f;
+      break;
+  }
+}
+
 // ==============================================================================================================================================
 // GENERACIÓN DE UNA CANCIÓN NUEVA
 // ==============================================================================================================================================
@@ -814,6 +1010,9 @@ void startSong() {
     progBeats[i] = (rndI(3) == 0) ? 8 : 4;          // 4 u 8 negras
   }
 
+  // — Percusión: patrón + timbres + nivel según el arquetipo (o ninguna) —
+  genPercussion();
+
   // — Registro de la melodía: ventana en el RANGO VOCAL (grados 7..~16 → ~C4–D5) —
   //   (el plegado por-nota a [VOCAL_LO, VOCAL_HI] garantiza que no se salga aunque suba de octava)
   melLo  = 7;
@@ -847,6 +1046,10 @@ void stopSong() {
       voices[i].decCoef = expf(-6.5f / (0.12f * SAMPLE_RATE));
     }
   melVoiceIdx = -1;
+  // percusión → cola rápida (un boom largo no debe quedar sonando tras el STOP)
+  float pf = expf(-6.5f / (0.10f * SAMPLE_RATE));
+  for (int i = 0; i < PERC_VOICES; i++)
+    if (pvoices[i].active && pvoices[i].decCoef > pf) pvoices[i].decCoef = pf;
   playing = false;
 }
 
@@ -947,6 +1150,13 @@ void renderLEDs() {
   }
   g_melFlash *= 0.6f;
 
+  // Pulso con el BOMBO (toda la barra "late" suavemente en cada golpe)
+  if (g_kickFlash > 0.02f) {
+    uint8_t kv = (uint8_t)(g_kickFlash * 55.0f);
+    for (int i = 0; i < NUM_LEDS; i++) leds[i] += CHSV(hue + 32, 140, kv);
+    g_kickFlash *= 0.55f;
+  }
+
   // Flash al cambiar de acorde (suma en el color complementario suave)
   if (g_chordFlash > 0.02f) {
     uint8_t cv = (uint8_t)(g_chordFlash * 90.0f);
@@ -1034,6 +1244,7 @@ void setup() {
   for (int i = 0; i < 256; i++)
     sineLUT[i] = sinf(2.0f * (float)M_PI * (float)i / 256.0f);
   for (int i = 0; i < NUM_VOICES; i++) voices[i].active = false;
+  for (int i = 0; i < PERC_VOICES; i++) pvoices[i].active = false;
 
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.addLeds<LED_TYPE, ONBOARD_PIN, COLOR_ORDER>(onboard, 1);
@@ -1053,12 +1264,13 @@ void loop() {
     else         startSong();
   }
 
-  // — POT1: volumen de los PADS · POT2: volumen de la MELODÍA (mezcla) —
+  // — POT1: volumen PADS · POT2: volumen MELODÍA · POT3: volumen PERCUSIÓN (mezcla) —
   static uint8_t potDiv = 0;
   if (++potDiv >= 4) {
     potDiv = 0;
-    float vp = readPot(POT1); g_padVol = vp * vp;   // curva cuadrática (más control abajo)
-    float vm = readPot(POT2); g_melVol = vm * vm;
+    float vp = readPot(POT1); g_padVol  = vp * vp;   // curva cuadrática (más control abajo)
+    float vm = readPot(POT2); g_melVol  = vm * vm;
+    float vq = readPot(POT3); g_percVol = vq * vq;
   }
 
   // — Progresión de acordes (avanza por tiempo) —
@@ -1113,6 +1325,12 @@ void loop() {
       melSamplesToNext--;
     }
 
+    // Secuenciador de PERCUSIÓN: 16 semicorcheas por compás, el MISMO grid del clock
+    if (playing && percOn) {
+      if (percSamplesToNext <= 0) { percStepFire(); percSamplesToNext += (int32_t)gridSamples; }
+      percSamplesToNext--;
+    }
+
     float padL = 0.0f, padR = 0.0f, melL = 0.0f, melR = 0.0f;
     for (int i = 0; i < NUM_VOICES; i++) {
       Voice &v = voices[i];
@@ -1153,6 +1371,29 @@ void loop() {
       else                    { melL += a * v.lGain; melR += a * v.rGain; }
     }
 
+    // — Voces de PERCUSIÓN (motor propio, sin ataque: solo caída) —
+    float pcL = 0.0f, pcR = 0.0f;
+    for (int i = 0; i < PERC_VOICES; i++) {
+      PercVoice &p = pvoices[i];
+      if (!p.active) continue;
+      float x;
+      if (p.noiseMix >= 1.0f) {                   // hats: solo ruido (sin oscilador)
+        x = noiseSample();
+      } else {
+        p.phase += p.freq / SAMPLE_RATE;
+        if (p.phase >= 1.0f) p.phase -= 1.0f;
+        if (p.sweepCoef > 0.0f) p.freq += (p.freqEnd - p.freq) * p.sweepCoef;
+        x = oscSine(p.phase);
+        if (p.noiseMix > 0.0f) x = x * (1.0f - p.noiseMix) + noiseSample() * p.noiseMix;
+      }
+      p.lp += p.lpA * (x - p.lp);
+      float y = p.hipass ? (x - p.lp) : p.lp;     // hats pasa-altos · resto pasa-bajos (tono)
+      p.env *= p.decCoef;
+      if (p.env < 0.0008f) { p.active = false; continue; }
+      float a = y * p.env * p.gain;
+      pcL += a * p.lGain; pcR += a * p.rGain;
+    }
+
     // Interpolación de coeficientes del filtro (muestra a muestra) → el barrido de corte es continuo
     filterStep(coefL, stepL);
     filterStep(coefR, stepR);
@@ -1167,8 +1408,9 @@ void loop() {
     toneR += toneCoef * (fR - toneR);
 
     // Melodía SECA (solo su LPF de brillo por voz) sumada encima del pad filtrado · POT2 = su volumen
-    float vL = (toneL + melL * melLevel * g_melVol) * 0.12f;
-    float vR = (toneR + melR * melLevel * g_melVol) * 0.12f;
+    // Percusión también SECA (no pasa por el filtro resonante → pegada firme) · POT3 = su volumen
+    float vL = (toneL + melL * melLevel * g_melVol + pcL * percLevel * g_percVol) * 0.12f;
+    float vR = (toneR + melR * melLevel * g_melVol + pcR * percLevel * g_percVol) * 0.12f;
 
     if (vL >  3.0f) vL =  3.0f; if (vL < -3.0f) vL = -3.0f;
     if (vR >  3.0f) vR =  3.0f; if (vR < -3.0f) vR = -3.0f;

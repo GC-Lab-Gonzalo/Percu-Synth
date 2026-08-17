@@ -1,0 +1,26 @@
+# Perfil de compilacion del sampler_ia.
+#
+# Fija la placa Y LOS CINCO MENUS que este firmware necesita, para no depender de como
+# haya quedado el IDE. El Arduino IDE 2.3+ los muestra en el selector de placa, y por
+# linea de comandos:
+#
+#     arduino-cli compile --profile percusynth
+#     arduino-cli upload  --profile percusynth -p COM5
+#
+# Los menus, y que pasa si estan mal:
+#   esp32s3        placa correcta (el ESP32 normal no tiene USB OTG ni los GPIO 46/48)
+#   PSRAM=opi      obligatorio: los 3 slots + buffers son ~1 MB (si falta, parpadea magenta)
+#   FlashMode=dio  en este hardware el I2S suena mal en QIO/OPI
+#   CDCOnBoot=cdc  el Monitor Serie con el log de cada sample
+#   USBMode=default = "USB-OTG (TinyUSB)": sin esto el PC no ve el dispositivo MIDI
+
+profiles:
+  percusynth:
+    notes: PercuSynth ESP32-S3 con PSRAM, audio I2S y reloj MIDI USB
+    fqbn: esp32:esp32:esp32s3:PSRAM=opi,FlashMode=dio,CDCOnBoot=cdc,USBMode=default
+    platforms:
+      - platform: esp32:esp32 (3.2.0)
+    libraries:
+      - FastLED (3.9.13)
+
+default_profile: percusynth

@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0805">
+<title>PercuSynth Móvil · GC Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wood-1:#5a3520;--wood-2:#3d2114;--wood-3:#2a160c;
+  --silk:#e8e2cf;--silk-d:#8a8470;--silk-f:#5a5440;
+  --cyan:#5dd7ff;--violet:#b58aff;--amber:#ffaa44;--mint:#5fffc4;
+  --red:#ff5a4a;--blue:#5aa0ff;--pink:#ff6aa8;--led:#4dd0a0;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{
+  min-height:100%;width:100%;
+  font-family:'Space Mono',monospace;color:var(--silk);
+  background:linear-gradient(180deg,var(--wood-1) 0%,var(--wood-2) 40%,var(--wood-3) 100%);
+  background-attachment:fixed;
+  overscroll-behavior:none;
+}
+body{padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+
+/* ════════ PCB ════════ */
+.pcb{
+  border-radius:8px;padding:10px;
+  display:flex;flex-direction:column;gap:10px;
+  background:
+    repeating-linear-gradient(45deg,rgba(40,80,55,.10) 0px,rgba(40,80,55,.10) 1px,transparent 1px,transparent 16px),
+    repeating-linear-gradient(-45deg,rgba(40,80,55,.08) 0px,rgba(40,80,55,.08) 1px,transparent 1px,transparent 16px),
+    linear-gradient(180deg,#101108 0%,#070806 50%,#0a0b07 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),inset 0 0 0 2px rgba(0,0,0,.6),0 6px 24px rgba(0,0,0,.5);
+}
+
+/* ════════ HEADER ════════ */
+header{display:flex;align-items:center;gap:8px;padding:2px 2px 8px;border-bottom:1px solid rgba(232,226,207,.12)}
+.logo{width:26px;height:26px;background:url('assets/gclab-logo.png') center/contain no-repeat;flex:0 0 auto;opacity:.9}
+.ttl{font-family:'Orbitron',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;line-height:1.1}
+.ttl small{display:block;font-family:'Space Mono',monospace;font-weight:400;font-size:8px;color:var(--silk-d);letter-spacing:.14em}
+.stat{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:8.5px;color:var(--silk-d);letter-spacing:.1em}
+.dot{width:7px;height:7px;border-radius:50%;background:#3a3a30;transition:.25s}
+.dot.on{background:var(--led);box-shadow:0 0 8px var(--led)}
+
+/* ════════ GATE (arranque) ════════ */
+.gate{
+  position:fixed;inset:0;z-index:50;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:26px;
+  background:rgba(6,7,5,.965);backdrop-filter:blur(6px);text-align:center;
+}
+.gate.hide{display:none}
+.gate h1{font-family:'Orbitron',sans-serif;font-size:19px;font-weight:900;letter-spacing:.08em}
+.gate p{font-size:11px;line-height:1.75;color:var(--silk-d);max-width:330px}
+.gate p b{color:var(--amber);font-weight:700}
+#go{
+  font-family:'Orbitron',sans-serif;font-size:15px;font-weight:800;letter-spacing:.1em;
+  padding:20px 34px;border-radius:11px;border:1px solid var(--amber);
+  background:linear-gradient(180deg,rgba(255,170,68,.24),rgba(255,170,68,.08));
+  color:var(--amber);box-shadow:0 0 26px rgba(255,170,68,.3);cursor:pointer;
+}
+#go:active{transform:translateY(1px)}
+#gate-err{font-size:10px;color:var(--red);max-width:330px;line-height:1.6;min-height:1em}
+#gate-warn:not(:empty){
+  font-size:10.5px;line-height:1.7;color:var(--red);max-width:340px;
+  border:1px solid var(--red);border-radius:7px;padding:10px 12px;background:rgba(255,90,74,.1);
+}
+#gate-warn code{color:var(--amber);word-break:break-all}
+
+/* diagnóstico del sensor */
+.diag{
+  font-size:8.5px;line-height:1.65;color:var(--silk-f);letter-spacing:.04em;
+  padding:5px 8px;border-radius:5px;background:rgba(0,0,0,.3);
+  box-shadow:inset 0 0 0 1px rgba(232,226,207,.07);word-break:break-word;
+}
+.diag b{color:var(--silk-d);font-weight:700}
+.diag .ok{color:var(--led)}
+.diag .bad{color:var(--red)}
+
+/* ════════ SCOPE ════════ */
+.scope-wrap{position:relative;border-radius:6px;overflow:hidden;background:#000;
+  box-shadow:inset 0 0 0 1px rgba(93,215,255,.18),inset 0 0 26px rgba(0,0,0,.9)}
+#scope{display:block;width:100%;height:110px}
+.scope-hud{position:absolute;top:5px;left:7px;right:7px;display:flex;gap:9px;
+  font-size:8.5px;letter-spacing:.09em;color:var(--silk-d);pointer-events:none}
+.scope-hud b{color:var(--cyan);font-weight:700}
+.scope-hud .r{margin-left:auto;color:var(--amber)}
+.scope-modes{position:absolute;bottom:5px;right:6px;display:flex;gap:3px}
+.scope-modes .chip{font-size:8px;padding:3px 7px}
+
+/* ════════ IMU ════════ */
+.imu{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
+  background:rgba(255,170,68,.05);box-shadow:inset 0 0 0 1px rgba(255,170,68,.18)}
+#imu-cv{width:104px;height:52px;flex:0 0 auto;touch-action:none}
+.imu-data{display:flex;flex-direction:column;gap:2px;min-width:0}
+.imu-data .big{font-family:'Orbitron',sans-serif;font-size:17px;font-weight:800;color:var(--amber);line-height:1}
+.imu-data .sub{font-size:8.5px;color:var(--silk-d);letter-spacing:.08em}
+.imu-act{margin-left:auto;display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+
+/* ════════ CHIPS ════════ */
+.chip{
+  font-family:'Space Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.06em;
+  padding:6px 9px;border-radius:5px;cursor:pointer;
+  border:1px solid rgba(232,226,207,.2);background:rgba(232,226,207,.04);color:var(--silk-d);
+  transition:.14s;touch-action:manipulation;
+}
+.chip.active{border-color:var(--c,var(--cyan));color:var(--c,var(--cyan));
+  background:rgba(255,255,255,.07);box-shadow:0 0 9px rgba(255,255,255,.09)}
+.chip.wave{font-size:13px;padding:5px 10px;line-height:1}
+.row{display:flex;gap:4px;flex-wrap:wrap}
+
+/* ════════ BOTONES DE PERFORMANCE ════════ */
+.perf{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.pbtn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  height:64px;border-radius:7px;cursor:pointer;touch-action:none;user-select:none;
+  border:1px solid rgba(232,226,207,.18);background:linear-gradient(180deg,rgba(232,226,207,.07),rgba(0,0,0,.25));
+  transition:transform .05s,box-shadow .1s,border-color .1s;
+}
+.pbtn .ic{font-size:17px;line-height:1;color:var(--c)}
+.pbtn .lb{font-size:7.5px;letter-spacing:.06em;color:var(--silk-d)}
+.pbtn.down{transform:translateY(2px);border-color:var(--c);
+  box-shadow:0 0 14px color-mix(in srgb,var(--c) 45%,transparent),inset 0 0 12px rgba(0,0,0,.5)}
+.pbtn.down .lb{color:var(--c)}
+.pbtn[data-k="kill"]{--c:var(--red)}
+.pbtn[data-k="bdn"],.pbtn[data-k="bup"]{--c:var(--amber)}
+.pbtn[data-k="odn"],.pbtn[data-k="oup"]{--c:var(--cyan)}
+
+/* ════════ KNOBS ════════ */
+.knobs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.kw{display:flex;flex-direction:column;align-items:center;gap:3px}
+.kc{width:100%;max-width:82px;aspect-ratio:1;touch-action:none;cursor:ns-resize}
+.kname{font-size:7.5px;letter-spacing:.08em;color:var(--silk-d)}
+
+/* ════════ MÓDULOS ════════ */
+.acc{border-radius:6px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(232,226,207,.1)}
+.acc>summary{
+  list-style:none;cursor:pointer;padding:10px 11px;font-family:'Orbitron',sans-serif;
+  font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--silk);
+  background:rgba(232,226,207,.05);display:flex;align-items:center;gap:7px;
+}
+.acc>summary::-webkit-details-marker{display:none}
+.acc>summary::after{content:'▾';margin-left:auto;color:var(--silk-d);transition:.2s}
+.acc[open]>summary::after{transform:rotate(180deg)}
+.acc-body{padding:9px;display:flex;flex-direction:column;gap:9px}
+
+.mod{border-radius:6px;padding:9px;background:rgba(0,0,0,.3);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 26%,transparent)}
+.mod-lbl{display:flex;align-items:center;gap:6px;font-family:'Orbitron',sans-serif;
+  font-size:9px;font-weight:700;letter-spacing:.11em;color:var(--c);margin-bottom:7px}
+.mod-lbl::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 7px var(--c)}
+.mod .row{margin-bottom:6px}
+.mod .row:last-child{margin-bottom:0}
+
+/* sliders */
+.sl{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.sl:last-child{margin-bottom:0}
+.sl label{font-size:8.5px;letter-spacing:.06em;color:var(--silk-d);width:48px;flex:0 0 auto}
+.sl input[type=range]{flex:1;min-width:0;accent-color:var(--c);height:26px;touch-action:none}
+.sl .v{font-size:9px;color:var(--c);width:46px;text-align:right;flex:0 0 auto;font-weight:700}
+
+.foot{font-size:8.5px;color:var(--silk-f);text-align:center;line-height:1.8;padding:4px 6px}
+.foot a{color:var(--silk-d)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ GATE: el gesto que enciende audio + sensores ═══════════════ -->
+<div class="gate" id="gate">
+  <h1>PERCUSYNTH MÓVIL</h1>
+  <p>El sintetizador corre <b>dentro del teléfono</b>. Inclínalo para cambiar el tono, igual que la placa con su IMU. No necesitas el PercuSynth conectado.</p>
+  <button id="go">▶ MODO MÓVIL</button>
+  <p>Al tocar el botón se activan el audio y el sensor de movimiento. Necesita <b>HTTPS</b> y, en iPhone, tu permiso explícito.</p>
+  <div id="gate-warn"></div>
+  <div id="gate-err"></div>
+</div>
+
+<div class="pcb">
+
+  <header>
+    <div class="logo"></div>
+    <div class="ttl">PERCUSYNTH<small>MÓVIL · GC LAB CHILE</small></div>
+    <div class="stat"><span class="dot" id="dot-au"></span>AUDIO<span class="dot" id="dot-mo"></span>IMU</div>
+  </header>
+
+  <!-- SCOPE -->
+  <div class="scope-wrap">
+    <canvas id="scope"></canvas>
+    <div class="scope-hud">
+      <span>NOTA <b id="hud-note">—</b></span>
+      <span><b id="hud-hz">—</b></span>
+      <span class="r" id="hud-oct">OCT 0</span>
+    </div>
+    <div class="scope-modes" id="scope-modes">
+      <button class="chip active" data-m="wave">WAVE</button>
+      <button class="chip" data-m="spec">SPEC</button>
+      <button class="chip" data-m="liss">LISS</button>
+    </div>
+  </div>
+
+  <!-- IMU -->
+  <div class="imu">
+    <canvas id="imu-cv" width="208" height="104"></canvas>
+    <div class="imu-data">
+      <div class="big" id="imu-deg">0°</div>
+      <div class="sub" id="imu-shift">+18 st</div>
+      <div class="sub" id="imu-src">SENSOR</div>
+    </div>
+    <div class="imu-act">
+      <button class="chip active" id="ax-b" style="--c:var(--amber)">β</button>
+      <button class="chip" id="ax-g" style="--c:var(--amber)">γ</button>
+      <button class="chip" id="recenter" style="--c:var(--amber)">CENTRAR</button>
+    </div>
+  </div>
+
+  <div class="diag" id="diag">sensor: esperando arranque…</div>
+
+  <!-- BOTONES 1..5 (mismo orden que la placa) -->
+  <div class="perf" id="perf">
+    <div class="pbtn" data-k="bdn"><span class="ic">▼</span><span class="lb">BEND −</span></div>
+    <div class="pbtn" data-k="odn"><span class="ic">−8</span><span class="lb">OCT −</span></div>
+    <div class="pbtn" data-k="kill"><span class="ic">✕</span><span class="lb">KILL</span></div>
+    <div class="pbtn" data-k="oup"><span class="ic">+8</span><span class="lb">OCT +</span></div>
+    <div class="pbtn" data-k="bup"><span class="ic">▲</span><span class="lb">BEND +</span></div>
+  </div>
+
+  <!-- 4 POTS -->
+  <div class="knobs">
+    <div class="kw"><canvas class="kc" id="k-p1"></canvas><div class="kname">CUTOFF</div></div>
+    <div class="kw"><canvas class="kc" id="k-p2"></canvas><div class="kname">VOL</div></div>
+    <div class="kw"><canvas class="kc" id="k-p3"></canvas><div class="kname">RES</div></div>
+    <div class="kw"><canvas class="kc" id="k-p4"></canvas><div class="kname">LFO RATE</div></div>
+  </div>
+
+  <!-- SÍNTESIS -->
+  <details class="acc">
+    <summary>SÍNTESIS</summary>
+    <div class="acc-body">
+
+      <div class="mod" style="--c:var(--cyan)">
+        <div class="mod-lbl">VCO 1</div>
+        <div class="row" id="tg-o1w"></div>
+        <div class="row" id="tg-o1o"></div>
+        <div class="sl"><label>LEVEL</label><input type="range" id="s-o1l" min="0" max="100" value="80"><span class="v"></span></div>
+        <div class="sl"><label>DETUNE</label><input type="range" id="s-o1d" min="-100" max="100" value="0"><span class="v"></span></div>
+        <div class="sl"><label>PW</label><input type="range" id="s-o1p" min="0" max="100" value="50"><span class="v"></span></div>
+      </div>
+
+      <div class="mod" style="--c:var(--violet)">
+        <div class="mod-lbl">VCO 2</div>
+        <div class="row" id="tg-o2w"></div>
+        <div class="row" id="tg-o2m"></div>
+        <div class="sl"><label>SEMI</label><input type="range" id="s-o2s" min="-24" max="24" value="7"><span class="v"></span></div>
+        <div class="sl"><label>DETUNE</label><input type="range" id="s-o2d" min="-100" max="100" value="5"><span class="v"></span></div>
+        <div class="sl"><label>LEVEL</label><input type="range" id="s-o2l" min="0" max="100" value="50"><span class="v"></span></div>
+        <div class="sl"><label>FM</label><input type="range" id="s-o2f" min="0" max="100" value="30"><span class="v"></span></div>
+      </div>
+
+      <div class="mod" style="--c:var(--pink)">
+        <div class="mod-lbl">NOISE</div>
+        <div class="row" id="tg-nst"></div>
+        <div class="sl"><label>LEVEL</label><input type="range" id="s-nsl" min="0" max="100" value="0"><span class="v"></span></div>
+        <div class="sl"><label>PITCH</label><input type="range" id="s-nsp" min="80" max="4000" value="800"><span class="v"></span></div>
+      </div>
+
+      <div class="mod" style="--c:var(--amber)">
+        <div class="mod-lbl">FILTRO</div>
+        <div class="row" id="tg-ft"></div>
+      </div>
+
+      <div class="mod" style="--c:var(--mint)">
+        <div class="mod-lbl">LFO</div>
+        <div class="row" id="tg-lt"></div>
+        <div class="row" id="tg-lw"></div>
+        <div class="sl"><label>DEPTH</label><input type="range" id="s-lfd" min="0" max="100" value="0"><span class="v"></span></div>
+      </div>
+
+      <div class="mod" style="--c:var(--red)">
+        <div class="mod-lbl">DRIVE</div>
+        <div class="row" id="tg-dm"></div>
+        <div class="sl"><label>AMOUNT</label><input type="range" id="s-dra" min="0" max="100" value="0"><span class="v"></span></div>
+      </div>
+
+      <div class="mod" style="--c:var(--blue)">
+        <div class="mod-lbl">DELAY</div>
+        <div class="sl"><label>TIME</label><input type="range" id="s-dlt" min="0" max="100" value="25"><span class="v"></span></div>
+        <div class="sl"><label>FDBK</label><input type="range" id="s-dlf" min="0" max="95" value="30"><span class="v"></span></div>
+        <div class="sl"><label>MIX</label><input type="range" id="s-dlm" min="0" max="100" value="0"><span class="v"></span></div>
+      </div>
+
+    </div>
+  </details>
+
+  <div class="foot">
+    Motor de síntesis portado de <code>percusynth_theredddmin.ino</code> · 44.1/48 kHz<br>
+    ¿Tienes la placa? Usa <a href="index.html">el panel de control</a>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     WORKLET — DSP portado 1:1 del firmware (.ino). Se lee como texto y se
+     carga vía Blob, así el archivo sigue siendo uno solo.
+════════════════════════════════════════════════════════════════════════ -->
+<script id="ps-worklet" type="text/plain">
+class PercuSynth extends AudioWorkletProcessor {
+  constructor(options){
+    super();
+    // Parámetros (espejo de los comandos Serial del firmware)
+    this.p={
+      o1w:0,o1o:0,o1d:0,o1l:.8,o1p:.5,
+      o2w:1,o2m:0,o2s:7,o2d:5,o2l:.5,o2f:.3,
+      nst:0,nsl:0,nsp:800,ft:0,lt:0,lw:0,lfd:0,
+      dm:0,dra:0,dls:19,dlf:.3,dlm:0,
+      p1:.27,p2:.7,p3:.25,p4:.4,
+      imu:50,oo:2,bup:0,bdn:0,kill:0
+    };
+    // Estado inicial desde la UI: llega síncrono, así el motor nunca suena
+    // un instante con valores distintos a los que muestra la pantalla.
+    if(options&&options.processorOptions)Object.assign(this.p,options.processorOptions);
+    // Estado del motor (mismos nombres que el .ino)
+    this.ph1=0;this.ph2=0;this.lph=0;
+    this.cur=261.6256;this.tgt=261.6256;
+    this.bs=0;this.bt=0;this.kg=1;this.kt=1;this.mv=.49;
+    this.fs1=0;this.fs2=0;
+    // Biquad principal
+    this.qb0=1;this.qb1=0;this.qb2=0;this.qa1=0;this.qa2=0;
+    this.qx1=0;this.qx2=0;this.qy1=0;this.qy2=0;
+    // Pasabanda del ruido
+    this.nb0=0;this.nb1=0;this.nb2=0;this.na1=0;this.na2=0;
+    this.nx1=0;this.nx2=0;this.ny1=0;this.ny2=0;
+    this.pk=new Float32Array(7);
+    this.ls=0xACE1;
+    // Delay: 1 segundo, como el DM 44100 del firmware
+    this.DM=Math.round(sampleRate);
+    this.db=new Float32Array(this.DM);this.dw=0;
+    // Bloque de control cada 10 ms, igual que el loop() del firmware
+    this.CTRL=Math.round(sampleRate*.01);this.ctr=this.CTRL;
+    this.dead=false;
+    this.port.onmessage=e=>{
+      if(e.data&&e.data.__stop){this.dead=true;return;}
+      Object.assign(this.p,e.data);
+      if(e.data.nsp!==undefined)this.setNoiseBP(this.p.nsp);
+    };
+    this.setNoiseBP(this.p.nsp);this.setFilter(1000,.7);
+  }
+
+  // wv() — idéntica al firmware
+  wv(t,ph,pw){
+    switch(t){
+      case 1:return ph<.5?1:-1;
+      case 2:return 1-2*ph;
+      case 3:return ph<.5?4*ph-1:3-4*ph;
+      case 4:return ph<pw?1:-1;
+      default:return Math.sin(ph*2*Math.PI);
+    }
+  }
+  setNoiseBP(f){
+    f=Math.max(40,Math.min(sampleRate*.45,f));
+    const w=2*Math.PI*f/sampleRate,c=Math.cos(w),s=Math.sin(w),a=s/1.4,a0=1+a;
+    this.nb0=a/a0;this.nb1=0;this.nb2=-a/a0;this.na1=-2*c/a0;this.na2=(1-a)/a0;
+  }
+  nf(x){
+    const y=this.nb0*x+this.nb1*this.nx1+this.nb2*this.nx2-this.na1*this.ny1-this.na2*this.ny2;
+    this.nx2=this.nx1;this.nx1=x;this.ny2=this.ny1;this.ny1=y;return y;
+  }
+  ntk(){
+    // xorshift de 32 bits, igual que el LCG del firmware
+    let l=this.ls;l^=l<<13;l|=0;l^=l>>>17;l^=l<<5;l|=0;this.ls=l;
+    let w=l/2147483648;
+    if(this.p.nst===1){
+      const b=this.pk;
+      b[0]=.99886*b[0]+w*.0555179;b[1]=.99332*b[1]+w*.0750759;b[2]=.96900*b[2]+w*.1538520;
+      b[3]=.86650*b[3]+w*.3104856;b[4]=.55000*b[4]+w*.5329522;b[5]=-.7616*b[5]-w*.0168980;
+      const pp=(b[0]+b[1]+b[2]+b[3]+b[4]+b[5]+b[6]+w*.5362)*.11;
+      b[6]=w*.115926;w=pp;
+    }
+    return this.nf(w);
+  }
+  setFilter(fc,Q){
+    fc=Math.max(20,Math.min(sampleRate*.45,fc));Q=Math.max(.3,Q);
+    const w=2*Math.PI*fc/sampleRate,c=Math.cos(w),s=Math.sin(w),a=s/(2*Q),a0=1+a;
+    switch(this.p.ft){
+      case 1:this.qb0=(1+c)*.5/a0;this.qb1=-(1+c)/a0;this.qb2=this.qb0;break;
+      case 2:this.qb0=a/a0;this.qb1=0;this.qb2=-a/a0;break;
+      case 3:this.qb0=1/a0;this.qb1=-2*c/a0;this.qb2=this.qb0;break;
+      default:this.qb0=(1-c)*.5/a0;this.qb1=(1-c)/a0;this.qb2=this.qb0;
+    }
+    this.qa1=-2*c/a0;this.qa2=(1-a)/a0;
+  }
+  bq(x){
+    const y=this.qb0*x+this.qb1*this.qx1+this.qb2*this.qx2-this.qa1*this.qy1-this.qa2*this.qy2;
+    this.qx2=this.qx1;this.qx1=x;this.qy2=this.qy1;this.qy1=y;return y;
+  }
+  dr(x){
+    const dm=this.p.dm,amt=this.p.dra;
+    if(dm===0||amt<.001)return x;
+    if(dm===1){const d=1+amt*50,td=Math.tanh(d);return Math.tanh(x*d)/(td>1e-6?td:1);}
+    if(dm===2){let f=1+amt*4,fx=(x*f)%4;
+      if(fx<-2)fx+=4;if(fx>2)fx-=4;if(fx>1)fx=2-fx;if(fx<-1)fx=-2-fx;return fx;}
+    if(dm===3){const b=Math.max(2,12-amt*10),lv=Math.pow(2,b);return Math.round(x*lv)/lv;}
+    return x;
+  }
+  dlp(x){
+    const dlm=this.p.dlm;
+    if(dlm<.001)return x;
+    let n=Math.round(this.p.dls*.001*sampleRate);
+    if(n<1)n=1;if(n>this.DM-1)n=this.DM-1;
+    const rd=(this.dw+this.DM-n)%this.DM;
+    const wet=this.db[rd];
+    let fb=x+wet*this.p.dlf;
+    if(fb>1)fb=1;else if(fb<-1)fb=-1;
+    this.db[this.dw]=fb;this.dw=(this.dw+1)%this.DM;
+    return x*(1-dlm)+wet*dlm;
+  }
+
+  // Bloque de control @10 ms — réplica del if(now-ct>=10) del firmware
+  control(){
+    const p=this.p;
+    this.bt=p.bup?12:(p.bdn?-12:0);
+    this.kt=p.kill?0:1;
+    const sm=p.imu/100*36+(p.oo-2)*12;
+    let tgt=261.6256*Math.pow(2,sm/12);
+    this.lph=(this.lph+p.p4*p.p4*10*.01)%1;
+    const lv=this.wv(p.lw,this.lph,.5)*p.lfd;
+    const fc=80+p.p1*p.p1*19920,Q=.5+p.p3*12;
+    if(p.lt===0){
+      let f2=fc*(1+lv*.8);
+      f2=f2<80?80:(f2>20000?20000:f2);
+      this.setFilter(f2,Q);
+    }else{
+      this.setFilter(fc,Q);
+      tgt*=Math.pow(2,lv/12);
+    }
+    this.mv=p.p2*p.p2;
+    this.bs+=(this.bt-this.bs)*.15;
+    this.kg+=(this.kt-this.kg)*.15;
+    this.cur+=(tgt-this.cur)*.15;
+    let base=this.cur*Math.pow(2,this.bs/12);
+    if(base<20)base=20;
+    this.fs1=base*Math.pow(2,p.o1o)*Math.pow(2,p.o1d/1200)/sampleRate;
+    this.fs2=base*Math.pow(2,p.o2s/12)*Math.pow(2,p.o2d/1200)/sampleRate;
+  }
+
+  process(inputs,outputs){
+    if(this.dead)return false;
+    const out=outputs[0],L=out[0],R=out.length>1?out[1]:null;
+    const p=this.p;
+    for(let i=0;i<L.length;i++){
+      if(++this.ctr>=this.CTRL){this.ctr=0;this.control();}
+      this.ph1=(this.ph1+this.fs1)%1;
+      this.ph2=(this.ph2+this.fs2)%1;
+      let s;
+      if(p.o2m===2){                       // RING
+        s=this.wv(p.o1w,this.ph1,p.o1p)*p.o1l*this.wv(p.o2w,this.ph2,.5);
+      }else if(p.o2m===1){                 // FM
+        s=this.wv(p.o1w,(this.ph1+this.wv(p.o2w,this.ph2,.5)*p.o2f*10)%1,p.o1p)*p.o1l;
+      }else{                               // MIX
+        s=(this.wv(p.o1w,this.ph1,p.o1p)*p.o1l+this.wv(p.o2w,this.ph2,.5)*p.o2l)*.65;
+      }
+      if(p.nsl>.001)s+=this.ntk()*p.nsl;
+      // Cadena del firmware: drive → filtro → delay → tanh → volumen × killswitch
+      let y=Math.tanh(this.dlp(this.bq(this.dr(s))))*this.mv*this.kg;
+      if(!(y>-1.5&&y<1.5))y=0;             // red de seguridad ante NaN
+      L[i]=y;if(R)R[i]=y;
+    }
+    return true;
+  }
+}
+registerProcessor('percusynth',PercuSynth);
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   ESTADO — mismos nombres/valores por defecto que el panel de escritorio
+═══════════════════════════════════════════════════════════════════════ */
+const P={
+  o1w:0,o1o:0,o1d:0,o1l:.8,o1p:.5,
+  o2w:1,o2m:0,o2s:7,o2d:5,o2l:.5,o2f:.3,
+  nst:0,nsl:0,nsp:800,ft:0,lt:0,lw:0,lfd:0,
+  dm:0,dra:0,dls:250,dlf:.3,dlm:0,
+  p1:.27,p2:.7,p3:.25,p4:.4,
+  imu:50,oo:2,bup:0,bdn:0,kill:0
+};
+const BASE_HZ=261.6256;
+let ctx=null,node=null,ana=null,timeBuf=null,freqBuf=null;
+let scopeMode='wave',axis='beta',zero=0,lastRaw=null,sensorSeen=false,manual=false;
+
+const $=id=>document.getElementById(id);
+const lm=(t,lo,hi)=>lo*Math.pow(hi/lo,t);
+function push(patch){Object.assign(P,patch);if(node)node.port.postMessage(patch);}
+
+/* ════════════════════════════════════════════════════════════════════
+   AUDIO
+═══════════════════════════════════════════════════════════════════════ */
+async function startAudio(){
+  ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+  const src=$('ps-worklet').textContent;
+  const url=URL.createObjectURL(new Blob([src],{type:'application/javascript'}));
+  await ctx.audioWorklet.addModule(url);
+  URL.revokeObjectURL(url);
+  node=new AudioWorkletNode(ctx,'percusynth',{
+    numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],
+    processorOptions:Object.assign({},P)
+  });
+  ana=ctx.createAnalyser();ana.fftSize=2048;ana.smoothingTimeConstant=.72;
+  timeBuf=new Float32Array(ana.fftSize);
+  freqBuf=new Uint8Array(ana.frequencyBinCount);
+  node.connect(ana);ana.connect(ctx.destination);
+  node.port.postMessage(P);
+  await ctx.resume();
+  $('dot-au').classList.add('on');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   IMU — mismo mapeo que ia() del firmware: clamp ±45° → 0..100
+   Dos caminos de lectura, porque no todos los teléfonos entregan los dos:
+     · deviceorientation  → ángulos ya calculados (beta/gamma)
+     · devicemotion       → acelerómetro crudo; el ángulo se saca con el
+                            MISMO atan2 que usa ia() en el .ino
+   El respaldo manual sólo se activa si TÚ arrastras: si el sensor
+   despierta tarde, recupera el control solo.
+═══════════════════════════════════════════════════════════════════════ */
+const DIAG={ori:0,mot:0,oriNull:0,motNull:0,src:'—',perm:'—',beta:null,gamma:null,accel:null};
+
+function applyTilt(a){
+  lastRaw=a;
+  if(manual)return;
+  let v=a-zero;
+  v=v<-45?-45:(v>45?45:v);
+  push({imu:(v+45)/90*100});
+}
+function markSrc(s){
+  DIAG.src=s;
+  if(!sensorSeen){sensorSeen=true;$('dot-mo').classList.add('on');}
+  $('imu-src').textContent=manual?'MANUAL':s;
+}
+function onOri(e){
+  DIAG.ori++;DIAG.beta=e.beta;DIAG.gamma=e.gamma;
+  const raw=(axis==='beta')?e.beta:e.gamma;
+  if(raw===null||raw===undefined){DIAG.oriNull++;return;}
+  markSrc('ORIENT');
+  applyTilt(raw);
+}
+function onMotion(e){
+  DIAG.mot++;
+  const g=e.accelerationIncludingGravity;
+  if(!g||g.x===null||g.x===undefined){DIAG.motNull++;return;}
+  DIAG.accel=g;
+  if(DIAG.src==='ORIENT')return;             // orientation manda si funciona
+  // ia() del firmware: atan2(eje, sqrt(suma de los otros dos))
+  const ax=(axis==='beta')?g.y:g.x;
+  const rest=(axis==='beta')
+    ? Math.sqrt(g.x*g.x+g.z*g.z)
+    : Math.sqrt(g.y*g.y+g.z*g.z);
+  markSrc('MOTION');
+  applyTilt(Math.atan2(ax,rest)*180/Math.PI);
+}
+async function startSensors(){
+  if(!window.isSecureContext){
+    DIAG.perm='bloqueado (sin HTTPS)';
+    $('imu-src').textContent='SIN HTTPS · ARRASTRA';
+    return 'insecure';
+  }
+  const DO=window.DeviceOrientationEvent,DM=window.DeviceMotionEvent;
+  if(!DO&&!DM){DIAG.perm='API ausente';$('imu-src').textContent='SIN SENSOR · ARRASTRA';return 'nosensor';}
+  // iOS 13+: permiso explícito, uno por cada API
+  let denied=false;
+  for(const API of [DO,DM]){
+    if(API&&typeof API.requestPermission==='function'){
+      try{
+        const r=await API.requestPermission();
+        DIAG.perm=r;
+        if(r!=='granted')denied=true;
+      }catch(err){DIAG.perm='error: '+err.message;denied=true;}
+    }
+  }
+  if(denied){$('imu-src').textContent='PERMISO DENEGADO · ARRASTRA';return 'denied';}
+  if(DIAG.perm==='—')DIAG.perm='no requerido';
+  if(DO)window.addEventListener('deviceorientation',onOri,true);
+  if(DO)window.addEventListener('deviceorientationabsolute',onOri,true);
+  if(DM)window.addEventListener('devicemotion',onMotion,true);
+  setTimeout(()=>{
+    if(!sensorSeen)$('imu-src').textContent='SIN DATOS · ARRASTRA';
+  },2500);
+  return 'ok';
+}
+
+/* Diagnóstico visible: si algo falla, esta línea dice exactamente qué */
+function drawDiag(){
+  const f=v=>(v===null||v===undefined)?'—':(+v).toFixed(1);
+  const g=DIAG.accel;
+  $('diag').innerHTML=
+    '<b>origen</b> <span class="'+(sensorSeen?'ok':'bad')+'">'+DIAG.src+'</span> · '+
+    '<b>https</b> <span class="'+(window.isSecureContext?'ok':'bad')+'">'+
+      (window.isSecureContext?'sí':'NO')+'</span> · '+
+    '<b>permiso</b> '+DIAG.perm+'<br>'+
+    '<b>orient</b> '+DIAG.ori+' ev'+(DIAG.oriNull?' ('+DIAG.oriNull+' nulos)':'')+
+      ' β='+f(DIAG.beta)+' γ='+f(DIAG.gamma)+'<br>'+
+    '<b>motion</b> '+DIAG.mot+' ev'+(DIAG.motNull?' ('+DIAG.motNull+' nulos)':'')+
+      (g?' x='+f(g.x)+' y='+f(g.y)+' z='+f(g.z):'')+'<br>'+
+    '<b>eje</b> '+axis+' · <b>imu</b> '+P.imu.toFixed(0)+'/100';
+}
+setInterval(drawDiag,300);
+
+/* ════════════════════════════════════════════════════════════════════
+   ARRANQUE (un solo gesto: audio + sensores)
+═══════════════════════════════════════════════════════════════════════ */
+$('go').addEventListener('click',async()=>{
+  $('go').disabled=true;$('gate-err').textContent='';
+  try{
+    await startAudio();
+  }catch(err){
+    $('gate-err').textContent='No se pudo iniciar el audio: '+err.message;
+    $('go').disabled=false;return;
+  }
+  const s=await startSensors();
+  const MSG={
+    denied:'Sin permiso de movimiento. Puedes tocar igual arrastrando el indicador de inclinación.',
+    insecure:'La página no está en HTTPS: el navegador bloquea los sensores. Puedes tocar arrastrando el indicador.',
+    nosensor:'Este dispositivo no expone sensores de movimiento. Puedes tocar arrastrando el indicador.'
+  };
+  if(MSG[s])$('gate-err').textContent=MSG[s];
+  drawDiag();
+  $('gate').classList.add('hide');
+});
+
+/* Aviso ANTES de tocar play: si no hay HTTPS, el IMU no va a funcionar */
+if(!window.isSecureContext){
+  $('gate-warn').innerHTML=
+    'Esta página <b>no está en HTTPS</b>, así que el navegador va a bloquear el sensor de movimiento.<br><br>'+
+    'Estás en <code>'+location.origin+'</code><br><br>'+
+    'El sonido funciona igual, y puedes tocar arrastrando el indicador de inclinación.';
+}
+// iOS puede suspender el contexto al volver de segundo plano
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&ctx&&ctx.state==='suspended')ctx.resume();
+});
+document.body.addEventListener('touchend',()=>{
+  if(ctx&&ctx.state==='suspended')ctx.resume();
+},{passive:true});
+
+/* ════════════════════════════════════════════════════════════════════
+   BOTONES 1..5 — flanco de presión, sin ventana de espera
+═══════════════════════════════════════════════════════════════════════ */
+document.querySelectorAll('.pbtn').forEach(b=>{
+  const k=b.dataset.k;
+  const down=ev=>{
+    ev.preventDefault();
+    if(b.classList.contains('down'))return;
+    b.classList.add('down');
+    if(k==='bup')push({bup:1});
+    else if(k==='bdn')push({bdn:1});
+    else if(k==='kill')push({kill:1});
+    else if(k==='oup'){if(P.oo<4)push({oo:P.oo+1});updOct();}
+    else if(k==='odn'){if(P.oo>0)push({oo:P.oo-1});updOct();}
+  };
+  const up=()=>{
+    if(!b.classList.contains('down'))return;
+    b.classList.remove('down');
+    if(k==='bup')push({bup:0});
+    else if(k==='bdn')push({bdn:0});
+    else if(k==='kill')push({kill:0});
+  };
+  b.addEventListener('pointerdown',down);
+  b.addEventListener('pointerup',up);
+  b.addEventListener('pointercancel',up);
+  b.addEventListener('pointerleave',up);
+  b.addEventListener('contextmenu',e=>e.preventDefault());
+});
+function updOct(){$('hud-oct').textContent='OCT '+(P.oo-2>0?'+':'')+(P.oo-2);}
+
+/* ════════════════════════════════════════════════════════════════════
+   KNOBS (4 pots) — arrastre vertical
+═══════════════════════════════════════════════════════════════════════ */
+const KN={};
+function knob(id,key,col){
+  const cv=$('k-'+id);
+  KN[id]={cv,key,col,val:P[key]};
+  const dpr=window.devicePixelRatio||1;
+  const size=cv.clientWidth||72;
+  cv.width=size*dpr;cv.height=size*dpr;
+  cv.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+  drawKnob(id);
+  let sy=0,sv=0,act=false;
+  cv.addEventListener('pointerdown',e=>{
+    e.preventDefault();act=true;sy=e.clientY;sv=KN[id].val;
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(!act)return;
+    e.preventDefault();
+    const d=(sy-e.clientY)/140;
+    let v=sv+d;v=v<0?0:(v>1?1:v);
+    KN[id].val=v;push({[key]:v});drawKnob(id);
+  });
+  const end=e=>{act=false;try{cv.releasePointerCapture(e.pointerId)}catch(_){}};
+  cv.addEventListener('pointerup',end);
+  cv.addEventListener('pointercancel',end);
+}
+function drawKnob(id){
+  const d=KN[id],cv=d.cv,g=cv.getContext('2d');
+  const W=cv.clientWidth||72,H=W,cx=W/2,cy=H/2,r=W*.36;
+  const S=Math.PI*.75,SW=Math.PI*1.5;
+  g.clearRect(0,0,W,H);
+  // pista
+  g.beginPath();g.arc(cx,cy,r+7,S,S+SW);
+  g.strokeStyle='rgba(232,226,207,.15)';g.lineWidth=3;g.lineCap='round';g.stroke();
+  // valor
+  g.beginPath();g.arc(cx,cy,r+7,S,S+SW*d.val);
+  g.strokeStyle=d.col;g.lineWidth=3;g.lineCap='round';
+  g.shadowColor=d.col;g.shadowBlur=8;g.stroke();g.shadowBlur=0;
+  // cuerpo
+  const grd=g.createLinearGradient(0,cy-r,0,cy+r);
+  grd.addColorStop(0,'#2a2a24');grd.addColorStop(1,'#121210');
+  g.beginPath();g.arc(cx,cy,r,0,Math.PI*2);g.fillStyle=grd;g.fill();
+  g.strokeStyle='rgba(232,226,207,.18)';g.lineWidth=1;g.stroke();
+  // aguja
+  const a=S+SW*d.val;
+  g.beginPath();g.moveTo(cx+Math.cos(a)*r*.3,cy+Math.sin(a)*r*.3);
+  g.lineTo(cx+Math.cos(a)*r*.82,cy+Math.sin(a)*r*.82);
+  g.strokeStyle=d.col;g.lineWidth=2.4;g.lineCap='round';g.stroke();
+  // valor numérico
+  g.fillStyle='rgba(232,226,207,.75)';g.font='700 '+Math.max(8,W*.15)+'px Space Mono, monospace';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillText(Math.round(d.val*100)+'', cx, cy+r*.55);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   IMU widget (dibujo + arrastre manual de respaldo)
+═══════════════════════════════════════════════════════════════════════ */
+function drawImu(){
+  const cv=$('imu-cv'),g=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H-10;
+  g.clearRect(0,0,W,H);
+  const r=Math.min(W*.44,H*.82);
+  g.beginPath();g.arc(cx,cy,r,Math.PI*1.15,Math.PI*1.85);
+  g.strokeStyle='rgba(232,226,207,.22)';g.lineWidth=2;g.stroke();
+  for(let i=-2;i<=2;i++){
+    const a=Math.PI*1.5+i*Math.PI*.09,maj=(i===0);
+    g.beginPath();
+    g.moveTo(cx+(r-5)*Math.cos(a),cy+(r-5)*Math.sin(a));
+    g.lineTo(cx+(r+(maj?7:4))*Math.cos(a),cy+(r+(maj?7:4))*Math.sin(a));
+    g.strokeStyle=maj?'rgba(255,170,68,.75)':'rgba(232,226,207,.4)';
+    g.lineWidth=maj?3:2;g.stroke();
+  }
+  const tilt=(P.imu-50)/50,ang=Math.PI*1.5+tilt*Math.PI*.18;
+  g.save();g.shadowColor='#ffaa44';g.shadowBlur=12;
+  g.beginPath();g.moveTo(cx,cy);
+  g.lineTo(cx+r*.9*Math.cos(ang),cy+r*.9*Math.sin(ang));
+  g.strokeStyle='#ffaa44';g.lineWidth=4;g.lineCap='round';g.stroke();
+  g.restore();
+  g.beginPath();g.arc(cx,cy,5,0,Math.PI*2);g.fillStyle='#ffaa44';g.fill();
+
+  const deg=Math.round((P.imu-50)/50*45),semis=Math.round(P.imu/100*36);
+  $('imu-deg').textContent=(deg>0?'+':'')+deg+'°';
+  $('imu-shift').textContent=(semis>0?'+':'')+semis+' st';
+}
+(function imuDrag(){
+  const cv=$('imu-cv');let act=false;
+  const set=e=>{
+    const b=cv.getBoundingClientRect();
+    let t=(e.clientX-b.left)/b.width;t=t<0?0:(t>1?1:t);
+    push({imu:t*100});
+  };
+  cv.addEventListener('pointerdown',e=>{
+    e.preventDefault();act=true;manual=true;
+    $('imu-src').textContent='MANUAL';cv.setPointerCapture(e.pointerId);set(e);
+  });
+  cv.addEventListener('pointermove',e=>{if(act){e.preventDefault();set(e);}});
+  const end=e=>{act=false;try{cv.releasePointerCapture(e.pointerId)}catch(_){}};
+  cv.addEventListener('pointerup',end);
+  cv.addEventListener('pointercancel',end);
+})();
+$('recenter').addEventListener('click',()=>{
+  if(lastRaw!==null){zero=lastRaw;manual=false;$('imu-src').textContent='SENSOR';}
+});
+$('ax-b').addEventListener('click',()=>{
+  axis='beta';zero=0;manual=false;
+  $('ax-b').classList.add('active');$('ax-g').classList.remove('active');
+});
+$('ax-g').addEventListener('click',()=>{
+  axis='gamma';zero=0;manual=false;
+  $('ax-g').classList.add('active');$('ax-b').classList.remove('active');
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   TOGGLES + SLIDERS
+═══════════════════════════════════════════════════════════════════════ */
+function toggles(host,key,items,cur){
+  const el=$(host);
+  items.forEach((it,i)=>{
+    const b=document.createElement('button');
+    b.className='chip'+(it.v===cur?' active':'')+(it.wave?' wave':'');
+    b.textContent=it.t;
+    b.onclick=()=>{
+      [...el.children].forEach(c=>c.classList.remove('active'));
+      b.classList.add('active');
+      push({[key]:it.v});
+    };
+    el.appendChild(b);
+  });
+}
+const WAVES=[{t:'∿',v:0,wave:1},{t:'⊓',v:1,wave:1},{t:'⟋',v:2,wave:1},{t:'△',v:3,wave:1},{t:'⎍',v:4,wave:1}];
+toggles('tg-o1w','o1w',WAVES,0);
+toggles('tg-o1o','o1o',[{t:'-2',v:-2},{t:'-1',v:-1},{t:'0',v:0},{t:'+1',v:1},{t:'+2',v:2}],0);
+toggles('tg-o2w','o2w',WAVES,1);
+toggles('tg-o2m','o2m',[{t:'MIX',v:0},{t:'FM',v:1},{t:'RING',v:2}],0);
+toggles('tg-nst','nst',[{t:'WHITE',v:0},{t:'PINK',v:1}],0);
+toggles('tg-ft','ft',[{t:'LPF',v:0},{t:'HPF',v:1},{t:'BPF',v:2},{t:'NOTCH',v:3}],0);
+toggles('tg-lt','lt',[{t:'FILT',v:0},{t:'PITCH',v:1}],0);
+toggles('tg-lw','lw',WAVES.slice(0,4),0);
+toggles('tg-dm','dm',[{t:'OFF',v:0},{t:'SOFT',v:1},{t:'FOLD',v:2},{t:'BIT',v:3}],0);
+
+function slider(id,key,fmt,map){
+  const el=$(id),out=el.parentElement.querySelector('.v');
+  const upd=()=>{
+    const raw=parseFloat(el.value);
+    const v=map?map(raw):raw;
+    push({[key]:v});
+    out.textContent=fmt(raw,v);
+  };
+  el.addEventListener('input',upd);
+  upd();
+}
+const pct=v=>Math.round(v)+'%';
+slider('s-o1l','o1l',pct,v=>v/100);
+slider('s-o1d','o1d',v=>(v>0?'+':'')+Math.round(v));
+slider('s-o1p','o1p',pct,v=>v/100);
+slider('s-o2s','o2s',v=>(v>0?'+':'')+Math.round(v));
+slider('s-o2d','o2d',v=>(v>0?'+':'')+Math.round(v));
+slider('s-o2l','o2l',pct,v=>v/100);
+slider('s-o2f','o2f',pct,v=>v/100);
+slider('s-nsl','nsl',pct,v=>v/100);
+slider('s-nsp','nsp',v=>v>=1000?(v/1000).toFixed(1)+'k':Math.round(v)+'');
+slider('s-lfd','lfd',pct,v=>v/100);
+slider('s-dra','dra',pct,v=>v/100);
+slider('s-dlt','dls',(raw,v)=>Math.round(v)+'ms',v=>lm(v/100,5,1000));
+slider('s-dlf','dlf',pct,v=>v/100);
+slider('s-dlm','dlm',pct,v=>v/100);
+
+/* ════════════════════════════════════════════════════════════════════
+   SCOPE — audio real vía AnalyserNode
+═══════════════════════════════════════════════════════════════════════ */
+$('scope-modes').addEventListener('click',e=>{
+  const b=e.target.closest('.chip');if(!b)return;
+  [...$('scope-modes').children].forEach(c=>c.classList.remove('active'));
+  b.classList.add('active');scopeMode=b.dataset.m;
+});
+const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function sizeScope(){
+  const cv=$('scope'),dpr=window.devicePixelRatio||1;
+  cv.width=cv.clientWidth*dpr;cv.height=cv.clientHeight*dpr;
+  cv.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+}
+function drawScope(){
+  const cv=$('scope'),g=cv.getContext('2d');
+  const W=cv.clientWidth,H=cv.clientHeight;
+  const hues=[180,275,30,150,200],hue=hues[P.o1w]||180;
+  const col='hsl('+hue+',85%,68%)',colG='hsla('+hue+',85%,68%,.4)';
+  g.fillStyle='rgba(0,0,0,.28)';g.fillRect(0,0,W,H);
+  if(!ana){requestAnimationFrame(drawScope);return;}
+
+  if(scopeMode==='spec'){
+    ana.getByteFrequencyData(freqBuf);
+    const bins=56,step=Math.floor(freqBuf.length/3/bins)||1,bw=W/bins;
+    for(let i=0;i<bins;i++){
+      let m=0;for(let j=0;j<step;j++)m=Math.max(m,freqBuf[i*step+j]);
+      const h=(m/255)*H*.9;
+      const grd=g.createLinearGradient(0,H,0,H-h);
+      grd.addColorStop(0,colG);grd.addColorStop(1,col);
+      g.fillStyle=grd;g.fillRect(i*bw+.5,H-h,bw-1.5,h);
+    }
+  }else{
+    ana.getFloatTimeDomainData(timeBuf);
+    // engancha en un cruce por cero ascendente para que la onda no "viaje"
+    let st=0;
+    for(let i=1;i<timeBuf.length/2;i++){
+      if(timeBuf[i-1]<=0&&timeBuf[i]>0){st=i;break;}
+    }
+    g.save();g.shadowColor=col;g.shadowBlur=10;
+    g.beginPath();
+    if(scopeMode==='liss'){
+      const N=Math.min(700,timeBuf.length-200),off=90;
+      const cx=W/2,cy=H/2,sc=Math.min(W,H)*.42;
+      for(let i=0;i<N;i++){
+        const x=cx+timeBuf[st+i]*sc,y=cy+timeBuf[st+i+off]*sc;
+        i?g.lineTo(x,y):g.moveTo(x,y);
+      }
+    }else{
+      const N=Math.min(620,timeBuf.length-st),sl=W/N;
+      for(let i=0;i<N;i++){
+        const x=i*sl,y=H/2-timeBuf[st+i]*H*.44;
+        i?g.lineTo(x,y):g.moveTo(x,y);
+      }
+    }
+    g.strokeStyle=col;g.lineWidth=2;g.lineCap='round';g.lineJoin='round';g.stroke();
+    g.restore();
+  }
+
+  // lectura de nota (misma fórmula del firmware)
+  const sm=P.imu/100*36+(P.oo-2)*12;
+  const hz=BASE_HZ*Math.pow(2,sm/12);
+  $('hud-hz').textContent=hz<10000?hz.toFixed(0)+' Hz':(hz/1000).toFixed(2)+' kHz';
+  const ni=Math.round(12*Math.log2(hz/27.5))+9;
+  if(ni>=0&&ni<130)$('hud-note').textContent=NOTES[((ni%12)+12)%12]+Math.floor(ni/12);
+  drawImu();
+  requestAnimationFrame(drawScope);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════════════════ */
+function boot(){
+  sizeScope();
+  knob('p1','p1','#5dd7ff');
+  knob('p2','p2','#ffaa44');
+  knob('p3','p3','#b58aff');
+  knob('p4','p4','#5fffc4');
+  updOct();drawImu();
+  requestAnimationFrame(drawScope);
+}
+window.addEventListener('resize',()=>{
+  sizeScope();
+  Object.keys(KN).forEach(id=>{
+    const cv=KN[id].cv,dpr=window.devicePixelRatio||1,s=cv.clientWidth||72;
+    cv.width=s*dpr;cv.height=s*dpr;
+    cv.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+    drawKnob(id);
+  });
+});
+boot();
+</script>
+</body>
+</html>

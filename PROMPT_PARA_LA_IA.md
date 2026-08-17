@@ -93,6 +93,30 @@ Sólo incluye lo que el firmware use:
 
 > Nota: el MPU6050 se lee normalmente **por registros crudos con `Wire`** (ver 6.4), así no hace falta ninguna librería externa de IMU. Es el estilo preferido del proyecto.
 
+### 4.1 Credenciales: nunca dentro del `.ino`
+
+Si el firmware necesita WiFi o una API key, **no las escribas en el sketch**. Van en un
+`secretos.h` en la misma carpeta, que está en el `.gitignore` del repositorio:
+
+```cpp
+// En el .ino:
+#if !__has_include("secretos.h")
+  #error "Falta secretos.h: copia secretos.example.h a secretos.h y pon tus claves."
+#endif
+#include "secretos.h"
+```
+
+```cpp
+// secretos.example.h  (esta plantilla SÍ se sube; secretos.h NO)
+#pragma once
+const char* WIFI_SSID      = "TU_RED_WIFI";
+const char* WIFI_PASS      = "TU_PASSWORD_WIFI";
+const char* OPENAI_API_KEY = "sk-proj-TU_API_KEY";
+```
+
+Deja siempre el `secretos.example.h` junto al sketch: es lo que le dice al que clona el repo
+qué claves necesita. El `#error` hace que el problema aparezca al compilar y no al encender.
+
 ---
 
 ## 5. Constantes y convenciones de audio
@@ -335,6 +359,8 @@ const uint8_t PIEZO_PINS[4] = { 4, 5, 6, 7 };   // ADC/GPIO
 - ❌ Olvidar `USB.begin()` con `USBMIDI` → ✅ `MIDI.begin(); USB.begin();`.
 - ❌ Brillo de LEDs al máximo de entrada → ✅ subir gradual (consumo/brownout).
 - ❌ Leer pots sin oversampling → ✅ promedio de 8 (ruido del ADC).
+- ❌ Escribir el SSID, la contraseña del WiFi o una API key dentro del `.ino` → ✅ ponerlas en un `secretos.h` aparte (ver 4.1).
+- ❌ Usar **ADC2** en un firmware con WiFi → ✅ los 4 pots ya están en ADC1 (1, 2, 8, 10); con el WiFi encendido el ADC2 no se puede leer.
 
 ---
 

@@ -1,5 +1,5 @@
 // ==============================================================================================================================================
-// PERCU-SYNTH — Impact Chimes + LEDs (3 instrumentos · escala mágica C Lydian · show de luces WS2812) — GC Lab Chile
+// PERCU-SYNTH — Impact Chimes + LEDs (3 instrumentos · escala mágica C Lydian · show WS2812 100% MAGENTA) — GC Lab Chile
 // ==============================================================================================================================================
 // Desarrollado por: Gonzalo - GC Lab Chile
 // Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
@@ -38,7 +38,13 @@
 // golpear el piso cerca, la vibración llega al acelerómetro como un pico → se dispara una
 // nota de la escala C LYDIA (mágica, soñadora) y un EFECTO DE LUZ reactivo sobre una tira
 // WS2812 de 68 LEDs. Tres TIMBRES seleccionables (campana / marimba / guitarra eléctrica)
-// y cinco EFECTOS de luz ciclables. Motor de audio: I2S → PCM5102 44.1 kHz / 16-bit estéreo,
+// y cinco EFECTOS de luz ciclables + un estado APAGADO, que es el estado INICIAL.
+//
+// TODA la luz es MAGENTA PURO (R = B, G = 0) — no existe ningún otro color en el firmware:
+// los efectos varían BRILLO, posición y velocidad, nunca el tono. Se usa RGB directo en vez
+// de CHSV porque el mapa "rainbow" de FastLED desatura el magenta.
+//
+// Motor de audio: I2S → PCM5102 44.1 kHz / 16-bit estéreo,
 // voces polifónicas, filtro LPF y soft-limiter. Las luces corren por FastLED (RMT, no choca
 // con el I2S) y se refrescan throttleadas a ~30 FPS.
 // ==============================================================================================================================================
@@ -48,11 +54,14 @@
 //   Golpe más fuerte = nota más fuerte y luz más brillante.
 //
 // BOTONES:
-// - BTN1 (44) → EFECTO de luz ANTERIOR
-// - BTN5 (47) → EFECTO de luz SIGUIENTE   (5 efectos: Onda · Cometa · Pulso · Chispas · Arcoíris)
+// - BTN1 (44) → EFECTO de luz ANTERIOR  (estando en APAGADO salta al último, Barrido)
+// - BTN5 (47) → EFECTO de luz SIGUIENTE (estando en Barrido vuelve a APAGADO)
+//   6 estados en ciclo circular: APAGADO · Onda · Cometa · Pulso · Chispas · Barrido
+//   ARRANCA EN APAGADO: al encender la tira queda negra hasta que elijas un efecto.
 // - BTN2 (42) → TIMBRE 1: CAMPANA  (el clásico: morph seno→sierra, cola larga)
 // - BTN3 (0)  → TIMBRE 2: MARIMBA  (fundamental + 4º armónico, ataque seco, cola corta leñosa)
 // - BTN4 (45) → TIMBRE 3: GUITARRA ELÉCTRICA (sierra + overdrive + vibrato, sostenido largo)
+//   (el flash que confirma el timbre se distingue por BRILLO: tenue / medio / fuerte)
 //
 // POTENCIÓMETROS (igual que impact_chimes, contextual por timbre):
 // - POT1 (ADC1)  → Ataque
@@ -62,7 +71,8 @@
 //
 // DIAGNÓSTICO (sin USB):
 // - Al encender: barrido de luz + ACORDE de arranque → confirma firmware/audio/LEDs OK.
-// - Si NO se detecta el IMU: "latido" grave cada ~1.2 s + parpadeo rojo de la tira.
+//   El barrido dura ~0.4 s y termina en negro; después la tira queda APAGADA (efecto 0).
+// - Si NO se detecta el IMU: "latido" grave cada ~1.2 s + parpadeo magenta tenue de la tira.
 // ==============================================================================================================================================
 
 #include <Arduino.h>
@@ -114,7 +124,8 @@ const float FLOOR_DECAY  = 0.970f; // cuánto baja el listón por buffer (↓ = 
 #define INST_MARIMBA   1
 #define INST_GUITARRA  2
 uint8_t instrument = INST_CAMPANA;          // timbre activo
-const uint8_t instHue[3] = {140, 28, 0};    // color indicador por timbre (cian / naranja / rojo)
+// Todo es magenta: el timbre se distingue por BRILLO del flash, no por color.
+const uint8_t instFlashVal[3] = {80, 150, 230};   // campana (tenue) / marimba / guitarra (fuerte)
 
 // ─── Polifonía ─────────────────────────────────────────────
 #define NUM_VOICES 10
@@ -176,19 +187,28 @@ bool btnLast[NUM_BTN];
 static i2s_chan_handle_t tx_chan;
 
 // ─── Estado del motor de luces ─────────────────────────────
-#define NUM_EFFECTS 5
-int     ledEffect = 0;           // 0=Onda 1=Cometa 2=Pulso 3=Chispas 4=Arcoíris
-float   g_energy = 0.0f;         // energía global (0..1) que decae — alimenta Pulso/Arcoíris
-uint8_t g_hue = 150;             // color de la última nota
+#define NUM_EFFECTS 6            // el APAGADO es un efecto más del ciclo (el 0)
+int     ledEffect = 0;           // 0=APAGADO 1=Onda 2=Cometa 3=Pulso 4=Chispas 5=Barrido
+                                 // arranca en 0 = tira apagada; BTN1 ◀ / BTN5 ▶ con rebote
+                                 // en los dos extremos (0 --BTN1--> 5  y  5 --BTN5--> 0)
+float   g_energy = 0.0f;         // energía global (0..1) que decae — alimenta Pulso/Barrido
 int     g_newSparks = 0;         // chispas pendientes de pintar (efecto Chispas)
-float   g_scroll = 0.0f;         // desplazamiento del arcoíris
+float   g_scroll = 0.0f;         // desplazamiento de la onda de brillo (Barrido)
 uint8_t g_fxFlash = 0;           // frames de flash al cambiar de efecto
 uint8_t g_instFlash = 0;         // frames de flash al cambiar de instrumento
 unsigned long lastLedFrame = 0;
 
-struct LedWave { bool active; float radius; uint8_t hue; uint8_t vel; };
+struct LedWave { bool active; float radius; uint8_t vel; };
 #define NUM_WAVES 8
 LedWave lwaves[NUM_WAVES];
+
+// ÚNICO color de todo el firmware: MAGENTA puro (R = B, G = 0).
+// Se usa RGB directo y no CHSV porque el mapa "rainbow" de FastLED desatura el magenta
+// (lo baja a ~128,0,128). Así el magenta es exacto a cualquier brillo y las mezclas
+// aditivas (leds[i] += c) siguen siendo magenta, nunca derivan a otro tono.
+// OJO: debe quedar DESPUÉS de las structs — el IDE inyecta los prototipos automáticos
+// justo antes de la primera función del .ino, y si va arriba rompe `instWave(Voice&)`.
+inline CRGB magenta(uint8_t v) { return CRGB(v, 0, v); }
 
 // ─── Lectura de pot con sobre-muestreo ─────────────────────
 float readPot(uint8_t pin) {
@@ -264,11 +284,10 @@ void triggerNote(float freq, float vel) {
   voices[idx] = {true, freq, 0.0f, 0.0f, 0, vel, voiceCounter++, instrument};
 }
 
-// ─── Luces: registrar una nota (color + energía + onda) ────
-void ledOnNote(uint8_t hue, float vel) {
+// ─── Luces: registrar una nota (energía + onda) ────────────
+void ledOnNote(float vel) {
   for (int i = 0; i < NUM_WAVES; i++)
-    if (!lwaves[i].active) { lwaves[i] = {true, 0.0f, hue, (uint8_t)(vel * 255.0f)}; break; }
-  g_hue = hue;
+    if (!lwaves[i].active) { lwaves[i] = {true, 0.0f, (uint8_t)(vel * 255.0f)}; break; }
   g_energy += 0.35f + 0.65f * vel; if (g_energy > 1.0f) g_energy = 1.0f;
   g_newSparks += 2 + (int)(vel * 7.0f); if (g_newSparks > 40) g_newSparks = 40;
 }
@@ -287,7 +306,7 @@ void onImpact(float sh) {
   vel = 0.35f + vel * 0.65f;                   // 0.35..1.0
 
   triggerNote(noteFreq(walkDeg), vel);
-  ledOnNote((uint8_t)(150 + walkDeg * 7), vel);   // paleta mágica cian→violeta→magenta por nota
+  ledOnNote(vel);                                 // siempre magenta: la nota cambia el brillo, no el color
 }
 
 // ─── IMU: detección de dirección (0x68 / 0x69) ─────────────
@@ -369,7 +388,15 @@ void updateEnvCoefs() {
 }
 
 // ─── EFECTOS DE LUZ ────────────────────────────────────────
-// 0 — ONDA: cada golpe lanza una onda simétrica desde el centro (estilo referencia).
+// 0 — APAGADO: tira negra (estado inicial). Además vacía lo que haya quedado pendiente
+//     (ondas en vuelo y chispas acumuladas) para que al volver a un efecto no se descargue
+//     de golpe todo lo que se acumuló mientras estaba apagado.
+void fxApagado() {
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  for (int i = 0; i < NUM_WAVES; i++) lwaves[i].active = false;
+  g_newSparks = 0;
+}
+// 1 — ONDA: cada golpe lanza una onda simétrica desde el centro (estilo referencia).
 void fxOnda() {
   fadeToBlackBy(leds, NUM_LEDS, 55);
   for (int i = 0; i < NUM_WAVES; i++) {
@@ -378,63 +405,70 @@ void fxOnda() {
     float prog = (float)r / CENTER;
     if (prog > 1.0f) { lwaves[i].active = false; continue; }
     uint8_t b = (uint8_t)((1.0f - prog) * 255.0f * (0.4f + 0.6f * lwaves[i].vel / 255.0f));
-    CRGB c = CHSV(lwaves[i].hue, 255, b);
+    CRGB c = magenta(b);
     int L = CENTER - r, R = CENTER + r;
     if (L >= 0 && L < NUM_LEDS) leds[L] += c;
     if (R >= 0 && R < NUM_LEDS) leds[R] += c;
     lwaves[i].radius += 0.8f + 0.6f * (lwaves[i].vel / 255.0f);
   }
 }
-// 1 — COMETA: cabezas brillantes que vuelan del centro a los extremos, con estela.
+// 2 — COMETA: cabezas brillantes que vuelan del centro a los extremos, con estela.
 void fxCometa() {
   fadeToBlackBy(leds, NUM_LEDS, 38);
   for (int i = 0; i < NUM_WAVES; i++) {
     if (!lwaves[i].active) continue;
     int r = (int)lwaves[i].radius;
     if (r > CENTER) { lwaves[i].active = false; continue; }
-    CRGB c = CHSV(lwaves[i].hue, 255, 255);
+    CRGB c = magenta(255);
     int L = CENTER - r, R = CENTER + r;
     if (L >= 0 && L < NUM_LEDS) leds[L] = c;
     if (R >= 0 && R < NUM_LEDS) leds[R] = c;
     lwaves[i].radius += 1.6f;
   }
 }
-// 2 — PULSO: toda la tira late con el color de la nota; respiración suave en reposo.
+// 3 — PULSO: toda la tira late en magenta; respiración suave en reposo.
 void fxPulso(uint32_t t) {
   uint8_t breath = 18 + (uint8_t)(12.0f * (0.5f + 0.5f * sinf(t * 0.002f)));
   uint8_t v = (uint8_t)(g_energy * 255.0f);
   if (v < breath) v = breath;
-  fill_solid(leds, NUM_LEDS, CHSV(g_hue, 210, v));
+  fill_solid(leds, NUM_LEDS, magenta(v));
 }
-// 3 — CHISPAS: cada golpe rocía polvo mágico en posiciones aleatorias.
+// 4 — CHISPAS: cada golpe rocía polvo mágico en posiciones aleatorias.
+//     La variedad va por BRILLO (antes por tono) para no salirse del magenta.
 void fxChispas() {
   fadeToBlackBy(leds, NUM_LEDS, 32);
   while (g_newSparks > 0) {
     int p = rng() % NUM_LEDS;
-    leds[p] = CHSV(g_hue + (int)(rng() % 30) - 15, 200, 255);
+    leds[p] = magenta(190 + (uint8_t)(rng() % 66));
     g_newSparks--;
   }
 }
-// 4 — ARCOÍRIS: arcoíris que se desplaza; su brillo y velocidad pulsan con la energía.
-void fxArcoiris() {
+// 5 — BARRIDO: onda de BRILLO magenta que recorre la tira (antes era el arcoíris);
+//     su nivel y su velocidad pulsan con la energía.
+void fxBarrido() {
   g_scroll += 1.0f + g_energy * 4.0f;
   uint8_t base = (uint8_t)g_scroll;
   uint8_t v = 55 + (uint8_t)(g_energy * 200.0f);
-  for (int i = 0; i < NUM_LEDS; i++) leds[i] = CHSV(base + i * 4, 230, v);
+  for (int i = 0; i < NUM_LEDS; i++) {
+    uint8_t w = sin8(base + i * 4);                  // perfil de la onda 0..255
+    leds[i] = magenta(scale8(v, 40 + scale8(w, 215)));
+  }
 }
 
 // ─── Un frame de luces (throttleado a ~30 FPS) ─────────────
 void ledFrame(uint32_t t) {
   switch (ledEffect) {
-    case 0: fxOnda();        break;
-    case 1: fxCometa();      break;
-    case 2: fxPulso(t);      break;
-    case 3: fxChispas();     break;
-    case 4: fxArcoiris();    break;
+    case 0: fxApagado();     break;
+    case 1: fxOnda();        break;
+    case 2: fxCometa();      break;
+    case 3: fxPulso(t);      break;
+    case 4: fxChispas();     break;
+    case 5: fxBarrido();     break;
   }
-  // Flashes de confirmación (sobre-escriben unos pocos frames, sin delays)
-  if (g_fxFlash > 0)   { g_fxFlash--;   fill_solid(leds, NUM_LEDS, CRGB(50, 50, 70)); }
-  if (g_instFlash > 0) { g_instFlash--; fill_solid(leds, NUM_LEDS, CHSV(instHue[instrument], 255, 130)); }
+  // Flashes de confirmación (sobre-escriben unos pocos frames, sin delays).
+  // También en APAGADO: el parpadeo corto confirma que el botón se registró.
+  if (g_fxFlash > 0)   { g_fxFlash--;   fill_solid(leds, NUM_LEDS, magenta(60)); }
+  if (g_instFlash > 0) { g_instFlash--; fill_solid(leds, NUM_LEDS, magenta(instFlashVal[instrument])); }
 
   g_energy *= 0.90f;
   FastLED.show();
@@ -486,7 +520,7 @@ void setup() {
 
   // Barrido de arranque (confirma la tira) + acorde (confirma audio)
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CHSV(150 + i * 2, 230, 200);
+    leds[i] = magenta(200);
     FastLED.show();
     delay(6);
   }
@@ -504,6 +538,8 @@ void loop() {
   for (int i = 0; i < NUM_BTN; i++) {
     bool now = digitalRead(BTN_PINS[i]);
     if (now == LOW && btnLast[i] == HIGH) {
+      // Ciclo circular de 6 estados (0 = APAGADO): BTN1 retrocede y desde el 0 salta al
+      // último (5); BTN5 avanza y desde el último vuelve al 0.
       if (i == 0)      { ledEffect = (ledEffect + NUM_EFFECTS - 1) % NUM_EFFECTS; g_fxFlash = 4; }
       else if (i == 4) { ledEffect = (ledEffect + 1) % NUM_EFFECTS;               g_fxFlash = 4; }
       else             { instrument = i - 1; g_instFlash = 5; }   // BTN2→0 BTN3→1 BTN4→2
@@ -524,11 +560,11 @@ void loop() {
       trigFloor = shock * RETRIG_RATIO;
     }
   } else {
-    // — Sin IMU: "latido" grave + parpadeo rojo —
+    // — Sin IMU: "latido" grave + parpadeo magenta tenue —
     if (t - lastBeat > 1200) {
       triggerNote(BASE_FREQ * 0.5f, 0.5f);
       lastBeat = t;
-      fill_solid(leds, NUM_LEDS, CRGB(40, 0, 0));
+      fill_solid(leds, NUM_LEDS, magenta(40));
     }
   }
 
