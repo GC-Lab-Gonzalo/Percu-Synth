@@ -172,8 +172,9 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 
 ### Firmwares con IA (requieren WiFi y claves de API)
 
-Estos cinco firmwares llaman a servicios externos (OpenAI, ElevenLabs) desde el propio ESP32-S3.
-Necesitan además un **micrófono INMP441** por I2S y, salvo `asistente_ia`, un módulo **con PSRAM**.
+Estos seis firmwares llaman a servicios externos (OpenAI, NagaAI, ElevenLabs) desde el propio
+ESP32-S3. Necesitan además un **micrófono INMP441** por I2S y, salvo los dos asistentes simples
+(`asistente_ia` y `asistente_naga`), un módulo **con PSRAM**.
 
 > **Las claves no están en el repositorio.** Cada uno de estos sketches trae un
 > `secretos.example.h`: cópialo a `secretos.h` **en la misma carpeta** y escribe ahí tu WiFi y tus
@@ -184,6 +185,13 @@ Necesitan además un **micrófono INMP441** por I2S y, salvo `asistente_ia`, un 
 - Mantienes BTN1, hablas, y te responde por el parlante. El más simple de la familia: el que conviene leer primero para entender cómo se conecta el hardware a una API
 - Micrófono INMP441 (16 kHz mono) → Whisper → GPT-4o-mini → TTS (PCM 24 kHz) → DAC PCM5102, sin resamplear
 - Los 6 LEDs SMD indican el estado: verde listo, rojo grabando, ámbar procesando, cian hablando
+
+#### `asistente_naga` — El mismo asistente, sobre NagaAI (una sola clave, modelos gratis)
+- [NagaAI](https://naga.ac/) es un **agregador**: una API compatible con OpenAI que enruta a muchos proveedores con **una sola clave y un solo saldo**. Los endpoints son idénticos; lo que cambia es el host, los **nombres de modelo** y un parámetro
+- Ojo con eso último: **`whisper-1`, `tts-1` y `gpt-4o-mini` no existen en Naga** (hay `whisper-large-v3`, `gpt-4o-mini-tts`, `llama-3.3-70b-instruct:free`, voces de ElevenLabs…), y el límite de respuesta es `max_completion_tokens`, no `max_tokens`. Copiar los nombres de OpenAI tal cual da 404 y silencio
+- Viene con los tres modelos **`:free`** puestos por defecto: funciona **sin gastar saldo**, que es lo que hace falta en un taller con diez placas
+- La reproducción **lee la cabecera WAV** en vez de asumir 24 kHz: frecuencia, canales y bits vienen en el archivo y el I2S se reconfigura en caliente, así cambiar de voz no obliga a tocar ninguna constante. Si llega un MP3 lo detecta y **lo avisa por Serial** en vez de reproducir ruido
+- `MOSTRAR_ESTADO` imprime todo el recorrido a 115200: lo que entendió, lo que respondió, los códigos HTTP con el cuerpo del error y el formato de audio recibido
 
 #### `asistente_musical` — Conversas con GPT sobre música que nunca se detiene
 - Cruce de la cadena de red de `asistente_ia` con el motor de voces de `pads_imu`: **hablas con GPT mientras un fondo armónico generativo sigue sonando**
@@ -348,7 +356,7 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los cinco firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
 
 Los firmwares con IA piden además **PSRAM** (`sampler_ia`, `oscilador_ia`, `asistente_musical`,
@@ -378,6 +386,7 @@ percusynth/
 │   ├── seismic_drone/              #   Drones graves por vibración de la tierra
 │   ├── dub_siren/                  #   Dub siren (en desarrollo · PLAN.md)
 │   ├── asistente_ia/               #   Asistente de voz (Whisper → GPT → TTS)
+│   ├── asistente_naga/             #   El mismo asistente sobre NagaAI: una sola clave y modelos gratis
 │   ├── asistente_musical/          #   Hablas con GPT sobre música que nunca se detiene
 │   ├── sampler_ia/                 #   Pides un sample hablando (→ ElevenLabs) y lo disparas
 │   ├── oscilador_ia/               #   El sample de IA es el oscilador (afinado por autocorrelación)
