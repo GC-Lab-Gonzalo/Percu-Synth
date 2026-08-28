@@ -303,7 +303,40 @@ midiRT(0xFA);  // Start
 midiRT(0xFC);  // Stop
 ```
 
-### 6.6 LEDs WS2812 (FastLED) — ojo con los 6 internos
+### 6.6 MIDI DIN-5 (salida por UART, GPIO 43)
+
+El conector DIN-5 de la placa se alimenta del **GPIO 43** a **31250 baud**. Es MIDI serie crudo: se
+escriben los bytes a mano, no hay librería.
+
+```cpp
+#define MIDI_TX_PIN  43
+HardwareSerial &MIDIOUT = Serial1;          // Serial1, NO Serial0 (ver la trampa de abajo)
+
+void midiSetup() {
+  MIDIOUT.begin(31250, SERIAL_8N1, -1, MIDI_TX_PIN);   // RX en -1: sin receptor
+}
+
+inline void midiSend3(uint8_t st, uint8_t d1, uint8_t d2) {
+  uint8_t b[3] = { st, d1, d2 };
+  MIDIOUT.write(b, 3);
+}
+midiSend3(0x90, nota, velocidad);   // Note On  canal 1  (0x90 | (canal-1))
+midiSend3(0x80, nota, 0);           // Note Off canal 1
+MIDIOUT.write(0xF8);                // Clock (24 PPQ) · 0xFA Start · 0xFC Stop
+```
+
+> ⚠️ **Las dos trampas del DIN-5, las dos por el mismo motivo.** El **UART0** del ESP32-S3 sale
+> por los **GPIO 43 (TX) y 44 (RX)** — o sea que el TX del DIN-5 es *el mismo pin* que usa
+> `Serial0`, y el RX que le correspondería es **el BTN1**. Entonces:
+> 1. **No imprimas nunca por `Serial0`** en un firmware con MIDI DIN: esos bytes saldrían por
+>    el cable MIDI como basura. El diagnóstico va **sólo por `Serial`** (USB CDC, con *USB CDC
+>    On Boot = Enabled*).
+> 2. **Usa `Serial1` con `rxPin = -1`.** La matriz de GPIO enruta el TX de `Serial1` al 43 y
+>    deja el 44 en paz; si abres el RX, te quedas sin BTN1.
+>
+> Firmware de referencia: `firmwares/drum_poder/` (saca líneas de bajo + MIDI Clock por el DIN-5).
+
+### 6.7 LEDs WS2812 (FastLED) — ojo con los 6 internos
 
 ```cpp
 #include <FastLED.h>
@@ -327,7 +360,7 @@ void ledsSetup() {
 
 > Para la **matriz 20×20** (`matrix_midi_anyma`, `test_matrix_20x20`) hay un mapeo XY (serpentina) sobre el mismo arreglo, también empezando en `START_LED`.
 
-### 6.7 Piezos (sensores de impacto)
+### 6.8 Piezos (sensores de impacto)
 
 ```cpp
 const uint8_t PIEZO_PINS[4] = { 4, 5, 6, 7 };   // ADC/GPIO
@@ -464,6 +497,7 @@ void loop() {
 | Firmware | Qué hace |
 |---|---|
 | `drum_machine_basic` | Drum machine 16 pasos con síntesis en tiempo real (sin samples) |
+| `drum_poder` | Drum machine con peso, mezclada y masterizada: 12 grooves escritos a mano en compases impares (7/8, 5/8+7/8, 9/8, 13/8, 5/4, 12/8) + **reloj MIDI por el DIN-5** (Clock 24 PPQN + Start/Stop, sin notas: el bajo lo pone el sinte externo). Es la referencia para el DIN-5, para una cadena de master (sidechain → reverb → EQ tilt → compresor → limitador) y para el reparto en dos núcleos (audio en el core 1, controles en el core 0) |
 | `synth_basico` | Synth polifónico 5 voces con morphing seno→cuadrada→sierra |
 | `trance_imu` / `trance_imu_leds` | Secuenciador de trance polifónico, filtro por IMU (+ LEDs internos como visualizador) |
 | `MIDI_Drum` | Controlador USB-MIDI con botones + piezos + IMU (velocidad por movimiento) |
@@ -471,6 +505,7 @@ void loop() {
 | `step_sequencer_midi` | Secuenciador de samples 6×16 + MIDI Clock Master + edición en vivo por Web MIDI |
 | `matrix_midi_anyma` | Secuenciador electro + MIDI Clock Master + motor visual 2D para matriz 20×20 |
 | `impact_chimes` / `seismic_drone` | El acelerómetro detecta golpes/vibración del piso → notas de escala / dron grave |
+| `laser_chimes` | Mismo instrumento que `impact_chimes` pero disparado por un **LDR + láser** en el sensor externo A (GPIO 3): al cortar el haz suena una nota. Es la referencia para leer un sensor analógico externo (tarea a 1 kHz en el core 0, límites de lectura como variables) |
 | `test_leds` / `test_imu` / `test_matrix_20x20` | Sketches de prueba de cada periférico |
 
 > Las webapps de `tools/` (sample_loader, loop_loader, midi_sampler, etc.) **generan `.ino` con samples embebidos**; si necesitas samples, conviene usarlas en vez de pedir a la IA que invente arrays gigantes.

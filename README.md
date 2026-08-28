@@ -49,6 +49,8 @@ Los firmwares y herramientas del repositorio son ejemplos concretos de estas pos
 - **Entradas:** 5 botones, 4 potenciómetros, 4 sensores piezoeléctricos, 2 sensores analógicos externos
 - **Salidas:** Audio I2S · tira/matriz LED WS2812 · MIDI USB nativo · MIDI DIN-5
 
+> **¿Quieres armar el tuyo?** La [lista de materiales](MATERIALES.md) tiene cada componente con su término de búsqueda, los tres caminos para armarlo (PCB fabricada, protoboard o placa perforada) y cómo pedir la placa en JLCPCB. Comprar la PCB es opcional.
+
 ### Pinout
 
 | Señal | Pin ESP32-S3 |
@@ -96,6 +98,16 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - 5 kits (CYBER · DUBSTEP half-time · GLITCH · INDUSTRIAL · CAOS) y 7 pistas: kick, snare, hats, clank, metal, blast y bajo
 - Un botón = una función: BTN1 patrón · BTN2 timbre · BTN3 tap tempo · BTN4 half-time · BTN5 fill. POT4 = beat repeat ×2/×4/×8/×16 sobre un reloj maestro que nunca se desfasa
 - No hay play/stop: la máquina siempre corre, POT1 a cero es el mute. Requiere **FastLED**
+
+#### `drum_poder` — Drum machine con peso + reloj MIDI por el DIN-5
+- Hermana de `drum_ruido` con el signo cambiado: **acá no hay ruido como estética**. Bombos redondos con pegada de mazo, cajas grandes y afinadas, toms cantados, platos con brillo controlado
+- **12 grooves escritos a mano** en el idioma de Sleep Token, Tool y Dream Theater, con compases impares de verdad: 7/8 (3+2+2), 5/8+7/8, 9/8, 13/8, 5/4, 12/8, doble bombo y 4/4 desplazado (3+3+3+3+2+2). Los patrones se escriben **como texto**, un carácter por semicorchea
+- **Por el MIDI DIN-5 sale el RELOJ, no notas** (GPIO 43, 31250 baud): MIDI Clock a 24 PPQN + Start, y Stop+Start cada vez que se reubica el "1". La melodía la pone el sinte que lo recibe. Hubo tres versiones con bajo adentro (línea escrita por groove, tabla de ritmos sobre una grilla, patrones derivados del bombo) y las tres se descartaron: elegir el sonido y la secuencia en el sinte es más expresivo que cualquier tabla metida en el firmware, y el único trabajo real de la máquina es dar un pulso que no se mueva. Verificado: el tempo del reloj cae dentro del **0.04 %** del BPM en los 12 grooves
+- **Es percusión y nada más**: la melodía la hacen las notas MIDI. Sólo el SUB (abajo de 60 Hz) sigue el acorde; todo lo que vive arriba de 1 kHz es **ruido filtrado** — no tiene nota, así que no puede hacer melodía —, y el decay tiene presupuesto por banda: el peso abajo es largo (sub 2.1 s, bombo 1.3 s) y arriba todo es corto (hat 0.13 s, tick 0.07 s)
+- 8 pistas con **su propia banda** cada una (sub, bombo, toms, caja, clap, tick, hats, metal) y cadena de master fija: sidechain → sala corta → saturación de cuerpo → filtro → compresor de bus → limitador **con lookahead** → techo de 13 kHz
+- **Exactamente los controles de `drum_ruido`, uno por uno**: BTN1 groove · BTN2 kit · BTN3 tap tempo · BTN4 medio tiempo · BTN5 redoble; POT1 volumen · POT2 filtro · POT3 cuerpo · POT4 beat repeat. Sin paneles, sin combos y sin pots congelados: todo eso existió mientras el firmware generaba las notas del bajo
+- **El SUB lleva 2º y 3er armónico**: su fundamental vive en 33–45 Hz, así que en un parlante chico lo que se oye son los armónicos y el oído reconstruye la que falta
+- **El audio corre en su propia tarea en el core 1** y los controles en el core 0. El ADC y `FastLED.show()` compartiendo `loop()` con el render eran lo que hacía que el DMA se quedara sin datos en los patrones densos y en los fills: eso era el chasquido. Y por lo mismo **no hay ni un `Serial.print`**. Requiere **FastLED**
 
 #### `synth_basico` — Sintetizador Polifónico
 - 5 voces con morphing de forma de onda (senoidal → cuadrada → diente de sierra)
@@ -160,6 +172,12 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - Hermano de `impact_chimes` con **show WS2812 de 68 LEDs** y **3 timbres** (campana / marimba / guitarra eléctrica), en una sola escala mágica: **C lidio**
 - Cada golpe en el piso dispara una nota (caminata melódica) y un efecto de luz reactivo. BTN1/BTN5 recorren 5 efectos (onda, cometa, pulso, chispas, arcoíris); BTN2/3/4 eligen el timbre
 - Umbral dinámico anti-doble-disparo; FastLED por RMT para no chocar con el I2S. Requiere **FastLED**
+
+#### `laser_chimes` — Campanas al cortar el haz de un láser
+- Hermano de `impact_chimes` con el **sensor de entrada cambiado**: un **LDR + 220 Ω en el sensor externo A (EXT1, GPIO 3)** vigila un **haz de láser**; cada vez que algo lo cruza se dispara una nota de la escala
+- Mismo motor de sonido y mismos controles que `impact_chimes` (una escala por botón, pots = ataque/decay/brillo/timbre). El corte más profundo suena más fuerte
+- El LDR se muestrea a **1 kHz en el core 0** (el audio se queda con el core 1) y la cola de DMA es corta (≈12 ms): la nota se oye en el acto
+- Los **límites de lectura del LDR** (`LDR_LASER` / `LDR_TAPADO`) son variables en el `.ino`; con `MOSTRAR_ESTADO 1` el Monitor Serie imprime `raw` y los `min`/`max` vistos para copiarlos directo. Sin librerías externas
 
 #### `seismic_drone` — Drones épicos por vibración de la tierra
 - Hermano grave de `impact_chimes`: el MPU6050 en **±2g** detecta la vibración del suelo → genera un **dron épico** (sierra estéreo desafinada + sub-oscilador, filtro resonante que "respira")
@@ -356,7 +374,7 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
 
 Los firmwares con IA piden además **PSRAM** (`sampler_ia`, `oscilador_ia`, `asistente_musical`,
@@ -371,6 +389,7 @@ percusynth/
 ├── firmwares/                      # Sketches Arduino escritos a mano
 │   ├── drum_machine_basic/         #   Drum machine con secuenciador de pasos
 │   ├── drum_ruido/                 #   Drum machine de timbres ruidosos, salida limpia
+│   ├── drum_poder/                 #   Drum machine con peso + reloj MIDI por el DIN-5 (12 grooves, compases impares)
 │   ├── synth_basico/               #   Sintetizador polifónico con morphing
 │   ├── trance_imu/                 #   Secuenciador de trance polifónico (IMU→filtro)
 │   ├── trance_imu_leds/            #   trance_imu + 6 LEDs SMD internos como visualizador
@@ -383,6 +402,7 @@ percusynth/
 │   ├── espacio_modular/            #   Ambientes de película: 24 temas sobre dron continuo
 │   ├── impact_chimes/              #   Campanas por golpe en el piso (acelerómetro)
 │   ├── impact_chimes_leds/         #   impact_chimes + 68 LEDs y 3 timbres (C lidio)
+│   ├── laser_chimes/               #   Campanas al cortar un haz de láser (LDR en EXT1)
 │   ├── seismic_drone/              #   Drones graves por vibración de la tierra
 │   ├── dub_siren/                  #   Dub siren (en desarrollo · PLAN.md)
 │   ├── asistente_ia/               #   Asistente de voz (Whisper → GPT → TTS)
