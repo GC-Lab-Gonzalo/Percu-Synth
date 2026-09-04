@@ -1,0 +1,13 @@
+{
+  "name": "PercuSynth — Paisajes Relax LEDs",
+  "version": "1.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "paisajes_relax_leds_esp32s3.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
