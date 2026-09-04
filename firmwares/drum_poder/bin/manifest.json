@@ -1,0 +1,13 @@
+{
+  "name": "PercuSynth — Drum Poder",
+  "version": "1.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "drum_poder_esp32s3.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
