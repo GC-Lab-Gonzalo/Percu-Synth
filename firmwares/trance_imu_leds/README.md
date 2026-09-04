@@ -57,6 +57,33 @@ de `trance_imu` para la tabla completa de botones y pots.
 - Librerías: ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`) + `Wire.h` (incluida)
   + **FastLED** (gestor de librerías)
 
+## Binario precompilado (flashear sin Arduino IDE)
+
+En [`bin/`](bin/) está el firmware ya compilado para el ESP32-S3 con los ajustes de
+arriba (ESP32S3 Dev Module · USB CDC On Boot · **DIO** · OPI PSRAM · 4 MB · partición
+default · core ESP32 3.3.11 · FastLED 3.10.4):
+
+| Archivo                        | Qué es                                                                 |
+|--------------------------------|------------------------------------------------------------------------|
+| `trance_imu_leds_esp32s3.bin`  | Imagen **merged** (bootloader + particiones + boot_app0 + app), ~550 KB |
+| `manifest.json`                | Descriptor para ESP Web Tools (lo lee el flasheador de `percu_control`) |
+
+Se graba **completa en la dirección `0x0`** — es un solo archivo, no hay que indicar
+offsets por separado. Tres formas de cargarlo:
+
+- **Desde el navegador (PC, Chrome/Edge):** copia `trance_imu_leds_esp32s3.bin` a
+  `tools/percu_control/firmware/firmware.bin`, sirve esa carpeta
+  (`python -m http.server 8000`) y aprieta **⚡ FLASH FW**. Web Serial no existe en
+  Chrome para Android ni en iOS, así que desde el teléfono este camino no sirve.
+- **Desde el teléfono (Android + cable OTG):** cualquier app de flasheo de ESP32 por USB
+  OTG que acepte un `.bin` y una dirección: elige el archivo, dirección `0x0`
+  (o `0x00000`), chip ESP32-S3, y graba. Si la placa no entra sola en modo descarga,
+  mantén **BOOT** (BTN3 = GPIO 0) mientras conectas el USB.
+- **Desde la terminal:** `esptool --chip esp32s3 write-flash 0x0 trance_imu_leds_esp32s3.bin`
+
+Si tocas el `.ino`, hay que recompilar y volver a exportar (`Sketch → Export Compiled
+Binary` deja el `*.merged.bin`, que es el mismo formato).
+
 ## Ajustes
 
 - Si oyes glitches de audio, sube `LED_REFRESH_MS` (refresca menos seguido).
