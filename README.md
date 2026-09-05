@@ -74,9 +74,13 @@ Todos los firmwares de audio generan señal a **44.1 kHz, 16-bit estéreo** a tr
 
 El diseño electrónico está abierto para que puedas fabricar tu propia placa o estudiar las conexiones:
 
-- [`Schematic_Percu-synth_V1.1.pdf`](Hardware/Schematic_Percu-synth_V1.1.pdf) — esquemático completo
-- [`PCB_1-PCB_PCB_Percu-synth_V1.1.pdf`](Hardware/PCB_1-PCB_PCB_Percu-synth_V1.1.pdf) — vista del PCB
-- [`Gerber_Percu-synth_1-PCB_PCB_Percu-synth_V1.1.zip`](Hardware/Gerber_Percu-synth_1-PCB_PCB_Percu-synth_V1.1.zip) — gerbers listos para enviar a fabricar
+La versión vigente es la **V2.0** (septiembre 2026): cada entrada de piezo lleva ahora diodo Schottky 1N5817 + 10 nF + 100 kΩ, y la placa trae sitio para el micrófono INMP441 y un conector OLED opcional. La lista de materiales completa está en [`MATERIALES.md`](MATERIALES.md).
+
+- [`Schematic_Percu-synth_V2.0.pdf`](Hardware/Schematic_Percu-synth_V2.0.pdf) — esquemático completo
+- [`PCB_1-PCB_PCB_Percu-synth_V2.0.pdf`](Hardware/PCB_1-PCB_PCB_Percu-synth_V2.0.pdf) — vista del PCB (top y bottom) para ubicar componentes
+- [`Gerber_Percu-synth_1-PCB_PCB_Percu-synth_V2.0.zip`](Hardware/Gerber_Percu-synth_1-PCB_PCB_Percu-synth_V2.0.zip) — gerbers listos para enviar a fabricar
+
+Los archivos `V1.1` siguen en `Hardware/` sólo como referencia de las placas antiguas.
 
 ---
 
@@ -156,6 +160,12 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - La idea original intacta — cada pot es un oscilador cuantizado a la escala activa — pero por debajo: stack de **3 voces en unísono** paneadas + sub-oscilador, formas de onda **PolyBLEP**, portamento de 40 ms y cuantización **con histéresis** (el ruido del ADC ya no hace saltar la nota)
 - Controles directos, sin paneles ni combos: BTN1 escala (10) · BTN2 octava · BTN3 intermitencia · BTN4 tap tempo · BTN5 forma de onda
 - Filtro resonante barrido por el eje X del IMU + **delay ping-pong** cuyo tiempo lo fija el tap tempo. Requiere **FastLED**
+- Audio en su propia tarea en el **core 1** y controles en el core 0: así los 4 osciladores en cuadrada o pulso ya no vacían el DMA (era el ruido que aparecía al cambiar de onda)
+
+#### `oscilador_escalas_clock` — El mismo dron + reloj MIDI por el DIN-5
+- `oscilador_escalas` con **MIDI Clock por el DIN-5** (24 PPQN, sólo reloj, nada de notas) al tempo del tap: **Start al activar la intermitencia, Stop al apagarla, Stop+Start en cada tap** para que el "1" del sinte externo caiga en el mismo corte
+- El clock se **cuenta en el audio** con el mismo contador que el corte (cero deriva) y se **manda desde la tarea de control** a 1 kHz. Los ticks salen siempre, aun parado, para que el sinte ya tenga el tempo cuando llegue el Start
+- Los **6 LEDs prenden al ritmo de la intermitencia** (siguen la envolvente que corta el audio) y el **LED RGB del módulo muestra el color de la nota** que suena, pasando al siguiente oscilador activo en cada pulso. Requiere **FastLED**
 
 #### `espacio_modular` — Ambientes de película (monofónico)
 - **24 patrones que son TEMAS, no figuras:** un tema se define tanto por su ritmo largo-corto como por sus notas, y **cada nota dura hasta la siguiente** — el espaciado *es* la duración. Por eso suena a música de película y no a un arpegio
@@ -374,7 +384,7 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
 
 Los firmwares con IA piden además **PSRAM** (`sampler_ia`, `oscilador_ia`, `asistente_musical`,
@@ -399,6 +409,7 @@ percusynth/
 │   ├── paisajes_relax_leds/        #   10 capas de paisaje sonoro + 2 anillos de LEDs
 │   ├── cyber_kit/                  #   Secuenciador de texturas, FX y leads cyber
 │   ├── oscilador_escalas/          #   4 pots = 4 osciladores por escala (port sin Mozzi)
+│   ├── oscilador_escalas_clock/    #   oscilador_escalas + MIDI Clock por el DIN-5 + LEDs al ritmo de la intermitencia
 │   ├── espacio_modular/            #   Ambientes de película: 24 temas sobre dron continuo
 │   ├── impact_chimes/              #   Campanas por golpe en el piso (acelerómetro)
 │   ├── impact_chimes_leds/         #   impact_chimes + 68 LEDs y 3 timbres (C lidio)
