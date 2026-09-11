@@ -25,7 +25,7 @@
 // ==============================================================================================================================================
 // - Board              : ESP32S3 Dev Module
 // - USB CDC On Boot    : Enabled
-// - USB Mode           : USB-OTG (TinyUSB)      ← obligatorio para MIDI USB
+// - USB Mode           : USB-OTG (TinyUSB)      ← obligatorio  para MIDI USB
 // - Flash Mode         : DIO
 // - PSRAM              : OPI PSRAM
 // ==============================================================================================================================================
