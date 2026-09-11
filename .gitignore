@@ -56,3 +56,12 @@ tools/instagram_cm/
 # PULSE SEQ — el secuenciador que corre con el pulso del oxímetro
 # (estuvo publicado hasta el commit 56877c4: sigue en el historial de GitHub)
 tools/oximeter_midi_sync/
+
+# Análisis de Ableton (se regenera solo al abrir el audio)
+*.asd
+
+# Respaldos de EasyEDA: el proyecto editable exportado (json del PCB y del
+# esquemático, sueltos o dentro de un zip con nombre de hash). Lo que se publica
+# de la placa son los gerbers y los PDF, no el respaldo del editor.
+Hardware/*.json
+Hardware/Percu-synth_*.zip
