@@ -83,8 +83,31 @@ Flash blanco al cambiar escala, octava, onda o tónica. El **LED RGB del módulo
 - PSRAM: OPI PSRAM (no es obligatorio — el delay vive en RAM interna, ~80 KB)
 - Librerías: **FastLED** (`Wire.h` y el driver I2S vienen en el core ESP32 ≥ 3.x)
 
+## Arquitectura: audio en el core 1, controles en el core 0
+
+La v1 tenía un **ruido al cambiar de onda con los 4 osciladores sonando**, que
+desaparecía al bajar el oscilador 4 y volvía al subirlo, en todas las ondas menos la
+sierra. No era un problema de señal, era de **tiempo**: todo corría en `loop()` — el
+render de 128 muestras, 16 lecturas de ADC por vuelta (cada `analogRead` del S3 cuesta
+decenas de µs), el I2C del IMU y `FastLED.show()`. La sierra es la onda más barata (un
+PolyBLEP por voz); cuadrada y pulso cuestan el doble (dos PolyBLEP cada una). Con 4
+osciladores × 3 voces la vuelta se pasaba de los 2,9 ms del buffer, el DMA se vaciaba y
+el driver (en `auto_clear`) sacaba ceros: eso es el ruido. Silenciar un oscilador
+ahorraba justo lo que faltaba, por eso "se arreglaba" bajando el pot.
+
+Ahora el **audio corre en su propia tarea fijada al core 1** y **botones, pots, IMU y
+LEDs en una tarea en el core 0 a 1 kHz**. La tarea de control nunca toca los
+osciladores ni el reloj del tempo: deja *pedidos* (`reqNote[]`, `reqTapMs`,
+`reqResync`, escala/octava/tónica/onda) que el audio aplica en el borde de cada buffer.
+Son escrituras de 32 bits alineadas, atómicas en el S3: sin mutex. Misma receta que
+`drum_poder`.
+
 ## Notas de implementación
 
+- **Tap tempo**: un intervalo que se aparta más del 35 % del tempo en curso abre una
+  serie nueva sin tocar el tempo. Antes la pausa entre dos series se promediaba como si
+  fuera un pulso y arrastraba el tempo durante varios taps (4 taps a 400 ms terminaban
+  en 428 ms).
 - **Timbre fijo**: como los 4 pots son notas (igual que en el original), el resto de la
   síntesis va con valores fijos elegidos a mano (desafinación 14 cents, ancho 0.6,
   drive 1.6, piso de cutoff 380 Hz, Q 2.2, delay 26 % con realimentación 0.36). Si algo

@@ -56,6 +56,15 @@
 //   · DELAY ESTÉREO ping-pong sincronizado al tap (corchea con puntillo). El tiempo
 //     cambia por CROSSFADE entre dos cabezas de lectura: nunca cambia de tono
 //   · Visualizador sobre los 6 LEDs WS2812 de la placa
+//
+// ARQUITECTURA (v2): el AUDIO corre en su propia tarea fijada al CORE 1 y los controles
+// (botones, pots, IMU, LEDs) en una tarea en el CORE 0 a 1 kHz. La v1 hacía todo en
+// `loop()` y con los 4 osciladores sonando en cuadrada o pulso (dos PolyBLEP por voz,
+// el doble que la sierra) el render más las 16 lecturas de ADC se pasaban del
+// presupuesto de 2,9 ms por buffer: el DMA se vaciaba y el driver sacaba ceros — un
+// ruido que desaparecía al silenciar un oscilador. La tarea de control NO toca los
+// osciladores: deja pedidos (nota, tempo, reenganche) que el audio aplica en el borde
+// de cada buffer.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
@@ -155,12 +164,8 @@ const int8_t SCALES[NUM_SCALES][SCALE_DEG] = {
   {0, 2, 3, 5, 7, 8, 11},   // 9 Menor armónica
 };
 
-int scaleIdx = 3;             // arranca en Lidio (como el original)
-int rootSemi = 0;             // 0 = La (BASE_FREQ ya es A1)
-
 // Octava global (BTN2): ciclo de 4 posiciones
 const int8_t OCT_STEPS[4] = { -1, 0, 1, 2 };
-int octIdx = 1;               // arranca en 0
 
 // ─── Tabla semitono → relación de frecuencia ───────────────
 const float BASE_FREQ = 55.0f;    // A1 = grado 0, octava 0 (igual que el original)
@@ -174,14 +179,6 @@ inline float semiToFreq(int semi) {
   return BASE_FREQ * semiLUT[idx];
 }
 
-// nota (0..27) → frecuencia según escala + tónica + octava global
-float noteToFreq(int note) {
-  int oct = note / SCALE_DEG;
-  int deg = note % SCALE_DEG;
-  int semi = rootSemi + OCT_STEPS[octIdx] * 12 + oct * 12 + SCALES[scaleIdx][deg];
-  return semiToFreq(semi);
-}
-
 // ─── Tabla de seno ─────────────────────────────────────────
 float sineLUT[256];
 inline float oscSine(float phase) {
@@ -189,6 +186,42 @@ inline float oscSine(float phase) {
   int i0 = (int)f; float frac = f - (float)i0;
   i0 &= 255; int i1 = (i0 + 1) & 255;
   return sineLUT[i0] + (sineLUT[i1] - sineLUT[i0]) * frac;
+}
+
+// ==============================================================================================================================================
+// PEDIDOS ENTRE NÚCLEOS
+// ==============================================================================================================================================
+// El audio vive en su tarea (core 1) y los controles en la otra (core 0). La tarea de
+// control NO toca los osciladores ni el reloj del tempo: escribe un pedido y la tarea
+// de audio lo aplica en el borde de un buffer. Son escrituras de 32 bits alineadas,
+// atómicas en el S3: no hace falta mutex.
+//
+//   control → audio : reqNote[]  scaleIdx  octIdx  rootSemi  waveType  gateOn
+//                     reqTapMs  reqResync  filtered_x
+//   audio → control : g_cutNorm  beatCount  gateEnvOut   (+ slots[].note/amp, sólo lectura)
+volatile int      reqNote[4] = { -1, -1, -1, -1 };  // nota pedida por cada pot (−1 = silencio)
+volatile int      scaleIdx = 3;        // arranca en Lidio (como el original)
+volatile int      rootSemi = 0;        // 0 = La (BASE_FREQ ya es A1)
+volatile int      octIdx   = 1;        // arranca en 0
+volatile int      waveType = 0;        // WAVE_SAW: el original era sierra
+volatile bool     gateOn   = false;    // BTN3: intermitencia activada
+volatile uint32_t reqTapMs = 0;        // > 0 = tempo nuevo (ms por pulso)
+volatile bool     reqResync = false;   // reengancha la fase del corte (tap / gate on)
+volatile float    filtered_x = 0.0f;   // IMU eje X suavizado → filtro
+volatile float    g_cutNorm  = 0.0f;   // apertura del filtro 0..1 (para los LEDs)
+volatile uint32_t beatCount  = 0;      // sube en cada pulso del tempo (para el latido del LED)
+volatile float    gateEnvOut = 1.0f;   // envolvente de la intermitencia (para los LEDs)
+
+// Copias que sólo toca la tarea de audio (se sincronizan en el borde del buffer)
+int aScale = 3, aOct = 1, aRoot = 0, aWave = 0;
+bool aGateOn = false;
+
+// nota (0..27) → frecuencia según escala + tónica + octava global (versión del audio)
+float noteToFreq(int note) {
+  int oct = note / SCALE_DEG;
+  int deg = note % SCALE_DEG;
+  int semi = aRoot + OCT_STEPS[aOct] * 12 + oct * 12 + SCALES[aScale][deg];
+  return semiToFreq(semi);
 }
 
 // ==============================================================================================================================================
@@ -218,7 +251,6 @@ float detRatio[UNISON] = { 1.0f, 1.0f, 1.0f };
 #define WAVE_TRI   3
 #define WAVE_SINE  4
 #define WAVE_N     5
-int   waveType = WAVE_SAW;              // el original era sierra
 
 const float DETUNE_CENTS = 14.0f;       // desafinación del ensemble
 const float SPREAD_WIDTH = 0.60f;       // ancho estéreo del unísono
@@ -238,7 +270,6 @@ const float DRIVE_COMP = 1.0f / (0.75f + 0.25f * DRIVE_AMT);
 // ==============================================================================================================================================
 // TEMPO — tap tempo (BTN4) → intermitencia (BTN3) + tiempo del delay
 // ==============================================================================================================================================
-bool     gateOn   = false;              // BTN3: intermitencia activada
 uint32_t tapMs    = 500;                // 120 BPM por defecto
 uint32_t gatePeriod = (uint32_t)(0.5f * SAMPLE_RATE);
 uint32_t gateHalf   = (uint32_t)(0.25f * SAMPLE_RATE);
@@ -246,8 +277,9 @@ uint32_t gateCount  = 0;
 float    gateEnv    = 1.0f;             // 1 = abierto · 0 = cortado
 const float GATE_COEF = 1.0f - expf(-1.0f / (0.003f * SAMPLE_RATE));  // rampa ~3 ms (sin clic)
 
-unsigned long lastTap = 0;
+unsigned long lastTap = 0;              // (tarea de control)
 uint8_t  tapCount = 0;
+uint32_t ctlTapMs = 500;                // copia del tempo en la tarea de control (promedio)
 
 // ─── Delay estéreo (sincronizado al tap) ───────────────────
 // El tiempo cambia con CROSSFADE ENTRE DOS CABEZAS DE LECTURA, no deslizando una sola:
@@ -267,33 +299,32 @@ const float DRY_MIX   = 1.0f - DELAY_MIX * 0.35f;
 float dampL = 0.0f, dampR = 0.0f;       // amortiguación en la realimentación
 const float DAMP_COEF = 0.42f;
 
-// ─── IMU ───────────────────────────────────────────────────
+// ─── IMU (tarea de control) ────────────────────────────────
 float imu_x = 0.0f;
-float filtered_x = 0.0f;
 unsigned long lastIMURead = 0;
 bool  imuOk = false;
 uint8_t imuFails = 0;
 unsigned long lastIMURetry = 0;
 const unsigned long IMU_RETRY_MS = 3000;      // sin IMU, reintenta cada 3 s (no cada lectura)
 
-// ─── Filtro biquad LPF resonante (estéreo) ─────────────────
+// ─── Filtro biquad LPF resonante (estéreo, tarea de audio) ──
 float f_b0, f_b1, f_b2, f_a1, f_a2;
 BiqState bqL = {0, 0, 0, 0};
 BiqState bqR = {0, 0, 0, 0};
-float g_cutNorm = 0.0f;      // apertura del filtro 0..1 (para los LEDs)
 
-// ─── Estado de botones ─────────────────────────────────────
+// ─── Estado de botones (tarea de control) ──────────────────
 bool b1Level = HIGH, b2Level = HIGH, b3Level = HIGH, b4Level = HIGH, b5Level = HIGH;
 unsigned long b1Time = 0, b2Time = 0, b3Time = 0, b4Time = 0, b5Time = 0;
 bool b5Long = false;
+int  ctlNote[NUM_SLOTS] = { -1, -1, -1, -1 };   // última nota cuantizada por pot (histéresis)
 
 static i2s_chan_handle_t tx_chan;
 
-// ─── Lectura de pot con sobre-muestreo ─────────────────────
+// ─── Lectura de pot con sobre-muestreo (core 0: no le roba tiempo al audio) ──
 float readPot(uint8_t pin) {
   uint32_t sum = 0;
-  for (int i = 0; i < 16; i++) sum += analogRead(pin);
-  return (float)(sum >> 4) / 4095.0f;
+  for (int i = 0; i < 8; i++) sum += analogRead(pin);
+  return (float)(sum >> 3) / 4095.0f;
 }
 
 // ==============================================================================================================================================
@@ -308,8 +339,8 @@ inline float polyBlep(float t, float dt) {
 }
 
 // Sierra / cuadrada / pulso 25 % / triangular / seno
-inline float osc(float phase, float dt) {
-  switch (waveType) {
+inline float osc(float phase, float dt, int wave) {
+  switch (wave) {
     case WAVE_SAW:
       return (2.0f * phase - 1.0f) - polyBlep(phase, dt);
     case WAVE_SQR: {
@@ -350,7 +381,7 @@ void initSpread() {
   }
 }
 
-// ─── Cuantizar la posición del pot a una nota de la escala ──
+// ─── Cuantizar la posición del pot a una nota de la escala (tarea de control) ──
 // Con HISTÉRESIS: el ruido del ADC no hace saltar la nota en los bordes.
 int quantizeNote(int slot, float v) {
   if (v < 0.02f) return -1;                              // zona de silencio (como el original)
@@ -359,12 +390,12 @@ int quantizeNote(int slot, float v) {
   int cand = (int)(f + 0.5f);
   if (cand < 0) cand = 0;
   if (cand > NUM_NOTES - 1) cand = NUM_NOTES - 1;
-  int cur = slots[slot].note;
+  int cur = ctlNote[slot];
   if (cur >= 0 && cand != cur && fabsf(f - (float)cur) < 0.65f) cand = cur;
   return cand;
 }
 
-// ─── Aplicar una nota nueva a un slot ──────────────────────
+// ─── Aplicar una nota nueva a un slot (tarea de audio) ─────
 void setSlotNote(int s, int note) {
   Slot &S = slots[s];
   S.note = note;
@@ -386,6 +417,7 @@ void retuneAll() {
 // ==============================================================================================================================================
 // El tempo manda dos cosas: el corte de la intermitencia y el tiempo del delay
 // (corchea con puntillo = 3/4 del pulso; si no cabe en la línea, se va dividiendo).
+// Lo llama la tarea de AUDIO en el borde de un buffer (toca el delay y el reloj).
 void applyTempo() {
   gatePeriod = (uint32_t)((float)tapMs * 0.001f * SAMPLE_RATE);
   if (gatePeriod < 1000) gatePeriod = 1000;              // tope de seguridad (~23 ms)
@@ -404,32 +436,36 @@ void applyTempo() {
   }
 }
 
-// Cada toque de BTN4: mide el intervalo, promedia y REENGANCHA la fase del corte.
+// Cada toque de BTN4 (tarea de control): mide el intervalo, promedia y pide al audio
+// que REENGANCHE la fase del corte.
 void tapTempo() {
   unsigned long t = millis();
   unsigned long dt = t - lastTap;
 
-  if (lastTap != 0 && dt > 120 && dt < 3000) {
+  // Un intervalo que se aparta más del 35 % del tempo en curso NO es parte de la serie:
+  // es el primer golpe de una nueva (si no, la pausa entre dos series se promediaba
+  // como si fuera un pulso y arrastraba el tempo durante varios taps).
+  bool enSerie = (tapCount == 0) ||
+                 (fabsf((float)dt - (float)ctlTapMs) < 0.35f * (float)ctlTapMs);
+  if (lastTap != 0 && dt > 120 && dt < 3000 && enSerie) {
     // Serie en curso → promedio suave (el golpe nuevo pesa el doble)
-    tapMs = (tapCount >= 1) ? (uint32_t)((tapMs + 2UL * dt) / 3UL) : (uint32_t)dt;
+    ctlTapMs = (tapCount >= 1) ? (uint32_t)((ctlTapMs + 2UL * dt) / 3UL) : (uint32_t)dt;
     tapCount++;
-    applyTempo();
+    reqTapMs = ctlTapMs;
   } else {
     tapCount = 0;                                        // primer golpe de una serie nueva
   }
   lastTap = t;
 
-  gateCount = 0;                                         // el corte cae donde tú marcas
-  beatPulse = 1.0f;
+  reqResync = true;                                      // el corte cae donde tú marcas
 }
 
 // ==============================================================================================================================================
-// IMU — eje X fijo → filtro
+// IMU — eje X fijo → filtro (tarea de control)
 // ==============================================================================================================================================
 // Nota: el WHO_AM_I es sólo informativo (algunos clones devuelven 0x68/0x70/0x72/0x98).
 // Lo que manda es que la lectura de datos funcione; si falla varias veces seguidas se
-// re-inicializa sola. warm = true → reintento en caliente, con esperas mínimas para no
-// vaciar el DMA de audio mientras suena.
+// re-inicializa sola. warm = true → reintento en caliente, con esperas mínimas.
 bool initIMU(bool warm) {
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
@@ -475,7 +511,7 @@ void readIMU() {
   }
 }
 
-// ─── Filtro: el eje X del IMU abre/cierra el pasa-bajos ────
+// ─── Filtro: el eje X del IMU abre/cierra el pasa-bajos (tarea de audio, por buffer) ──
 void updateFilter() {
   float axis = fabsf(filtered_x);
   if (axis > 1.0f) axis = 1.0f;
@@ -509,7 +545,7 @@ inline float applyFilter(BiqState &st, float in) {
 // ─── Leer la línea de delay en una posición (interpolación lineal) ──
 inline float readDelay(const int16_t *line, float dly) {
   float rp = (float)dlIdx - dly;
-  while (rp < 0.0f) rp += (float)DELAY_MAX;
+  if (rp < 0.0f) rp += (float)DELAY_MAX;                 // dly < DELAY_MAX siempre: basta una vuelta
   int i0 = (int)rp;
   float fr = rp - (float)i0;
   if (i0 >= DELAY_MAX) i0 -= DELAY_MAX;
@@ -525,25 +561,30 @@ inline float softClip(float x) {
 }
 
 // ==============================================================================================================================================
-// LEDs
+// LEDs (tarea de control)
 // ==============================================================================================================================================
 // 0..3 = los 4 osciladores (color = nota, brillo = nivel)
 // 4    = escala activa (color = escala, brillo = octava)
 // 5    = filtro (IMU) + latido del tempo (fuerte si la intermitencia está activa)
+inline uint8_t noteHue(int note) { return (uint8_t)(10 + note * 8); }   // recorre el arcoíris
+
 void renderLEDs() {
   unsigned long t = millis();
   static unsigned long lastFrame = 0;
+  static uint32_t lastBeat = 0;
   if (t - lastFrame < LED_REFRESH_MS) return;
   lastFrame = t;
+
+  uint32_t bc = beatCount;
+  if (bc != lastBeat) { lastBeat = bc; beatPulse = 1.0f; }
 
   for (int s = 0; s < NUM_SLOTS; s++) {
     Slot &S = slots[s];
     if (S.note < 0 && S.amp < 0.02f) {
       leds[s] = CHSV(140, 200, 6);                   // apagado casi total = silencio
     } else {
-      uint8_t hue = (uint8_t)(10 + S.note * 8);      // recorre el arcoíris con la nota
       uint8_t val = 18 + (uint8_t)(S.amp * 215.0f);
-      leds[s] = CHSV(hue, 245, val);
+      leds[s] = CHSV(noteHue(S.note), 245, val);
     }
   }
 
@@ -552,8 +593,8 @@ void renderLEDs() {
   leds[4] = CHSV((uint8_t)(scaleIdx * 25), 255, OCT_VAL[octIdx]);
 
   // LED 5 → apertura del filtro (IMU) + latido del tempo
-  leds[5] = CHSV(140 + (uint8_t)(g_cutNorm * 45.0f), 235,
-                 30 + (uint8_t)(g_cutNorm * 200.0f));
+  float cut = g_cutNorm;
+  leds[5] = CHSV(140 + (uint8_t)(cut * 45.0f), 235, 30 + (uint8_t)(cut * 200.0f));
   if (beatPulse > 0.02f) {
     uint8_t p = (uint8_t)(beatPulse * (gateOn ? 220.0f : 90.0f));
     leds[5] += CRGB(p, p, p);
@@ -601,6 +642,13 @@ void i2s_init() {
   ESP_ERROR_CHECK(i2s_channel_enable(tx_chan));
 }
 
+void pasoControl();
+void renderBuffer();
+#ifndef SIMULADOR
+void audioTask(void *);
+void controlTask(void *);
+#endif
+
 void setup() {
   esp_log_level_set("*", ESP_LOG_NONE);
 
@@ -642,12 +690,19 @@ void setup() {
   updateFilter();
 
   i2s_init();
+
+#ifndef SIMULADOR
+  // El audio tiene el core 1 para él solo; botones, pots, IMU y LEDs van al core 0.
+  // Así ni el ADC ni FastLED.show() pueden dejar al DAC sin datos (ver DESCRIPCIÓN).
+  xTaskCreatePinnedToCore(audioTask,   "audio",   8192, NULL, 10, NULL, 1);
+  xTaskCreatePinnedToCore(controlTask, "control", 4096, NULL,  3, NULL, 0);
+#endif
 }
 
 // ==============================================================================================================================================
-// LOOP
+// TAREA DE CONTROL — botones, IMU, pots y LEDs (core 0, 1 kHz). No toca los osciladores.
 // ==============================================================================================================================================
-void loop() {
+void pasoControl() {
   unsigned long tms = millis();
 
   // ── Botones: uno por función, sin combos ni paneles ──
@@ -661,19 +716,19 @@ void loop() {
   if (b1 == LOW && b1Level == HIGH && (tms - b1Time) > DEBOUNCE_MS) {
     b1Time = tms;
     scaleIdx = (scaleIdx + 1) % NUM_SCALES;
-    retuneAll(); flashLevel = 0.8f;
+    flashLevel = 0.8f;
   }
   // BTN2 → octava global (ciclo de 4)
   if (b2 == LOW && b2Level == HIGH && (tms - b2Time) > DEBOUNCE_MS) {
     b2Time = tms;
     octIdx = (octIdx + 1) & 3;
-    retuneAll(); flashLevel = 0.6f;
+    flashLevel = 0.6f;
   }
   // BTN3 → intermitencia ON/OFF
   if (b3 == LOW && b3Level == HIGH && (tms - b3Time) > DEBOUNCE_MS) {
     b3Time = tms;
     gateOn = !gateOn;
-    if (gateOn) gateCount = 0;                 // arranca abierto, en el pulso
+    if (gateOn) reqResync = true;              // arranca abierto, en el pulso
     flashLevel = 0.5f;
   }
   // BTN4 → tap tempo
@@ -688,7 +743,7 @@ void loop() {
   if (b5 == LOW && !b5Long && (tms - b5Time) > LONGPRESS_MS) {
     b5Long = true;                             // se dispara al cumplirse el tiempo
     rootSemi = (rootSemi + 1) % 12;
-    retuneAll(); flashLevel = 1.0f;
+    flashLevel = 1.0f;
   }
   if (b5 == HIGH && b5Level == LOW && !b5Long && (tms - b5Time) < LONGPRESS_MS) {
     waveType = (waveType + 1) % WAVE_N;
@@ -697,18 +752,38 @@ void loop() {
 
   b1Level = b1; b2Level = b2; b3Level = b3; b4Level = b4; b5Level = b5;
 
-  // ── IMU → filtro ──
+  // ── IMU → filtro (cada 10 ms) ──
   readIMU();
-  updateFilter();
 
-  // ── Pots: uno por buffer en rotación (los 4 son notas, siempre activos) ──
+  // ── Pots: uno por pasada en rotación (los 4 son notas, siempre activos) ──
   static const uint8_t POT_PIN[4] = { POT1, POT2, POT3, POT4 };
   static uint8_t potScan = 0;
   int pi = potScan; potScan = (potScan + 1) & 3;
   int n = quantizeNote(pi, readPot(POT_PIN[pi]));
-  if (n != slots[pi].note) setSlotNote(pi, n);
+  if (n != ctlNote[pi]) { ctlNote[pi] = n; reqNote[pi] = n; }
 
-  // ── Buffer de audio (estéreo) ──
+  renderLEDs();
+}
+
+// ==============================================================================================================================================
+// TAREA DE AUDIO — un buffer estéreo de 128 muestras (core 1)
+// ==============================================================================================================================================
+void renderBuffer() {
+  // ── Borde del buffer: aplicar los pedidos de la tarea de control ──
+  int sc = scaleIdx, oc = octIdx, rt = rootSemi;
+  if (sc != aScale || oc != aOct || rt != aRoot) { aScale = sc; aOct = oc; aRoot = rt; retuneAll(); }
+  aWave   = waveType;
+  aGateOn = gateOn;
+  for (int s = 0; s < NUM_SLOTS; s++) {
+    int n = reqNote[s];
+    if (n != slots[s].note) setSlotNote(s, n);
+  }
+  uint32_t tm = reqTapMs;
+  if (tm) { reqTapMs = 0; tapMs = tm; applyTempo(); }
+  if (reqResync) { reqResync = false; gateCount = 0; beatCount++; }
+  updateFilter();
+
+  const int wave = aWave;
   int16_t buffer[BUFFER_SAMPLES * 2];
 
   for (int i = 0; i < BUFFER_SAMPLES; i++) {
@@ -723,11 +798,12 @@ void loop() {
       if (S.amp < 0.0004f) { S.amp = 0.0f; continue; }      // slot mudo: no gasta CPU
 
       // 3 voces de unísono desafinadas y repartidas en el estéreo
+      float g = S.amp * 0.30f;
       for (int k = 0; k < UNISON; k++) {
         float dt = S.freqCur * detRatio[k] * INV_SR;
         S.phase[k] += dt;
         if (S.phase[k] >= 1.0f) S.phase[k] -= 1.0f;
-        float a = osc(S.phase[k], dt) * S.amp * 0.30f;
+        float a = osc(S.phase[k], dt, wave) * g;
         mixL += a * S.lg[k];
         mixR += a * S.rg[k];
       }
@@ -759,8 +835,8 @@ void loop() {
     //    esté apagada); cuando está activa, corta media parte de cada pulso.
     //    Rampa de ~3 ms en cada flanco → se corta seco pero sin chasquido. ──
     gateCount++;
-    if (gateCount >= gatePeriod) { gateCount = 0; beatPulse = 1.0f; }
-    float gTarget = (!gateOn || gateCount < gateHalf) ? 1.0f : 0.0f;
+    if (gateCount >= gatePeriod) { gateCount = 0; beatCount++; }
+    float gTarget = (!aGateOn || gateCount < gateHalf) ? 1.0f : 0.0f;
     gateEnv += (gTarget - gateEnv) * GATE_COEF;
 
     float gL = toneL * gateEnv;
@@ -804,9 +880,19 @@ void loop() {
     buffer[i * 2]     = (int16_t)vL;
     buffer[i * 2 + 1] = (int16_t)vR;
   }
+  gateEnvOut = gateEnv;
 
   size_t written;
   i2s_channel_write(tx_chan, buffer, sizeof(buffer), &written, portMAX_DELAY);
-
-  renderLEDs();
 }
+
+// ==============================================================================================================================================
+// Las dos tareas (y el `loop()` de Arduino, que acá no hace nada)
+// ==============================================================================================================================================
+#ifdef SIMULADOR
+void loop() { pasoControl(); renderBuffer(); }
+#else
+void audioTask(void *)   { for (;;) renderBuffer(); }                     // core 1, prioridad 10
+void controlTask(void *) { for (;;) { pasoControl(); vTaskDelay(1); } }   // core 0, 1 kHz
+void loop() { vTaskDelay(1000 / portTICK_PERIOD_MS); }
+#endif
