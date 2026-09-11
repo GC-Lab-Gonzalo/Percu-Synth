@@ -498,6 +498,7 @@ void loop() {
 |---|---|
 | `drum_machine_basic` | Drum machine 16 pasos con síntesis en tiempo real (sin samples) |
 | `drum_poder` | Drum machine con peso, mezclada y masterizada: 12 grooves escritos a mano en compases impares (7/8, 5/8+7/8, 9/8, 13/8, 5/4, 12/8) + **reloj MIDI por el DIN-5** (Clock 24 PPQN + Start/Stop, sin notas: el bajo lo pone el sinte externo). Es la referencia para el DIN-5, para una cadena de master (sidechain → reverb → EQ tilt → compresor → limitador) y para el reparto en dos núcleos (audio en el core 1, controles en el core 0) |
+| `oscilador_escalas_clock` | Dron de 4 osciladores por escala (4 pots = 4 notas, unísono + sub, IMU → filtro, intermitencia con tap tempo) + **MIDI Clock por el DIN-5** que sigue al tap y a la intermitencia (Start/Stop con BTN3, Stop+Start en cada tap). Referencia para un reloj MIDI contado en el audio y mandado desde el control, y para LEDs que siguen la envolvente del audio |
 | `synth_basico` | Synth polifónico 5 voces con morphing seno→cuadrada→sierra |
 | `trance_imu` / `trance_imu_leds` | Secuenciador de trance polifónico, filtro por IMU (+ LEDs internos como visualizador) |
 | `MIDI_Drum` | Controlador USB-MIDI con botones + piezos + IMU (velocidad por movimiento) |
