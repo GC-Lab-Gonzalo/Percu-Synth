@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PercuSynth Web Sequencer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Retro gaming font -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="crt-overlay"></div>
+    <div class="app-container">
+        <header>
+            <h1>PERCUSYNTH <span class="highlight">SECUENCIADOR MELODICO</span></h1>
+            <div class="midi-status" id="midi-status">Conectar Serial</div>
+        </header>
+
+        <main>
+            <!-- Panel de Indicadores de Hardware -->
+            <div class="indicators panel">
+                <div class="indicator">
+                    <span class="label">VOL</span>
+                    <span class="value" id="val-vol">--%</span>
+                </div>
+                <div class="indicator">
+                    <span class="label">BPM</span>
+                    <span class="value" id="val-bpm">--</span>
+                </div>
+                <div class="indicator">
+                    <span class="label">PITCH</span>
+                    <span class="value" id="val-pitch">--st</span>
+                </div>
+                <div class="indicator">
+                    <span class="label">ENV (A/R)</span>
+                    <span class="value" id="val-env">--</span>
+                </div>
+                <div class="indicator">
+                    <span class="label">SCALE</span>
+                    <span class="value highlight" id="val-scale">MAJOR</span>
+                </div>
+                <div class="indicator">
+                    <span class="label">MODE</span>
+                    <span class="value" id="val-mode">FWD</span>
+                </div>
+            </div>
+
+            <!-- Grilla del Secuenciador -->
+            <div class="sequencer panel" id="sequencer-grid">
+                <!-- Se generará con JS -->
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
