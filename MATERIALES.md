@@ -5,7 +5,8 @@ mismo circuito se puede armar en protoboard o en placa perforada, y corre exacta
 
 > Los componentes se listan con su **término de búsqueda** en vez de un enlace, porque los enlaces
 > de tienda mueren y el término de búsqueda no. Con ese texto los encuentras en AliExpress,
-> Mouser, o la tienda de electrónica de tu ciudad.
+> Mouser, o la tienda de electrónica de tu ciudad. Si igual quieres los enlaces que usamos para
+> comprar la V2.0 en AliExpress, están en [`Hardware/LISTA_ALIEXPRESS_Percusynth.txt`](Hardware/LISTA_ALIEXPRESS_Percusynth.txt).
 
 > **Qué cambió de la V1.1 a la V2.0 (septiembre 2026):** cada entrada de piezo lleva ahora un
 > **diodo Schottky 1N5817**, un **condensador de 10 nF** y una resistencia de **100 kΩ** (antes era
@@ -30,13 +31,12 @@ mismo circuito se puede armar en protoboard o en placa perforada, y corre exacta
 |---|---|---|---|---|
 | 5 | **Jack 6.3 mm hembra mono, montaje en PCB** | 4 | `6.35mm mono jack socket PCB` (huella NMJ4HFD2) | Entradas MIC1–MIC4: es por donde entran los piezos |
 | 6 | **Conector DIN-5 hembra para PCB** | 1 | `DIN 5 pin female PCB socket MIDI` | Salida MIDI OUT |
-| 7 | **Bornera de tornillo para PCB, 3 vías** | 3 | `KF128 3P` (fija) o `KF301 3P` (enchufable) | Sensores externos EXT1 / EXT2 y salida a tira LED. ⚠️ Mide el **paso** en la placa antes de comprar: 2.54, 3.5 o 5.08 mm |
-| 8 | **Bornera de tornillo para PCB, 2 vías** | 1 | `KF128 2P` / `KF301 2P` | Entrada de 5 V. Mismo tipo y mismo paso que el anterior |
+| 7 | **Bornera de tornillo para PCB, 3 vías, paso 5.08 mm** | 3 | `KF301 3P 5.08mm` | Sensores externos EXT1 / EXT2 y salida a tira LED |
+| 8 | **Bornera de tornillo para PCB, 2 vías, paso 5.08 mm** | 1 | `KF301 2P 5.08mm` | Entrada de 5 V |
 
 > **El nombre del conector 7/8:** en español es *bornera* o *bloque terminal de tornillo para PCB*;
-> en inglés, *PCB screw terminal block*. Lo que define la compra son tres cosas: número de vías
-> (2P, 3P…), **paso** entre pines (2.54 / 3.5 / 5.08 mm) y si es fija (KF128, se atornilla directo)
-> o enchufable (KF301, la parte de arriba sale). Las verdes de la placa son fijas.
+> en inglés, *PCB screw terminal block*. La placa V2.0 lleva borneras **KF301 de paso 5.08 mm**
+> (la separación entre pines); con otro paso no entran en los agujeros.
 
 ## 3. Controles y luces
 
@@ -100,7 +100,7 @@ sacar y reutilizar.
 | Componente | Buscar como | Para qué |
 |---|---|---|
 | **Discos piezoeléctricos** con plug 6.3 mm | `piezo disc transducer 27mm` | Pads de percusión por impacto. Se conectan a MIC1–MIC4 |
-| **Pantalla OLED 0.96" I2C (SSD1306, 4 pines)** | `0.96 OLED I2C SSD1306 4 pin` | Va en el conector OLED de la V2.0 (mismo bus I2C del MPU6050: SDA 21 / SCL 38). ⚠️ Ningún firmware la usa todavía; el conector está para los que vengan. Revisa que el orden de pines del módulo (GND / VCC / SCL / SDA) coincida con la serigrafía |
+| **Pantalla OLED 0.96" I2C (SSD1306, 4 pines)** | `0.96 OLED I2C SSD1306 4 pin` | Va en el conector OLED de la V2.0 (mismo bus I2C del MPU6050: SDA 21 / SCL 38). La usa `oled_video_techno` (video vertical con la pantalla de lado). Revisa que el orden de pines del módulo (GND / VCC / SCL / SDA) coincida con la serigrafía |
 | **Tira LED WS2812B** | `WS2812B LED strip` | Visualizadores. El largo lo eliges tú (30, 60, 68, 144…) y se ajusta en el firmware |
 | **LDR + resistencia 220 Ω** | `LDR 5528 photoresistor` | Sensor externo. Es lo que usa `laser_chimes` para detectar el corte de un láser |
 | **Cable MIDI DIN-5** | `MIDI cable DIN 5 pin` | Para conectar la salida MIDI a un sinte o caja de ritmos externa |

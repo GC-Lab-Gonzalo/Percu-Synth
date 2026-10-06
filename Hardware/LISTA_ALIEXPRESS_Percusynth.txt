@@ -1,0 +1,94 @@
+*PercuSynth · Lista de materiales (placa V2.0)*
+
+Todo se compra en AliExpress. Pide lo antes posible, que el envío a Chile se demora.
+Muchos componentes vienen en paquetes (10, 50, 100 unidades): con el paquete más chico te alcanza.
+Donde un enlace tiene varias opciones, elige la que se indica.
+
+*1. Módulos*
+
+• ESP32-S3 DevKitC-1 *N16R8* × 1
+Tiene que ser *S3* y variante *N16R8*
+https://es.aliexpress.com/item/1005009330328373.html
+
+• DAC PCM5102A × 1
+https://es.aliexpress.com/item/1005012358077206.html
+
+• IMU MPU6050 × 1
+https://es.aliexpress.com/item/1005005617813897.html
+
+• Micrófono INMP441 × 1
+https://es.aliexpress.com/item/1005012097806013.html
+
+*2. Conectores*
+
+• Jack 6.3 mm hembra mono, para PCB × 4
+https://es.aliexpress.com/item/32757640538.html
+
+• Conector DIN-5 hembra para PCB × 1
+https://es.aliexpress.com/item/1005010728587970.html
+
+• Bornera de tornillo *3 vías* (paso 5.08 mm) × 3
+• Bornera de tornillo *2 vías* (paso 5.08 mm) × 1
+Las dos salen del mismo enlace
+https://es.aliexpress.com/item/1005007145396958.html
+
+*3. Controles y luces*
+
+• Potenciómetro *1K*, vertical, eje 20 mm × 4
+Es la primera opción del listado
+https://es.aliexpress.com/item/4000665266312.html
+
+• Switch mecánico × 5
+https://es.aliexpress.com/item/1005007891400560.html
+
+• Keycaps × 5
+https://es.aliexpress.com/item/1005008404422530.html
+
+• LED WS2812B *6028* × 6
+https://es.aliexpress.com/item/1005008658792377.html
+
+*4. Componentes*
+
+• Resistencia 220 Ω × 2
+• Resistencia 1 MΩ × 5
+• Resistencia 100 kΩ × 4
+Las tres salen del mismo enlace, eliges el valor
+https://es.aliexpress.com/item/1005003923602966.html
+
+• Diodo Schottky 1N5817 × 4
+https://es.aliexpress.com/item/1005012949107224.html
+
+• Condensador cerámico 10 nF (código 103) × 4
+https://es.aliexpress.com/item/1005004787479555.html
+
+• Condensador electrolítico 100 µF × 1
+https://es.aliexpress.com/item/1005002524973878.html
+
+*5. Tiras de pines hembra 2.54 mm*
+
+Todas salen del mismo enlace, eliges el número de pines
+https://es.aliexpress.com/item/1005009799089778.html
+
+• 22 pines × 2 (ESP32-S3)
+• 8 pines × 1 (MPU6050)
+• 6 pines × 1 (DAC)
+• 3 pines × 1 (DAC)
+• 4 pines × 1 (pantalla OLED)
+
+*6. Para tocar*
+
+• Disco piezo × 4
+https://es.aliexpress.com/item/1005006719344052.html
+
+• Pantalla OLED 0.96" I2C × 1
+https://es.aliexpress.com/item/1005006141235306.html
+
+• Tira LED WS2812B × 1 (el largo que quieras)
+https://es.aliexpress.com/item/1005006766819624.html
+
+*Y además tienes que tener*
+• Cable USB-C *de datos* (no sirve uno de sólo carga)
+• Parlante amplificado, audífonos o interfaz de audio
+
+¿Dudas con algún componente? Escríbeme antes de comprar.
+GC Lab Chile

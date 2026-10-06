@@ -82,6 +82,9 @@ La versión vigente es la **V2.0** (septiembre 2026): cada entrada de piezo llev
 
 Los archivos `V1.1` siguen en `Hardware/` sólo como referencia de las placas antiguas.
 
+- [`base_3d/`](Hardware/base_3d/) — **base imprimible en 3D** que reemplaza el marco de madera (STL y 3MF listos, más `generar_base.py` para ajustarla)
+- [`LISTA_ALIEXPRESS_Percusynth.txt`](Hardware/LISTA_ALIEXPRESS_Percusynth.txt) — la lista de materiales de la V2.0 con los **links de compra** en AliExpress
+
 ---
 
 ## Firmwares disponibles
@@ -158,7 +161,7 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 #### `oscilador_escalas` — 4 pots = 4 osciladores por escala
 - Port del sketch `Oscilador_4_escalas` del **Proto-Synth v2**, **sin Mozzi**, al motor I2S estéreo de 44.1 kHz del PercuSynth
 - La idea original intacta — cada pot es un oscilador cuantizado a la escala activa — pero por debajo: stack de **3 voces en unísono** paneadas + sub-oscilador, formas de onda **PolyBLEP**, portamento de 40 ms y cuantización **con histéresis** (el ruido del ADC ya no hace saltar la nota)
-- Controles directos, sin paneles ni combos: BTN1 escala (10) · BTN2 octava · BTN3 intermitencia · BTN4 tap tempo · BTN5 forma de onda
+- Controles directos, sin paneles ni combos: BTN1 escala (10) · BTN2 octava · BTN3 intermitencia · BTN4 mantenido + POT1 = tempo · BTN2+BTN4 = menú de 5 modos · BTN5 forma de onda
 - Filtro resonante barrido por el eje X del IMU + **delay ping-pong** cuyo tiempo lo fija el tap tempo. Requiere **FastLED**
 - Audio en su propia tarea en el **core 1** y controles en el core 0: así los 4 osciladores en cuadrada o pulso ya no vacían el DMA (era el ruido que aparecía al cambiar de onda)
 
@@ -166,6 +169,43 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - `oscilador_escalas` con **MIDI Clock por el DIN-5** (24 PPQN, sólo reloj, nada de notas) al tempo del tap: **Start al activar la intermitencia, Stop al apagarla, Stop+Start en cada tap** para que el "1" del sinte externo caiga en el mismo corte
 - El clock se **cuenta en el audio** con el mismo contador que el corte (cero deriva) y se **manda desde la tarea de control** a 1 kHz. Los ticks salen siempre, aun parado, para que el sinte ya tenga el tempo cuando llegue el Start
 - Los **6 LEDs prenden al ritmo de la intermitencia** (siguen la envolvente que corta el audio) y el **LED RGB del módulo muestra el color de la nota** que suena, pasando al siguiente oscilador activo en cada pulso. Requiere **FastLED**
+
+#### `bajo_8_pasos` — Secuenciador de bajo de 8 pasos
+- **8 pasos** de un **bajo monofónico lleno de armónicos**: dos sierras PolyBLEP desafinadas + cuadrada una octava abajo, saturación suave y filtro pasa-bajos resonante con **envolvente de filtro**
+- Creado en conjunto con los participantes del **taller abierto en Hive Espacios**
+- Todas las notas en **La pentatónica menor** (11 notas por pot, 2 octavas; pot al mínimo = paso en silencio)
+- BTN1 **play/stop** · BTN2 **panel A** (notas de los pasos 1–4) · BTN3 **panel B** (pasos 5–8) · BTN4 **panel C** (volumen · velocidad · decay · cutoff) · BTN5 **octava**
+- Al cambiar de panel un pot **sólo toma el control cuando lo mueves**: saltar de panel nunca pisa las notas del otro
+- **Tira WS2812 de 121 LEDs** encadenada a la placa: cada paso dispara una **bala de luz multicolor** que avanza por la tira al ritmo del tempo. Requiere **FastLED**
+
+#### `bajo_8_pasos_fsr_clock` — El bajo de 8 pasos con FSR al filtro y reloj MIDI
+- `bajo_8_pasos` con **dos cosas encima y nada más**: el motor de sonido, los controles y las balas de luz son idénticos
+- **FSR (sensor de presión) en EXT1 (GPIO 3)**: apretar **abre el filtro** hasta 3 octavas por encima de donde dejó el POT4 — el pot sigue mandando el reposo y la resonancia, el FSR es expresión en vivo encima (como el IMU en `espacio_modular`). Suelto suena **exactamente igual que el original**
+- Los dos extremos (`FSR_SUELTO` / `FSR_APRETADO`) son **lecturas medidas, no constantes mágicas**, y el mapeo es una recta entre ellas: la **polaridad del divisor da lo mismo**. Se calibra con `MOSTRAR_ESTADO` en 1 y el monitor serie
+- **MIDI Clock por el DIN-5** (24 PPQN, sólo reloj) al tempo del secuenciador: **Start al Play con el "1" en el paso 1**, Stop al parar, y los ticks salen siempre, aun parado. Contado en el audio con el mismo contador de muestras que los pasos (cero deriva) y mandado desde la tarea de control a 1 kHz
+- **La tira de 121 LEDs cambió**: en vez de sólo las balas, **8 efectos que se sortean solos** (balas · ondas · VU · chispas · arcoíris · plasma · bandas · serpiente), uno nuevo cada 4 compases y en cada Play, nunca el que estaba, y con paleta/dirección/parámetro sorteados también. Los ocho reaccionan al golpe del paso, a la nota, a la **envolvente real del bajo** (la publica la tarea de audio) y a la **presión del FSR**
+- La tira lleva **su propio limitador de corriente** (`TIRA_MAX_MA`, 300 mA): con la tira colgada del 5 V de la placa, un efecto que prende los 121 LEDs pide ~2 A, hunde el riel y **corta el audio**. Está escrito como un limitador de audio — baja al instante y sube despacio, porque lo que hunde el riel es el *escalón* de corriente. Con fuente propia para la tira se sube ese número y vuelven a brillo completo. Requiere **FastLED**
+
+#### `industrial_matriz` — Base de bombo y bajo + fábrica en paralelo + matriz 32×8
+- **Base**: bombo de tres bandas a negras y el bajo de `bajo_8_pasos` siguiendo una progresión de 4 acordes en La menor, con 6 líneas escritas para caer siempre entre los bombos; un **arpegiador** recorre el acorde y un **pluck** toca una de 8 melodías escritas en grados del acorde
+- **Percusión industrial en paralelo**: 6 pistas (hat · martillo · pistón · clap · hat abierto · tom), sin metales afinados. Cada ciclo dura de 10 a 32 pasos y forma un **polirritmo** contra los 16 de la base, que se realinea cada 4 compases
+- BTN1 play/stop · BTN2 patrón industrial · BTN3 tema nuevo (acordes + bajo + melodía) · BTN4 mantenido + POT1 = tempo · BTN2+BTN4 = menú de 5 modos · BTN5 break mientras se mantiene · POT1 volumen · POT2 mezcla base↔fábrica · POT3 corte del bajo · POT4 densidad industrial
+- **Matriz WS2812 de 32×8** encadenada a la placa: 8 escenas psicodélicas (túnel · plasma · caleidoscopio · espiral · figuras · moiré · ondas · damero) amarradas al tempo, que se sortean cada 4 compases, prueba de orientación al encender y limitador de corriente propio. Requiere **FastLED**
+
+#### `secuenciador_melodico` — 16 pasos en modos griegos *(por Nicolás Martínez)*
+- Secuenciador **monofónico** de 16 pasos: cada paso es un **grado de la escala** o un silencio, en uno de los **7 modos griegos** (BTN2 los recorre)
+- BTN1 play/stop · BTN3 reversa · BTN4 al azar · BTN5 borrar; POT1 volumen · POT2 tempo · POT3 transposición ±12 · POT4 envolvente
+- Trae una **webapp por Web Serial** para editar los pasos en pantalla. Requiere **ESP32Synth** y **FastLED**
+
+#### `secuenciador_melodico_cromatico` — 16 pasos polifónicos, 12 notas *(por Nicolás Martínez)*
+- Secuenciador **polifónico** sobre una octava cromática: cada paso puede tener cualquier combinación de las 12 notas (acordes incluidos), 12 voces
+- BTN2 cambia la onda (pulso / sierra / triángulo / seno); el resto de los controles como `secuenciador_melodico`
+- Webapp por Web Serial con la grilla de 16 × 12. Requiere **ESP32Synth** y **FastLED**
+
+#### `la_partida` — "La partida" de Víctor Jara en 3 pistas MIDI
+- Toca el arreglo desde sus **3 pistas MIDI** a los tiempos exactos del archivo (80 BPM, preciso a la muestra): **melodía** con un lead filtrado con vibrato, **bajo** en sierra + cuadrada levemente desafinadas (una octava abajo) y **arpegio** con un pluck electrónico de filtro que se cierra
+- BTN1 **play/stop + panel general** (volumen · velocidad) · BTN2 **melodía** (volumen · vibrato · filtro · resonancia) · BTN3 **bajo** (volumen · filtro · resonancia) · BTN4 **arpegio** (volumen · ataque · decay)
+- Diseñado para no hacer clicks: una voz de arpegio por altura, ataques que suben desde donde está la envolvente, stop con cierre de 40 ms. Las notas salen del proyecto de Ableton con `extraer_cancion.py`. Requiere **FastLED**
 
 #### `espacio_modular` — Ambientes de película (monofónico)
 - **24 patrones que son TEMAS, no figuras:** un tema se define tanto por su ritmo largo-corto como por sus notas, y **cada nota dura hasta la siguiente** — el espaciado *es* la duración. Por eso suena a música de película y no a un arpegio
@@ -188,6 +228,30 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - Mismo motor de sonido y mismos controles que `impact_chimes` (una escala por botón, pots = ataque/decay/brillo/timbre). El corte más profundo suena más fuerte
 - El LDR se muestrea a **1 kHz en el core 0** (el audio se queda con el core 1) y la cola de DMA es corta (≈12 ms): la nota se oye en el acto
 - Los **límites de lectura del LDR** (`LDR_LASER` / `LDR_TAPADO`) son variables en el `.ino`; con `MOSTRAR_ESTADO 1` el Monitor Serie imprime `raw` y los `min`/`max` vistos para copiarlos directo. Sin librerías externas
+
+#### `grabador_campo` — Grabadora de campo con efectos en las perillas
+- El micrófono INMP441 pasa por **ganancia, filtro (pasa-bajos ↔ pasa-altos en un pot), EQ de color y un efecto** (eco ping-pong, catedral, chorus, flanger, phaser) y se graba a una **microSD** (SPI en GPIO 14–17)
+- Cada toma deja dos WAV alineados muestra a muestra: el **procesado** (estéreo 24 bit) y el **crudo** del micrófono (mono 24 bit, sin tocar)
+- BTN3 **congela** los últimos ~3 s como una nube de granos que el filtro y el efecto siguen moldeando. Colchón de 8 s en PSRAM: la tarjeta nunca corta el audio. Requiere **PSRAM** y **FastLED**
+
+#### `voz_fx` — Procesador de voz en tiempo real
+- Hablas o cantas al **micrófono INMP441** y la voz sale transformada por el DAC, sin grabar (~12 ms de latencia)
+- **11 efectos** en BTN1: voz limpia, electro con trémolo al tempo, autotune + vocoder, robot, vocoder de 12 bandas, pitch, armonizador, eco de cinta, catedral y más. POT1–3 modifican el efecto, **POT4 es siempre el volumen**; BTN2 prende/apaga la puerta de ruido
+- Usa **audífonos**: con parlante el micro escucha la salida y los efectos largos se acoplan. Requiere **FastLED**
+
+#### `mezclador_pistas` — Una canción en 4 pistas desde la microSD, con visuales
+- Toca **batería, bajo, voz y otros** desde un solo WAV intercalado en la microSD (SPI en GPIO 14–17), sincronizados a la muestra y en loop. El audio lo mezcla la placa: el computador no lo toca
+- Por **bancos**: BTN1 = banco general (POT1–4 = volumen de bajo, voz, batería y otros; mantener = play/stop, 2,5 s = siguiente canción); BTN2–5 = banco de cada pista (POT1 filtro pasa-bajos ↔ pasa-altos · POT2 resonancia · POT3 efecto rítmico gate/repeat al pulso · POT4 intensidad)
+- Detecta los golpes de cada pista (y bombo/caja/platillo en la batería) y los manda por USB a **Resonancia**, donde cada pista mueve su capa visual. `preparar_cancion.py` convierte las pistas de Moises/Demucs. Requiere **PSRAM** y **FastLED**
+
+#### `trance_pistas` — Trance sintetizado en 4 pistas, con visuales (sin microSD)
+- El hermano sintetizado de `mezclador_pistas`: **trance con peso** (referencia: Chemical Brothers) con la batería de `drum_poder`, el bajo de `bajo_8_pasos`, un riff que sólo toca notas del acorde y un pad que crece por secciones con stabs rave. 6 temas de 32 compases con ruptura y drop, 128–140 BPM; BTN1 mantenido 2,5 s = siguiente tema
+- Los mismos bancos y la misma salida serial que `mezclador_pistas`: Resonancia lo trata igual. Se instala **desde Resonancia** (ESP Web Tools), sin Arduino IDE. Requiere **FastLED**; la PSRAM es opcional
+
+#### `oled_video_techno` — Video vertical en la OLED + techno con bombo
+- Un **video vertical** (un short) corre en la **pantalla OLED SSD1306 puesta de lado** (64×128), **amarrado al tempo**: al subir el BPM el video se acelera, con Stop se congela, cada Play lo reinicia con el "1" y en cada bombo la pantalla late (contraste)
+- Debajo, un **secuenciador techno**: bombo de tres bandas en negras, línea ácida de 16 pasos (acentos y ligados a la 303) y hats. POT1–4 = corte / resonancia / envolvente / decay del filtro; BTN1 play/stop, BTN2 patrón nuevo, BTN3 tap tempo, BTN4 bombo sí/no, **BTN5 graba a la microSD lo que sale por los audífonos** (WAV estéreo 16 bit, sin micrófono; mismo cableado SPI que `grabador_campo`)
+- El video se convierte con `convertir_video.py` (ffmpeg → cuadros de 1 bit ya en el orden de memoria de la SSD1306 → `video.h`). Requiere **FastLED** (LED de estado de la grabación)
 
 #### `seismic_drone` — Drones épicos por vibración de la tierra
 - Hermano grave de `impact_chimes`: el MPU6050 en **±2g** detecta la vibración del suelo → genera un **dron épico** (sierra estéreo desafinada + sub-oscilador, filtro resonante que "respira")
@@ -264,6 +328,11 @@ ESP32-S3. Necesitan además un **micrófono INMP441** por I2S y, salvo los dos a
 - El mismo motor de secuenciador de `trance_imu` pero **monofónico y melódico**: cada paso envía **una sola nota** por MIDI USB a tu DAW/sinte (true mono, sin notas solapadas)
 - El IMU se traduce a **MIDI CC** (CC74 filtro / CC71 resonancia) para barrer el filtro del sinte moviendo el aparato
 - En paralelo, la matriz 20×20 corre un show estilo **fiesta electrónica** reactivo al beat
+
+#### `laser_midi_wifi` — Nodo sensor que manda MIDI por WiFi *(ESP32-C3)*
+- Nació experimentando con **malabarismo**: detectar las **clavas en el aire** y que sus pasos generen música. El sensor va lejos del computador, así que el MIDI viaja por **WiFi con RTP-MIDI**
+- Por ahora es la **prueba de enlace**: manda un Do por segundo para comprobar la cadena ESP32-C3 → WiFi → sesión RTP-MIDI → computador o iPhone. Crea su propia red o se une a la tuya
+- Las redes y claves van en `secretos.h` (ver *Credenciales*). Requiere la librería **AppleMIDI** (lathoub)
 
 #### `matrix_midi_anyma` — Máquina audiovisual electro (matriz 20×20)
 - Máquina **estilo Anyma** que combina tres cosas: **secuenciador interno** de 16 pasos (drums ch10 + bajo *acid* ch1 por USB MIDI), **MIDI Clock Master** (24 PPQ) y un **motor visual 2D** de 5 escenas sobre la matriz WS2812 20×20
@@ -384,8 +453,10 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `bajo_8_pasos`, `bajo_8_pasos_fsr_clock`, `industrial_matriz`, `la_partida`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
+- **ESP32Synth** *(sólo `secuenciador_melodico` y `secuenciador_melodico_cromatico`)*
+- **Arduino AppleMIDI Library** de lathoub *(sólo `laser_midi_wifi`, que corre en un ESP32-C3)*
 
 Los firmwares con IA piden además **PSRAM** (`sampler_ia`, `oscilador_ia`, `asistente_musical`,
 `compositor_ia`) y un **micrófono INMP441** por I2S.
@@ -410,10 +481,21 @@ percusynth/
 │   ├── cyber_kit/                  #   Secuenciador de texturas, FX y leads cyber
 │   ├── oscilador_escalas/          #   4 pots = 4 osciladores por escala (port sin Mozzi)
 │   ├── oscilador_escalas_clock/    #   oscilador_escalas + MIDI Clock por el DIN-5 + LEDs al ritmo de la intermitencia
+│   ├── bajo_8_pasos/               #   Secuenciador de bajo en sierra de 8 pasos (pentatónica menor, 3 paneles) — hecho en el taller abierto de Hive
+│   ├── bajo_8_pasos_fsr_clock/     #   bajo_8_pasos + FSR en EXT1 que abre el filtro + MIDI Clock por el DIN-5
+│   ├── industrial_matriz/          #   Bombo + bajo con secuenciador industrial en paralelo + oscilador continuo + visuales en matriz 32×8
+│   ├── secuenciador_melodico/      #   16 pasos monofónicos en modos griegos + webapp Web Serial (Nicolás Martínez)
+│   ├── secuenciador_melodico_cromatico/ # 16 pasos polifónicos sobre 12 notas + webapp Web Serial (Nicolás Martínez)
+│   ├── la_partida/                 #   "La partida" (Víctor Jara) desde sus 3 pistas MIDI: lead / bajo / pluck electrónico
 │   ├── espacio_modular/            #   Ambientes de película: 24 temas sobre dron continuo
 │   ├── impact_chimes/              #   Campanas por golpe en el piso (acelerómetro)
 │   ├── impact_chimes_leds/         #   impact_chimes + 68 LEDs y 3 timbres (C lidio)
 │   ├── laser_chimes/               #   Campanas al cortar un haz de láser (LDR en EXT1)
+│   ├── grabador_campo/             #   Grabadora de campo a microSD: filtro/EQ/efectos en vivo + pista cruda
+│   ├── voz_fx/                     #   Procesador de voz en tiempo real: micrófono INMP441 → 11 efectos → DAC
+│   ├── mezclador_pistas/           #   4 pistas de una canción desde la microSD, volumen/filtro por pista + datos para Resonancia
+│   ├── trance_pistas/              #   Trance sintetizado en 4 pistas (sin microSD), mismos bancos y datos para Resonancia
+│   ├── oled_video_techno/          #   Video vertical en la OLED girada, amarrado al tempo + techno con bombo y filtro en los pots
 │   ├── seismic_drone/              #   Drones graves por vibración de la tierra
 │   ├── dub_siren/                  #   Dub siren (en desarrollo · PLAN.md)
 │   ├── asistente_ia/               #   Asistente de voz (Whisper → GPT → TTS)
@@ -425,6 +507,7 @@ percusynth/
 │   ├── MIDI_Drum/                  #   Controlador MIDI (piezo + IMU + botones)
 │   ├── drum_midi_leds/             #   Drum machine + MIDI + LEDs sincronizadas
 │   ├── trance_midi_leds/           #   Trance melódico mono por MIDI + matriz 20×20
+│   ├── laser_midi_wifi/            #   Nodo ESP32-C3 que manda MIDI por WiFi (RTP-MIDI): base para sensar clavas de malabarismo
 │   ├── matrix_midi_anyma/          #   Máquina audiovisual electro + MIDI Clock Master (matriz 20×20)
 │   ├── test_system/                #   Monitor de sistema: estado de todo por Serie + auto-tests
 │   ├── test_leds/                  #   Test de tira LED WS2812 — 6 modos
@@ -449,7 +532,7 @@ percusynth/
 │   ├── nebula_gp/                  # NEBULA GP — carreras FPV de drones contra 4 bots
 │   └── tilt_maze/                  # Tilt Maze — laberinto de bola por inclinación del IMU
 ├── samples/                        # Firmwares generados por las webapps (ejemplos vivos)
-├── Hardware/                       # Esquemático, PCB y gerbers del circuito
+├── Hardware/                       # Esquemático, PCB y gerbers del circuito + base 3D + lista de compra
 ├── Imagenes/                       # Renders 3D y diagrama de pinout
 ├── Documentos/                     # Informe técnico (PDF)
 ├── PROMPT_PARA_LA_IA.md            # Documento de contexto para IA (+ versión .pdf)

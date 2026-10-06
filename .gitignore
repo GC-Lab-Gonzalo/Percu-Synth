@@ -53,6 +53,10 @@ web/el_reloj/
 # Asistente de community manager de Instagram (contenido y marca de GC Lab)
 tools/instagram_cm/
 
+# Sketches de prueba de banco que se quedan en local
+firmwares/test_fsr/
+firmwares/test_mic/
+
 # PULSE SEQ — el secuenciador que corre con el pulso del oxímetro
 # (estuvo publicado hasta el commit 56877c4: sigue en el historial de GitHub)
 tools/oximeter_midi_sync/
