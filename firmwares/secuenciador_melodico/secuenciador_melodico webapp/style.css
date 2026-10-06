@@ -1,0 +1,174 @@
+:root {
+    --bg-color: #000000;
+    --text-color: #33ff00;
+    --accent-color: #ff00ff;
+    --accent-glow: #ff00ff;
+    --step-off: #111111;
+    --grid-line: #003300;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Press Start 2P', monospace;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Efecto CRT Scanlines */
+.crt-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 4px, 6px 100%;
+    pointer-events: none;
+    z-index: 999;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    z-index: 10;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 4px solid var(--text-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+
+h1 {
+    font-size: 1.5rem;
+    line-height: 1.5;
+    text-shadow: 2px 2px 0px #005500;
+}
+
+.highlight {
+    color: var(--accent-color);
+    text-shadow: 2px 2px 0px #550055;
+}
+
+.midi-status {
+    font-size: 0.7rem;
+    padding: 0.8rem;
+    background: #000;
+    border: 2px solid var(--text-color);
+    animation: blink 1s infinite alternate;
+}
+
+@keyframes blink {
+    0% { border-color: var(--text-color); color: var(--text-color); }
+    100% { border-color: #003300; color: #003300; }
+}
+
+.midi-status.connected {
+    animation: none;
+    border-color: #00ffff;
+    color: #00ffff;
+}
+
+.panel {
+    background: #000;
+    border: 4px solid var(--text-color);
+    padding: 1.5rem;
+    box-shadow: 8px 8px 0px var(--grid-line);
+}
+
+/* Indicators Panel */
+.indicators {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #000;
+    border: 2px solid #33ff00;
+    padding: 1rem;
+    min-width: 140px;
+}
+
+.indicator .label {
+    font-size: 0.6rem;
+    color: #00ff00;
+    margin-bottom: 0.8rem;
+}
+
+.indicator .value {
+    font-size: 0.9rem;
+    color: #ffffff;
+}
+
+/* Sequencer Grid */
+.sequencer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.track {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.track-label {
+    width: 60px;
+    font-size: 0.6rem;
+    color: #00ffff;
+    text-align: right;
+}
+
+.steps {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+}
+
+.step {
+    flex: 1;
+    aspect-ratio: 1/1;
+    background: var(--step-off);
+    border: 2px solid #002200;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.step:nth-child(4n) {
+    margin-right: 8px; /* Separar compases */
+    border-right: 2px solid #005500;
+}
+
+.step:hover {
+    background: #003300;
+}
+
+.step.current {
+    border-color: #ffffff;
+}
