@@ -4,6 +4,8 @@ Dos máquinas al mismo reloj. La **base** es un bombo a negras y un bajo potente
 son 5 pistas de sonidos industriales que corren en paralelo con su propio largo. Los visuales
 salen en una **matriz WS2812 de 32×8**.
 
+Tutorial paso a paso para usarlo: [`tutorial_industrial_matriz.pdf`](tutorial_industrial_matriz.pdf).
+
 ## Conexión
 
 - La matriz va **encadenada después de los 6 LEDs de la placa**, en el mismo pin (GPIO 46): el
