@@ -192,6 +192,12 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - BTN1 play/stop · BTN2 patrón industrial · BTN3 tema nuevo (acordes + bajo + melodía) · BTN4 mantenido + POT1 = tempo · BTN2+BTN4 = menú de 5 modos · BTN5 break mientras se mantiene · POT1 volumen · POT2 mezcla base↔fábrica · POT3 corte del bajo · POT4 densidad industrial
 - **Matriz WS2812 de 32×8** encadenada a la placa: 8 escenas psicodélicas (túnel · plasma · caleidoscopio · espiral · figuras · moiré · ondas · damero) amarradas al tempo, que se sortean cada 4 compases, prueba de orientación al encender y limitador de corriente propio. Requiere **FastLED**
 
+#### `industrial_matriz_v2` — 5 estilos, un panel por instrumento, datos para Resonancia
+- El motor de `industrial_matriz` ordenado en **4 instrumentos que se tocan por separado** (batería · bajo · melodías · oscilador), cada uno con su panel: suena/calla (las secuencias nunca se detienen, así que vuelve en tiempo), patrón, timbre y 4 pots propios. **BTN4+BTN5** pasa al siguiente panel y **BTN3+BTN4** vuelve al General
+- **General**: play/stop · estilo · fill al final del compás · beat repeat · break (y la subida del v1); POT1 volumen · POT2 tempo · POT3 swing · POT4 pasa-bajos general
+- **5 estilos** (INDUSTRIAL · TRANCE · TECHNO · SYNTHWAVE · FUTURISMO), cada uno con su escala, su progresión y 4 patrones de batería, bajo y melodía escritos como texto en grados del acorde: ninguna nota sale de tono. **5 kits** (INDUSTRIAL · NEXO · 909 · 808 · GLITCH), **4 bajos** (SIERRAS · SUB · ÁCIDO · REESE), **4 instrumentos** de melodía (KEYS · PLUCK · LEAD · VIDRIO) y **3 timbres** de oscilador. La DENSIDAD industrial del v1 sigue en el POT4 de la batería
+- Por USB manda la línea `R` de `mezclador_pistas`, así **Resonancia** proyecta cada instrumento en su capa con golpes exactos (los cuenta el secuenciador). Misma matriz 32×8 que el v1. Requiere **FastLED**
+
 #### `secuenciador_melodico` — 16 pasos en modos griegos *(por Nicolás Martínez)*
 - Secuenciador **monofónico** de 16 pasos: cada paso es un **grado de la escala** o un silencio, en uno de los **7 modos griegos** (BTN2 los recorre)
 - BTN1 play/stop · BTN3 reversa · BTN4 al azar · BTN5 borrar; POT1 volumen · POT2 tempo · POT3 transposición ±12 · POT4 envolvente
@@ -453,7 +459,7 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `bajo_8_pasos`, `bajo_8_pasos_fsr_clock`, `industrial_matriz`, `la_partida`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `bajo_8_pasos`, `bajo_8_pasos_fsr_clock`, `industrial_matriz`, `industrial_matriz_v2`, `la_partida`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
 - **ESP32Synth** *(sólo `secuenciador_melodico` y `secuenciador_melodico_cromatico`)*
 - **Arduino AppleMIDI Library** de lathoub *(sólo `laser_midi_wifi`, que corre en un ESP32-C3)*
@@ -484,6 +490,7 @@ percusynth/
 │   ├── bajo_8_pasos/               #   Secuenciador de bajo en sierra de 8 pasos (pentatónica menor, 3 paneles) — hecho en el taller abierto de Hive
 │   ├── bajo_8_pasos_fsr_clock/     #   bajo_8_pasos + FSR en EXT1 que abre el filtro + MIDI Clock por el DIN-5
 │   ├── industrial_matriz/          #   Bombo + bajo con secuenciador industrial en paralelo + oscilador continuo + visuales en matriz 32×8
+│   ├── industrial_matriz_v2/       #   industrial_matriz en 5 estilos y un panel por instrumento (batería · bajo · melodías · oscilador) + datos por USB para Resonancia
 │   ├── secuenciador_melodico/      #   16 pasos monofónicos en modos griegos + webapp Web Serial (Nicolás Martínez)
 │   ├── secuenciador_melodico_cromatico/ # 16 pasos polifónicos sobre 12 notas + webapp Web Serial (Nicolás Martínez)
 │   ├── la_partida/                 #   "La partida" (Víctor Jara) desde sus 3 pistas MIDI: lead / bajo / pluck electrónico
