@@ -358,7 +358,7 @@ Páginas HTML standalone (sin build, sin npm) que cumplen distintos roles según
 1. **Generadores de firmware** — drag & drop de audios → la webapp produce un `.ino` con los samples embebidos en flash como arrays `PROGMEM`. Lo flasheas con Arduino IDE y la web no se usa más hasta que cambies los samples. (`sample_loader`, `loop_loader`, `dub_siren_generator`, `loops/bpm_mono_44100`)
 2. **Flasheo desde el navegador** — instala el firmware compilado directo al ESP32-S3 vía **ESP Web Tools**, sin abrir Arduino IDE. (`percu_control`)
 3. **Control remoto en vivo** — se conecta al PercuSynth ya flasheado vía **Web MIDI** y edita patrón / FX / transport en tiempo real. (`step_sequencer_loader`)
-4. **Instrumento en el navegador** — lee un controlador MIDI USB (**Web MIDI**) y suena al instante con **Web Audio**, además de generar su `.ino`. (`midi_sampler`)
+4. **Instrumento en el navegador** — lee un controlador MIDI USB (**Web MIDI**) y suena al instante con **Web Audio** (`midi_sampler`, que además genera su `.ino`, y `bichos_midi`).
 5. **Síntesis audiovisual** — usa la PercuSynth (vía **Web Serial**) como controlador de visuales/sonido en el navegador. (`video_synth`)
 6. **Instrumentos y secuenciadores en el navegador** — el PercuSynth como controlador de un motor que suena en la página. (`arp_matrix`, `scale_osc`, `generador_estilos`)
 
@@ -381,6 +381,9 @@ Genera firmware con 3 samples polifónicos + oscilador siren con LFO modulado po
 
 ### [`midi_sampler/`](tools/midi_sampler/) — Sampler MIDI USB (1 sample · 4 pots)
 Lee un controlador MIDI USB vía **Web MIDI** y reproduce **un solo sample** (ej. una campana) según la nota MIDI que entra, transpuesto desde una nota base configurable. 4 potenciómetros: volumen/attack/decay/cutoff (también por CC MIDI). Suena en el navegador con **Web Audio** (testeable sin hardware: teclado en pantalla + teclas del PC) y, sin sample cargado, usa un seno afinado. Pestaña aparte para **generar el `.ino`** que convierte al PercuSynth en un sampler MIDI físico de 1 sample.
+
+### [`bichos_midi/`](tools/bichos_midi/) — Insectos, grillos y aves por MIDI
+Llegar y usar: conectas un controlador MIDI y cada nota dispara un sonido corto de insecto o ave **sintetizado** (grillo, chicharra, saltamontes, abejorro, mosquito, pío, trino, gorjeo, cucú…; la nota elige el bicho, la octava su tamaño). Ningún sonido dura más de 1 s y **ninguna nota puede quedar pegada**: son one-shots de duración fija que ignoran el Note Off, una voz por nota y botón de silencio.
 
 ### [`video_synth/`](tools/video_synth/) — Sintetizador audiovisual de video
 Webapp de una página que **importa un video y lo sintetiza en imagen Y sonido** en tiempo real, controlado por la PercuSynth vía **Web Serial** (o el micrófono del PC). Minimalista: cada control hace una sola cosa obvia.
@@ -521,6 +524,7 @@ percusynth/
 │   ├── step_sequencer_loader/      #   Genera .ino + control remoto vía Web MIDI
 │   ├── dub_siren_generator/        #   Genera .ino dub siren con samples
 │   ├── midi_sampler/               #   Sampler MIDI USB de 1 sample + 4 pots (Web Audio + genera .ino)
+│   ├── bichos_midi/                #   Insectos, grillos y aves cortos (≤ 1 s) por nota MIDI (Web MIDI + Web Audio)
 │   ├── arp_matrix/                 #   Arpegiador polifónico + matriz 64×32 (Web Audio + Serial)
 │   ├── scale_osc/                  #   Motor de tono cuantizado a escala en el navegador
 │   ├── generador_estilos/          #   Motor de estilos musicales por JSON (en desarrollo)

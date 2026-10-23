@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PercuSynth — Bichos MIDI</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0d0d14; --bg2:#161621; --bg3:#1e1e2c; --border:#2e2e44;
+  --accent:#00e5a0; --bird:#ffb347; --warn:#ffcc44; --err:#ff5555;
+  --text:#d0d0e8; --dim:#6a6a90;
+}
+body { background:var(--bg); color:var(--text); font-family:'Courier New',monospace; min-height:100vh; padding:16px; font-size:13px; }
+.wrap { max-width:900px; margin:0 auto; }
+.header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:12px 18px; border:1px solid var(--border); border-radius:8px; margin-bottom:14px; background:var(--bg2); }
+.logo-title { font-size:17px; font-weight:bold; letter-spacing:5px; color:var(--accent); }
+.logo-sub { font-size:10px; color:var(--dim); letter-spacing:3px; margin-left:6px; }
+#estado { font-size:11px; color:var(--dim); }
+.dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--err); margin-right:6px; vertical-align:middle; }
+.dot.on { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+section { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.titulo { font-size:9px; letter-spacing:4px; color:var(--dim); margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.fila { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.fila label { font-size:10px; color:var(--dim); letter-spacing:2px; }
+input[type=range] { width:200px; accent-color:var(--accent); }
+.btn { background:var(--bg3); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12px; padding:7px 14px; border-radius:4px; cursor:pointer; letter-spacing:1px; }
+.btn:hover { border-color:var(--err); color:var(--err); }
+#ultima { font-size:12px; color:var(--accent); min-height:16px; }
+#dispositivos { font-size:11px; color:var(--dim); margin-top:8px; }
+.pads { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; }
+.pad { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:12px 10px; cursor:pointer; user-select:none; -webkit-user-select:none; transition:background .25s, border-color .25s; touch-action:manipulation; }
+.pad .nota { font-size:10px; color:var(--dim); letter-spacing:2px; }
+.pad .nombre { font-size:14px; font-weight:bold; margin-top:4px; }
+.pad.insecto .nombre { color:var(--accent); }
+.pad.ave .nombre { color:var(--bird); }
+.pad.on { transition:none; border-color:var(--text); background:#3a3a58; }
+#activar { position:fixed; inset:0; background:rgba(8,8,14,.92); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; cursor:pointer; z-index:10; text-align:center; padding:20px; }
+#activar .grande { font-size:22px; letter-spacing:4px; color:var(--accent); }
+#activar .chico { font-size:12px; color:var(--dim); }
+.nota-pie { font-size:11px; color:var(--dim); line-height:1.6; }
+</style>
+</head>
+<body>
+
+<div id="activar">
+  <div class="grande">TOCA PARA ACTIVAR EL SONIDO</div>
+  <div class="chico">El navegador exige un clic antes de dejar sonar audio. Después de esto, solo toca tu controlador MIDI.</div>
+</div>
+
+<div class="wrap">
+  <div class="header">
+    <div><span class="logo-title">BICHOS MIDI</span><span class="logo-sub">INSECTOS · GRILLOS · AVES</span></div>
+    <div id="estado"><span class="dot" id="dotMidi"></span><span id="estadoTxt">Buscando MIDI…</span></div>
+  </div>
+
+  <section>
+    <div class="titulo">CONTROL</div>
+    <div class="fila">
+      <label for="vol">VOLUMEN</label>
+      <input type="range" id="vol" min="0" max="100" value="80">
+      <button class="btn" id="panico">■ SILENCIO</button>
+      <span id="ultima"></span>
+    </div>
+    <div id="dispositivos"></div>
+  </section>
+
+  <section>
+    <div class="titulo">SONIDOS · CADA NOTA DE LA OCTAVA ES UN BICHO (LA OCTAVA CAMBIA EL TAMAÑO)</div>
+    <div class="pads" id="pads"></div>
+  </section>
+
+  <p class="nota-pie">
+    Cada nota dispara un sonido corto (máx. 1 s) que termina solo: el Note Off se ignora, así que una nota
+    nunca se queda pegada. Repetir la misma nota corta la anterior con un fundido de 8 ms. Chrome o Edge.
+  </p>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================================
+// SÍNTESIS — cada sonido se calcula muestra a muestra en un buffer de duración
+// fija. El buffer ES la nota: no hay sustain ni dependencia del Note Off, así que
+// ningún sonido puede quedar sonando. Todo buffer mide como máximo MAX_DUR.
+// ============================================================================
+const MAX_DUR   = 1.0;     // segundos, tope absoluto por sonido
+const FADE_INI  = 0.001;   // rampa de entrada (s)
+const FADE_FIN  = 0.006;   // rampa de salida (s) — el buffer siempre termina en 0
+const RMS_OBJ   = 0.22;    // nivel de normalización (sin superar pico 1)
+
+const DOS_PI = 2 * Math.PI;
+
+function crear(dur, sr) {
+  return new Float32Array(Math.round(Math.min(dur, MAX_DUR) * sr));
+}
+function hann(x) { return (x <= 0 || x >= 1) ? 0 : 0.5 - 0.5 * Math.cos(DOS_PI * x); }
+// envolvente ataque/release lineal sobre una duración total
+function envAR(t, dur, a, r) { return Math.max(0, Math.min(1, t / a, (dur - t) / r)); }
+
+class Biquad {
+  constructor(tipo, f, Q, sr) { this.z1 = 0; this.z2 = 0; this.set(tipo, f, Q, sr); }
+  set(tipo, f, Q, sr) {
+    const w = DOS_PI * Math.min(f, sr * 0.45) / sr, c = Math.cos(w), al = Math.sin(w) / (2 * Q), a0 = 1 + al;
+    let b0, b1, b2;
+    if (tipo === 'bp')      { b0 = al;          b1 = 0;          b2 = -al; }
+    else if (tipo === 'lp') { b0 = (1 - c) / 2; b1 = 1 - c;      b2 = (1 - c) / 2; }
+    else                    { b0 = (1 + c) / 2; b1 = -(1 + c);   b2 = (1 + c) / 2; }
+    this.b0 = b0 / a0; this.b1 = b1 / a0; this.b2 = b2 / a0;
+    this.a1 = -2 * c / a0; this.a2 = (1 - al) / a0;
+    return this;
+  }
+  run(x) {
+    const y = this.b0 * x + this.z1;
+    this.z1 = this.b1 * x - this.a1 * y + this.z2;
+    this.z2 = this.b2 * x - this.a2 * y;
+    return y;
+  }
+}
+
+// sierra con PolyBLEP (sin aliasing audible en zumbidos graves)
+function polyBlep(t, dt) {
+  if (t < dt) { t /= dt; return t + t - t * t - 1; }
+  if (t > 1 - dt) { t = (t - 1) / dt; return t * t + t + t + 1; }
+  return 0;
+}
+
+// Cada generador recibe (sr, p = multiplicador de tamaño por octava, r = random)
+const SONIDOS = [
+  { nombre: 'Grillo', tipo: 'insecto', trim: 0.8, gen(sr, p, r) {
+      // chirrido de campo: 2 ráfagas de 3–4 pulsos de ~19 ms a ~4.6 kHz
+      const f = 4600 * p, nPul = 3 + (r() < 0.5 ? 1 : 0), per = 0.031, pul = 0.019;
+      const chirp = nPul * per, gap = 0.13 + 0.05 * r(), dur = 2 * chirp + gap + 0.01;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        let tc = -1;
+        if (t < chirp) tc = t; else if (t >= chirp + gap && t < 2 * chirp + gap) tc = t - chirp - gap;
+        const n = Math.floor(tc / per), x = (tc - n * per) / pul;
+        const a = (tc >= 0 && x < 1) ? hann(x) : 0;
+        ph += DOS_PI * f * (1 - 0.04 * Math.min(x, 1)) / sr;
+        b[i] = a * (Math.sin(ph) + 0.12 * Math.sin(2 * ph));
+      }
+      return b;
+  }},
+  { nombre: 'Grillo arbóreo', tipo: 'insecto', trim: 0.75, gen(sr, p, r) {
+      // trino continuo grave y suave, pulsado a ~48 Hz
+      const f = 2900 * p, am = 44 + 8 * r(), dur = 0.65 + 0.1 * r();
+      const b = crear(dur, sr);
+      let ph = 0, pa = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        ph += DOS_PI * f / sr; pa += am / sr; if (pa >= 1) pa -= 1;
+        const pulso = pa < 0.6 ? hann(pa / 0.6) : 0;
+        b[i] = envAR(t, dur, 0.04, 0.12) * pulso * Math.sin(ph);
+      }
+      return b;
+  }},
+  { nombre: 'Chicharra', tipo: 'insecto', trim: 0.9, gen(sr, p, r) {
+      // ruido filtrado + tono, zumbido a ~110 Hz, crece y se corta
+      const dur = 0.85 + 0.1 * r(), zum = 100 + 25 * r();
+      const bp = new Biquad('bp', 4800 * p, 4, sr);
+      const b = crear(dur, sr);
+      let ph = 0, pz = 0, ruido = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        ph += DOS_PI * 4400 * p / sr; pz += DOS_PI * zum / sr;
+        ruido = Math.random() * 2 - 1;
+        const buzz = Math.pow(0.5 + 0.5 * Math.sin(pz), 3);
+        const trem = 0.75 + 0.25 * Math.sin(DOS_PI * 9 * t);
+        const env = Math.min(1, Math.pow(t / 0.35, 1.5)) * Math.min(1, (dur - t) / 0.12);
+        b[i] = env * trem * buzz * (bp.run(ruido) * 2.5 + 0.35 * Math.sin(ph));
+      }
+      return b;
+  }},
+  { nombre: 'Saltamontes', tipo: 'insecto', trim: 1.0, gen(sr, p, r) {
+      // 3–5 raspados: tren de impulsos que excita dos resonancias agudas
+      const nR = 3 + Math.floor(r() * 3), largo = 0.035, sep = 0.085, rate = 320 + 80 * r();
+      const dur = nR * sep + 0.05;
+      const r1 = new Biquad('bp', 7000 * p, 6, sr), r2 = new Biquad('bp', 9500 * p, 5, sr);
+      const b = crear(dur, sr);
+      let pi = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr, k = Math.floor(t / sep), x = (t - k * sep) / largo;
+        const a = (k < nR && x < 1) ? hann(x) : 0;
+        pi += rate / sr;
+        let exc = 0;
+        if (pi >= 1) { pi -= 1; exc = a; }
+        exc += a * 0.06 * (Math.random() * 2 - 1);
+        b[i] = r1.run(exc) + 0.7 * r2.run(exc);
+      }
+      return b;
+  }},
+  { nombre: 'Abejorro', tipo: 'insecto', trim: 0.9, gen(sr, p, r) {
+      // zumbido grave que pasa volando (efecto Doppler suave)
+      const dur = 0.8 + 0.15 * r(), f0 = 185 * p * (0.95 + 0.1 * r());
+      const lp = new Biquad('lp', 2400, 0.7, sr), bp = new Biquad('bp', 750, 2, sr);
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr, u = t / dur;
+        const f = f0 * (1 + 0.07 * (0.5 - u)) * (1 + 0.02 * Math.sin(DOS_PI * 7 * t));
+        const dt = f / sr;
+        ph += dt; if (ph >= 1) ph -= 1;
+        const saw = 2 * ph - 1 - polyBlep(ph, dt);
+        const env = Math.pow(Math.sin(Math.PI * u), 1.3);
+        b[i] = env * (lp.run(saw) + 0.6 * bp.run(saw));
+      }
+      return b;
+  }},
+  { nombre: 'Mosquito', tipo: 'insecto', trim: 0.55, gen(sr, p, r) {
+      // zumbido agudo inestable que se acerca y se va
+      const dur = 0.55 + 0.1 * r(), f0 = 600 * p * (0.93 + 0.14 * r());
+      const hp = new Biquad('hp', 450, 0.7, sr), lp = new Biquad('lp', 6000, 0.7, sr);
+      const vRate = 9 + 5 * r(), vFase = r() * DOS_PI;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr, u = t / dur;
+        const f = f0 * (1 + 0.04 * Math.sin(DOS_PI * vRate * t + vFase) + 0.05 * (u - 0.5));
+        const dt = f / sr;
+        ph += dt; if (ph >= 1) ph -= 1;
+        const saw = 2 * ph - 1 - polyBlep(ph, dt);
+        b[i] = Math.pow(Math.sin(Math.PI * u), 1.5) * lp.run(hp.run(saw));
+      }
+      return b;
+  }},
+  { nombre: 'Escarabajo', tipo: 'insecto', trim: 1.0, gen(sr, p, r) {
+      // chasquidos secos irregulares: senos resonantes de ~2 ms
+      const n = 5 + Math.floor(r() * 4), dur = 0.4;
+      const b = crear(dur, sr);
+      for (let k = 0; k < n; k++) {
+        const t0 = Math.floor((0.005 + 0.34 * r()) * sr);
+        const f = (2800 + 3000 * r()) * p, tau = 0.0012 + 0.0008 * r(), amp = 0.5 + 0.5 * r();
+        const largo = Math.floor(tau * 6 * sr);
+        for (let j = 0; j < largo && t0 + j < b.length; j++) {
+          const t = j / sr;
+          b[t0 + j] += amp * Math.exp(-t / tau) * (Math.sin(DOS_PI * f * t) + 0.3 * (Math.random() * 2 - 1));
+        }
+      }
+      return b;
+  }},
+  { nombre: 'Pío', tipo: 'ave', trim: 0.8, gen(sr, p, r) {
+      // 2–3 píos cortos, barrido descendente rápido
+      const n = 2 + (r() < 0.4 ? 1 : 0), largo = 0.055, sep = 0.115;
+      const dur = (n - 1) * sep + largo + 0.01;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr, k = Math.floor(t / sep), x = (t - k * sep) / largo;
+        const act = k < n && x < 1;
+        const esc = Math.pow(0.93, k);
+        const f = 6200 * p * esc * Math.pow(3400 / 6200, Math.min(x, 1));
+        ph += DOS_PI * f / sr;
+        b[i] = act ? hann(x) * (k ? 0.8 : 1) * Math.sin(ph) : 0;
+      }
+      return b;
+  }},
+  { nombre: 'Silbido', tipo: 'ave', trim: 0.85, gen(sr, p, r) {
+      // silbido que sube y cae un poco, con vibrato
+      const dur = 0.48, f1 = 1900 * p, f2 = 3700 * p, f3 = 3000 * p;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        let f;
+        if (t < 0.3) { const u = t / 0.3; f = f1 + (f2 - f1) * u * u * (3 - 2 * u); }
+        else { const u = Math.min(1, (t - 0.3) / 0.15); f = f2 + (f3 - f2) * u; }
+        f *= 1 + 0.015 * Math.sin(DOS_PI * 28 * t);
+        ph += DOS_PI * f / sr;
+        b[i] = envAR(t, dur, 0.03, 0.07) * (Math.sin(ph) + 0.08 * Math.sin(2 * ph));
+      }
+      return b;
+  }},
+  { nombre: 'Trino', tipo: 'ave', trim: 0.8, gen(sr, p, r) {
+      // 11–14 notas rápidas descendentes, la serie baja un poco
+      const n = 11 + Math.floor(r() * 4), sep = 0.042, largo = 0.028;
+      const dur = n * sep + 0.01;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr, k = Math.floor(t / sep), x = (t - k * sep) / largo;
+        const act = k < n && x < 1;
+        const base = 1 - 0.15 * k / n;
+        const f = p * base * (5200 - 1400 * Math.min(x, 1));
+        ph += DOS_PI * f / sr;
+        const forma = Math.sin(Math.PI * Math.min(1, t / dur));
+        b[i] = act ? (0.4 + 0.6 * forma) * hann(x) * Math.sin(ph) : 0;
+      }
+      return b;
+  }},
+  { nombre: 'Gorjeo', tipo: 'ave', trim: 0.8, gen(sr, p, r) {
+      // 3 frases de canario: cada una con su centro, vibrato rápido y barrido
+      const frases = [];
+      let t0 = 0;
+      for (let k = 0; k < 3; k++) {
+        const largo = 0.17 + 0.07 * r();
+        frases.push({ t0, largo, c: (2600 + 1600 * r()) * p, dev: (300 + 900 * r()) * p,
+                      rate: 18 + 27 * r(), barr: (r() - 0.5) * 2000 * p });
+        t0 += largo + 0.02;
+      }
+      const b = crear(t0, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        let s = 0;
+        for (const fr of frases) {
+          const x = (t - fr.t0) / fr.largo;
+          if (x < 0 || x >= 1) continue;
+          const lt = t - fr.t0;
+          const f = fr.c + fr.barr * x + fr.dev * Math.sin(DOS_PI * fr.rate * lt);
+          ph += DOS_PI * f / sr;
+          s = Math.pow(Math.sin(Math.PI * x), 0.7) * Math.sin(ph);
+        }
+        b[i] = s;
+      }
+      return b;
+  }},
+  { nombre: 'Cucú', tipo: 'ave', trim: 1.0, gen(sr, p, r) {
+      // dos notas suaves y graves, la segunda más larga
+      const n1 = 0.16, gap = 0.07, n2 = 0.3, dur = n1 + gap + n2 + 0.01;
+      const b = crear(dur, sr);
+      let ph = 0;
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        let a = 0, f = 600 * p;
+        if (t < n1) { const u = t / n1; f = (780 - 90 * u) * p; a = Math.min(1, t / 0.025) * Math.pow(1 - u, 0.6); }
+        else if (t >= n1 + gap && t < n1 + gap + n2) {
+          const lt = t - n1 - gap, u = lt / n2;
+          f = (620 - 30 * u) * p; a = Math.min(1, lt / 0.025) * Math.pow(1 - u, 0.8);
+        }
+        ph += DOS_PI * f / sr;
+        b[i] = a * (Math.sin(ph) + 0.15 * Math.sin(2 * ph) + 0.05 * Math.sin(3 * ph));
+      }
+      return b;
+  }},
+];
+
+// Normaliza, limpia NaN y graba las rampas de entrada/salida. Después de esto el
+// buffer empieza y termina en 0 y nunca pasa de 1.
+function terminar(b, sr) {
+  let pico = 0, sum = 0;
+  for (let i = 0; i < b.length; i++) {
+    if (!Number.isFinite(b[i])) b[i] = 0;
+    const v = Math.abs(b[i]); if (v > pico) pico = v; sum += b[i] * b[i];
+  }
+  if (pico > 0) {
+    const rms = Math.sqrt(sum / b.length);
+    const k = Math.min(1 / pico, RMS_OBJ / Math.max(rms, 1e-9));
+    for (let i = 0; i < b.length; i++) b[i] *= k;
+  }
+  const ni = Math.min(b.length, Math.round(FADE_INI * sr));
+  for (let i = 0; i < ni; i++) b[i] *= i / ni;
+  const nf = Math.min(b.length, Math.round(FADE_FIN * sr));
+  for (let i = 0; i < nf; i++) b[b.length - 1 - i] *= i / nf;
+  return b;
+}
+
+// La octava cambia el "tamaño" del bicho, poco, para que siga sonando real.
+// Nota 60 (Do central) = tamaño 1. Cada golpe además varía ±2.5 % al azar.
+function multiplicador(nota) {
+  const oct = Math.floor(nota / 12) - 5;
+  const p = Math.pow(2, oct * 0.35);
+  return Math.min(1.6, Math.max(0.6, p)) * (1 + 0.05 * (Math.random() - 0.5));
+}
+
+function sintetizar(idx, nota, sr) {
+  const s = SONIDOS[idx];
+  return terminar(s.gen(sr, multiplicador(nota), Math.random), sr);
+}
+
+// Reserva: el próximo golpe de cada (sonido, octava) queda calculado de antemano,
+// así la nota suena sin esperar los milisegundos de síntesis.
+const reserva = new Map();
+function tomarBuffer(idx, nota, sr) {
+  const k = idx * 16 + Math.floor(nota / 12);
+  const listo = reserva.get(k);
+  reserva.delete(k);
+  setTimeout(() => { if (!reserva.has(k)) reserva.set(k, sintetizar(idx, nota, sr)); }, 0);
+  return listo || sintetizar(idx, nota, sr);
+}
+
+// ============================================================================
+// AUDIO — voces one-shot. Una voz por nota (repetir la nota corta la anterior
+// con fundido), tope de polifonía, y un vigilante que mata cualquier voz que
+// pase de MAX_DUR por si algo fallara. Nada depende del Note Off.
+// ============================================================================
+const MAX_VOCES   = 16;
+const FUNDIDO     = 0.008;   // s, al cortar una voz
+let ctx = null, bus = null, master = null;
+const voces = new Map();     // clave → {src, g, t0}
+
+function iniciarAudio() {
+  if (ctx) { if (ctx.state !== 'running') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  bus = ctx.createGain();
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -12; comp.knee.value = 6; comp.ratio.value = 4;
+  comp.attack.value = 0.003; comp.release.value = 0.15;
+  master = ctx.createGain();
+  master.gain.value = volumen();
+  bus.connect(comp); comp.connect(master); master.connect(ctx.destination);
+  setInterval(vigilante, 200);
+}
+
+function volumen() { const v = document.getElementById('vol').value / 100; return v * v; }
+
+function cortar(clave) {
+  const v = voces.get(clave);
+  if (!v) return;
+  voces.delete(clave);
+  const t = ctx.currentTime;
+  try {
+    if (v.g.gain.cancelAndHoldAtTime) v.g.gain.cancelAndHoldAtTime(t);
+    else { v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); }
+    v.g.gain.linearRampToValueAtTime(0, t + FUNDIDO);
+    v.src.stop(t + FUNDIDO + 0.002);
+  } catch (e) { try { v.src.stop(); } catch (_) {} }
+}
+
+function silencioTotal() { for (const k of [...voces.keys()]) cortar(k); }
+
+function vigilante() {
+  if (!ctx) return;
+  const ahora = ctx.currentTime;
+  for (const [k, v] of voces) if (ahora - v.t0 > MAX_DUR + 0.05) cortar(k);
+}
+
+function disparar(canal, nota, vel) {
+  if (!ctx || ctx.state !== 'running') { iniciarAudio(); if (!ctx || ctx.state !== 'running') return; }
+  const idx = nota % 12;
+  const clave = canal * 128 + nota;
+  cortar(clave);                                   // misma nota: corta la anterior
+  while (voces.size >= MAX_VOCES) {                // tope: roba la más vieja
+    let vieja = null, tv = Infinity;
+    for (const [k, v] of voces) if (v.t0 < tv) { tv = v.t0; vieja = k; }
+    cortar(vieja);
+  }
+  const datos = tomarBuffer(idx, nota, ctx.sampleRate);
+  const buf = ctx.createBuffer(1, datos.length, ctx.sampleRate);
+  buf.copyToChannel(datos, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  const vn = vel / 127;
+  g.gain.value = SONIDOS[idx].trim * (0.12 + 0.88 * Math.pow(vn, 1.5));
+  src.connect(g); g.connect(bus);
+  const t0 = ctx.currentTime;
+  src.start(t0);
+  src.stop(t0 + Math.min(buf.duration, MAX_DUR));  // tope duro, pase lo que pase
+  const voz = { src, g, t0 };
+  voces.set(clave, voz);
+  src.onended = () => { if (voces.get(clave) === voz) voces.delete(clave); g.disconnect(); };
+  marcar(idx, nota);
+}
+
+// ============================================================================
+// MIDI — se conectan TODAS las entradas, también las que se enchufan después.
+// Solo importa Note On. CC 120 / 123 (All Sound Off / All Notes Off) = silencio.
+// ============================================================================
+let midi = null;
+
+function alMensaje(e) {
+  const d = e.data;
+  if (!d || d.length < 2) return;
+  const st = d[0] & 0xF0, canal = d[0] & 0x0F;
+  if (st === 0x90 && d.length >= 3 && d[2] > 0) disparar(canal, d[1], d[2]);
+  else if (st === 0xB0 && (d[1] === 120 || d[1] === 123)) silencioTotal();
+  // Note Off (0x80 o 0x90 vel 0) se ignora a propósito: el sonido termina solo.
+}
+
+function conectarEntradas() {
+  const nombres = [];
+  midi.inputs.forEach(inp => { inp.onmidimessage = alMensaje; nombres.push(inp.name || 'MIDI'); });
+  const hay = nombres.length > 0;
+  document.getElementById('dotMidi').classList.toggle('on', hay);
+  document.getElementById('estadoTxt').textContent = hay ? `MIDI conectado (${nombres.length})` : 'Sin controlador MIDI — enchúfalo';
+  document.getElementById('dispositivos').textContent = hay ? 'Entradas: ' + nombres.join(' · ') : '';
+}
+
+async function iniciarMidi() {
+  if (!navigator.requestMIDIAccess) {
+    document.getElementById('estadoTxt').textContent = 'Este navegador no tiene Web MIDI (usa Chrome o Edge)';
+    return;
+  }
+  try {
+    midi = await navigator.requestMIDIAccess({ sysex: false });
+    conectarEntradas();
+    midi.onstatechange = () => { conectarEntradas(); };
+  } catch (e) {
+    document.getElementById('estadoTxt').textContent = 'Permiso MIDI denegado';
+  }
+}
+
+// ============================================================================
+// INTERFAZ
+// ============================================================================
+const NOMBRES_NOTA = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+const pads = [];
+
+function construirPads() {
+  const cont = document.getElementById('pads');
+  SONIDOS.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'pad ' + s.tipo;
+    el.innerHTML = `<div class="nota">${NOMBRES_NOTA[i]}</div><div class="nombre">${s.nombre}</div>`;
+    el.addEventListener('pointerdown', ev => { ev.preventDefault(); iniciarAudio(); disparar(15, 60 + i, 100); });
+    cont.appendChild(el);
+    pads.push(el);
+  });
+}
+
+function marcar(idx, nota) {
+  const el = pads[idx];
+  el.classList.add('on');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('on'), 90);
+  const oct = Math.floor(nota / 12) - 1;
+  document.getElementById('ultima').textContent = `${NOMBRES_NOTA[nota % 12]}${oct} (${nota}) → ${SONIDOS[idx].nombre}`;
+}
+
+function activar() {
+  iniciarAudio();
+  document.getElementById('activar').style.display = 'none';
+}
+
+document.getElementById('activar').addEventListener('pointerdown', activar);
+document.addEventListener('keydown', activar, { once: true });
+document.getElementById('vol').addEventListener('input', () => {
+  if (master) master.gain.setTargetAtTime(volumen(), ctx.currentTime, 0.02);
+});
+document.getElementById('panico').addEventListener('click', silencioTotal);
+
+construirPads();
+iniciarMidi();
+</script>
+</body>
+</html>
