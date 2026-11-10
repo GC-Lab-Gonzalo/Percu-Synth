@@ -94,3 +94,6 @@ firmwares/matriz_oscura/video/
 firmwares/matriz_oscura/ejemplos/
 firmwares/triphop_viaje/test_escalas/
 tools/simulador/Nueva carpeta/
+
+# Firmwares locales que el simulador no ofrece
+tools/simulador/ocultos_local.txt

@@ -91,7 +91,14 @@ def _edades():
 
 
 # Compilan, pero no se ofrecen en el simulador (decisión de Gonzalo, 2026-10-23 y 2026-11-08). Se pueden abrir igual con «abrir .ino».
-OCULTOS = {'lanzador_canciones', 'aves_samples', 'reel_taller', 'terror', 'lampara_lava'}
+OCULTOS = {'lanzador_canciones', 'aves_samples', 'reel_taller', 'terror', 'lampara_lava',
+           'oled_clip', 'oled_imagen'}
+# Más nombres que esconder, uno por línea, en ocultos_local.txt (no va al repo).
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ocultos_local.txt'), encoding='utf-8') as _fh:
+        OCULTOS |= {l.strip() for l in _fh if l.strip() and not l.startswith('#')}
+except OSError:
+    pass
 
 
 def lista_firmwares():
