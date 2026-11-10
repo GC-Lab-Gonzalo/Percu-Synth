@@ -87,3 +87,10 @@ Imagenes/PCB V2.jpeg
 Imagenes/Percusynth V2.jpeg
 Imagenes/Percusynth V2-2.jpeg
 Imagenes/v2.jpg
+
+# Pesados: se quedan en local (2026-11-10)
+Hardware/base_3d_terror/
+firmwares/matriz_oscura/video/
+firmwares/matriz_oscura/ejemplos/
+firmwares/triphop_viaje/test_escalas/
+tools/simulador/Nueva carpeta/
