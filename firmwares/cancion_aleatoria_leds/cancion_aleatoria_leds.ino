@@ -40,6 +40,11 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Máquina de canciones aleatorias: aprietas Play y la placa inventa y toca sola una
+// canción completa (tonalidad, acordes, tempo, melodía y percusión sorteados). Tú
+// solo mezclas con tres perillas: pad, melodía y percusión. Cada Play es una canción
+// nueva; los 6 LEDs siguen la música.
+//
 // Máquina de CANCIONES ALEATORIAS. Hermano autónomo de `pads_imu_leds`: reutiliza su
 // motor de voces estéreo (pads profundos con detune/paneo + filtro biquad resonante),
 // pero elimina TODO el control manual salvo dos cosas:
@@ -77,6 +82,15 @@
 // se mueve distinto en cada canal, creando un estéreo amplio y vivo (además del detune/paneo).
 //
 // STOP silencia con cola natural. Volver a dar PLAY genera una canción TOTALMENTE nueva.
+//
+// SIN CHASQUIDOS — cómo está armado (no deshacer):
+//   · El audio tiene una TAREA PROPIA en el core 1; botón, pots y LEDs van en otra tarea en el
+//     core 0 a 1 kHz. Antes todo iba en loop(): 48 analogRead + FastLED.show() + 32 voces en el
+//     mismo hilo vaciaban el DMA y el driver metía ceros (= chasquido que va y viene con la densidad).
+//   · Los volúmenes de los pots y el "gate" rítmico del pad se suavizan MUESTRA A MUESTRA
+//     (antes saltaban una vez por buffer: un pico del ADC o el gate eran escalones audibles).
+//   · Ninguna voz se corta en seco: al cruzar el umbral pasa a una cola de ~1.5 ms y se libera
+//     a −82 dB; si hay que ROBAR una voz que suena, su última muestra se apaga en ~1.5 ms (declick).
 // ==============================================================================================================================================
 // FUNCIONAMIENTO (LEDs — 6 SMD de la placa + LED RGB del módulo)
 // ==============================================================================================================================================
@@ -87,7 +101,33 @@
 //   4. PULSO con el BOMBO = toda la barra "late" suavemente en cada golpe de bombo.
 //   · Flash suave al cambiar de acorde · flash al arrancar una canción nueva.
 //   · Sin PLAY → respiración lenta y tenue (modo espera).
+//   · LED 5 MAGENTA (300 ms) = un buffer de audio tardó más del 80 % de su tiempo (aviso de CPU).
 // ==============================================================================================================================================
+// FUNCIONAMIENTO (controles)
+// ==============================================================================================================================================
+// Un solo panel. Solo se usan BTN1 y tres perillas; el resto no hace nada (a propósito:
+// la canción se compone sola).
+// - BTN1 (44) → Play / Stop. Cada Play sortea una canción TOTALMENTE nueva.
+//     Actúa al apretar. STOP apaga todo con una cola corta y natural.
+// - BTN2 (42) → sin uso
+// - BTN3 (0)  → sin uso
+// - BTN4 (45) → sin uso
+// - BTN5 (47) → sin uso
+// - POT1 (ADC1)  → Volumen de los PADS (acordes). Curva cuadrática.
+// - POT2 (ADC2)  → Volumen de la MELODÍA (para mezclar pad ↔ melodía). Curva cuadrática.
+// - POT3 (ADC8)  → Volumen de la PERCUSIÓN (bombo/caja/hats). Curva cuadrática.
+// - POT4 (ADC10) → sin uso
+// (No usa el IMU.)
+//
+// MODO DE USO:
+// 1. Sube POT1, POT2 y POT3 hasta la mitad y aprieta BTN1: arranca una canción nueva.
+// 2. Mezcla a tu gusto: POT1 sube o baja los acordes, POT2 la melodía, POT3 la percusión.
+// 3. ¿No te gustó? Aprieta BTN1 dos veces (Stop y Play) y sale otra canción distinta.
+// 4. Mira los LEDs: el color es la tonalidad, la barra es el pad y el punto que corre
+//    avanza con cada nota de la melodía.
+// ==============================================================================================================================================
+
+#pragma GCC optimize ("O2")   // el core compila con -Os; O2 le devuelve tiempo al audio
 
 #include <Arduino.h>
 #include <driver/i2s_std.h>
@@ -106,6 +146,14 @@ struct BiqCoef  { float b0, b1, b2, a1, a2; };   // coef. del filtro (uno por ca
 #define I2S_BCK   41
 #define SAMPLE_RATE     44100
 #define BUFFER_SAMPLES  128
+const float INV_SR = 1.0f / SAMPLE_RATE;   // multiplicar: dividir por muestra y por voz cuesta caro en el S3
+
+// ─── Anti-chasquidos ───────────────────────────────────────
+const float UMBRAL_COLA = 0.0008f;          // −62 dB: aquí la voz NO se corta, pasa a la cola corta
+const float UMBRAL_FIN  = 0.00008f;         // −82 dB: aquí recién se libera
+const float COEF_COLA   = 0.98500f;         // tau ~1.5 ms (cola corta y declick)
+const float SUAVE_VOL   = 0.0015f;          // ~15 ms: volúmenes de los pots, muestra a muestra
+const float SUAVE_GATE  = 0.0076f;          // ~3 ms: gate rítmico del pad (y su vuelta a 1 en Stop)
 
 // ─── LEDs WS2812 (6 SMD internos de la placa) ──────────────
 #define LED_PIN        46
@@ -121,15 +169,20 @@ const unsigned long LED_REFRESH_MS = 22;  // refresco del visualizador (~45 fps)
 CRGB leds[NUM_LEDS];
 CRGB onboard[1];
 
-// Métricas compartidas audio → LEDs (todo en el mismo hilo: sin volatile/locks)
-float g_energy   = 0.0f;   // energía del pad suavizada (0..~1)
-float g_melFlash = 0.0f;   // intensidad del punto de la melodía (decae en cada render)
-int   g_melPos   = 0;      // posición (0..5) del punto; avanza por nota
-float g_chordFlash = 0.0f; // flash al cambiar de acorde
-float g_startFlash = 0.0f; // flash blanco al arrancar canción nueva
-uint8_t g_keyHue = 140;    // color base de la tonalidad
-int   g_curDeg   = 0;      // grado del acorde en curso (para el color)
-float g_filtLfoVal = 0.0f; // -1..1 del LFO de filtro (color sweep)
+// Métricas audio (core 1) → LEDs (core 0). Son palabras de 32 bits: basta volatile, sin locks
+// (si un destello se pisa con el decaimiento del render, se pierde un destello, nada más).
+volatile float g_energy   = 0.0f;   // energía del pad suavizada (0..~1)
+volatile float g_melFlash = 0.0f;   // intensidad del punto de la melodía (decae en cada render)
+volatile int   g_melPos   = 0;      // posición (0..5) del punto; avanza por nota
+volatile float g_chordFlash = 0.0f; // flash al cambiar de acorde
+volatile float g_startFlash = 0.0f; // flash blanco al arrancar canción nueva
+volatile uint8_t g_keyHue = 140;    // color base de la tonalidad
+volatile int   g_curDeg   = 0;      // grado del acorde en curso (para el color)
+volatile float g_filtLfoVal = 0.0f; // -1..1 del LFO de filtro (color sweep)
+
+// Pedido de la tarea de control → el audio lo aplica en el borde del buffer
+volatile bool reqPlayStop = false;
+volatile uint32_t contSobrecarga = 0;   // buffers que tardaron > 80 % del tiempo disponible
 
 // ─── Botón PLAY/STOP + Pots de volumen (mezcla pad/melodía) ─
 #define BTN1_PIN   44
@@ -168,6 +221,8 @@ struct Voice {
   float    vibPhase;   // fase del vibrato por voz (rate dinámico a lo largo de la nota)
   uint32_t age;
 };
+// stage 4 = COLA CORTA: la voz cruzó el umbral de −62 dB y se apaga en ~1.5 ms antes de liberarse
+#define STAGE_COLA 4
 Voice voices[NUM_VOICES];
 uint32_t voiceCounter = 0;
 
@@ -346,8 +401,13 @@ struct PercVoice {
   float lp, lpA;                          // "tono" (LPF un polo)
   bool  hipass;                           // hats: usar (x - lp) → pasa-altos
   float gain, lGain, rGain;
+  float last;                             // última muestra entregada (para el declick si se roba)
 };
 PercVoice pvoices[PERC_VOICES];
+
+// DECLICK: cuando hay que robar una voz que todavía suena, su última muestra se suma aquí y se
+// apaga en ~1.5 ms → en vez de un escalón (chasquido) queda una caída corta. Uno por bus y canal.
+float dcPadL = 0.0f, dcPadR = 0.0f, dcMelL = 0.0f, dcMelR = 0.0f, dcPcL = 0.0f, dcPcR = 0.0f;
 
 // Ruido con LCG PROPIO → no consume el rng de la composición (la armonía/melodía no se altera)
 uint32_t noiseRng = 0x9E3779B9u;
@@ -364,8 +424,8 @@ float   ghostProb   = 0.0f;    // prob. de hat "fantasma" en pasos vacíos
 int     percStep    = 0;
 int32_t percSamplesToNext = 0;
 int     percBar     = 0;       // compás actual (para el mini-fill cada 4)
-float   g_percVol   = 0.7f;    // POT3 → volumen de la percusión
-float   g_kickFlash = 0.0f;    // pulso de LEDs con el bombo
+volatile float g_percVol   = 0.7f;    // POT3 → volumen de la percusión (objetivo; el audio lo suaviza)
+volatile float g_kickFlash = 0.0f;    // pulso de LEDs con el bombo
 
 // Timbres de la percusión (se sortean por canción)
 float kickF0 = 95.0f, kickF1 = 42.0f, kickDec = 0.22f;
@@ -387,7 +447,8 @@ float    padLpA = 1.0f;         // brillo del pad (LPF por voz)
 float    padGateDepth = 0.0f;   // profundidad del "gate" rítmico del pad (0 = sostenido)
 uint32_t padGateSamples = 0;    // periodo del gate en muestras (0 = off)
 uint32_t padGateAcc = 0;
-float    g_padGate = 1.0f;      // multiplicador de amplitud del pad (rítmico)
+float    padGateInv = 0.0f;     // 1 / padGateSamples (fase del gate sin dividir por muestra)
+float    g_padGate = 1.0f;      // multiplicador de amplitud del pad (rítmico), suavizado por muestra
 
 int      songArche = 0;         // arquetipo: 0 AMBIENT 1 CINEMATIC 2 PULSE 3 PLUCK 4 DRIVE
 uint8_t  stylePool[4]   = {1,1,1,1}; int stylePoolN   = 4;  // ritmos de frase permitidos
@@ -415,21 +476,23 @@ BiqState bqL = {0, 0, 0, 0};
 BiqState bqR = {0, 0, 0, 0};
 
 // ─── Envolvente del pad (por canción) ──────────────────────
-float g_padVol    = 0.7f;       // POT1 → volumen de los pads
-float g_melVol    = 0.7f;       // POT2 → volumen de la melodía
+volatile float g_padVol = 0.7f;  // POT1 → volumen de los pads   (objetivo; el audio lo suaviza)
+volatile float g_melVol = 0.7f;  // POT2 → volumen de la melodía (objetivo; el audio lo suaviza)
+float padVolS = 0.0f, melVolS = 0.0f, percVolS = 0.0f;   // los mismos, suavizados muestra a muestra
 float padAtkInc   = 0.0008f;
 float padReleaseCoef = 0.99995f;
 
 // ─── Estado de reproducción ────────────────────────────────
-bool playing = false;
+volatile bool playing = false;   // lo escribe el audio; los LEDs lo leen
 
 static i2s_chan_handle_t tx_chan;
 
 // ─── Lectura de pot con sobre-muestreo ─────────────────────
+// (4 lecturas: cada analogRead del S3 cuesta decenas de µs; el promedio fino lo hace el suavizado)
 float readPot(uint8_t pin) {
   uint32_t sum = 0;
-  for (int i = 0; i < 16; i++) sum += analogRead(pin);
-  return (float)(sum >> 4) / 4095.0f;
+  for (int i = 0; i < 4; i++) sum += analogRead(pin);
+  return (float)(sum >> 2) / 4095.0f;
 }
 
 bool buttonPressed(BtnState &b) {
@@ -449,11 +512,18 @@ int spawnVoice(int semi, float gain, float pan, uint8_t kind, uint8_t layer,
   int idx = -1;
   for (int i = 0; i < NUM_VOICES; i++) if (!voices[i].active) { idx = i; break; }
   if (idx < 0) {
+    // Robar la MENOS audible. Una voz en ataque cuenta por su nivel FUTURO (gain): si no, la
+    // recién disparada (env 0) sería la "más baja" y un acorde se robaría sus propias notas.
     float quietest = 1e30f; idx = 0;
     for (int i = 0; i < NUM_VOICES; i++) {
-      float a = voices[i].env * voices[i].gain;
+      float a = (voices[i].stage == 0) ? voices[i].gain : voices[i].env * voices[i].gain;
       if (a < quietest) { quietest = a; idx = i; }
     }
+    // Declick: lo que la voz robada estaba sonando se apaga en ~1.5 ms en vez de cortarse
+    Voice &o = voices[idx];
+    float last = o.lp * o.env * o.gain;
+    if (o.kind == KIND_PAD) { dcPadL += last * o.lGain; dcPadR += last * o.rGain; }
+    else                    { dcMelL += last * o.lGain; dcMelR += last * o.rGain; }
   }
 
   // detune (ensemble) SOLO para el pad; la melodía va AFINADA (una voz sola no se desafina)
@@ -496,7 +566,7 @@ void releaseAllPad() {
 // un poco (legato) y ninguna termina abruptamente.
 void fadeMelody() {
   for (int i = 0; i < NUM_VOICES; i++)
-    if (voices[i].active && voices[i].kind == KIND_MEL) {
+    if (voices[i].active && voices[i].kind == KIND_MEL && voices[i].stage != STAGE_COLA) {
       voices[i].stage = 3;
       voices[i].decCoef = melRelCoef;
     }
@@ -505,16 +575,16 @@ void fadeMelody() {
 // ─── Limitar colas del PAD ─────────────────────────────────
 // Las voces sobrantes NO se cortan en seco (eso hacía "chasquidos" en cada cambio de acorde):
 // se mandan a un fundido rápido (~6 ms, stage 3) → desaparecen suave sin discontinuidad.
-// Las que ya están en ese fundido (stage 3) no cuentan para el límite (ya van de salida).
+// Las que ya están en ese fundido (stage 3) o en la cola corta no cuentan (ya van de salida).
 void capPad(int keep) {
   float fastFade = expf(-6.5f / (0.006f * SAMPLE_RATE));   // ~6 ms
   int cnt = 0;
   for (int i = 0; i < NUM_VOICES; i++)
-    if (voices[i].active && voices[i].kind == KIND_PAD && voices[i].stage != 3) cnt++;
+    if (voices[i].active && voices[i].kind == KIND_PAD && voices[i].stage < 3) cnt++;
   while (cnt > keep) {
     int vic = -1; float lo = 1e30f;
     for (int i = 0; i < NUM_VOICES; i++)
-      if (voices[i].active && voices[i].kind == KIND_PAD && voices[i].stage != 3) {
+      if (voices[i].active && voices[i].kind == KIND_PAD && voices[i].stage < 3) {
         float a = voices[i].env * voices[i].gain;
         if (a < lo) { lo = a; vic = i; }
       }
@@ -693,7 +763,7 @@ void melodyStep() {
     // Libera cualquier OTRA voz de melodía (p.ej. la capa sub anterior) para que no quede
     // sonando la altura vieja; solo la voz principal hace glide.
     for (int i = 0; i < NUM_VOICES; i++)
-      if (i != melVoiceIdx && voices[i].active && voices[i].kind == KIND_MEL && voices[i].stage != 3) {
+      if (i != melVoiceIdx && voices[i].active && voices[i].kind == KIND_MEL && voices[i].stage < 3) {
         voices[i].stage = 3; voices[i].decCoef = melRelCoef;
       }
     Voice &v = voices[melVoiceIdx];
@@ -759,9 +829,11 @@ void triggerPerc(uint8_t type, float vel) {
       float a = pvoices[i].env * pvoices[i].gain;
       if (a < lo) { lo = a; idx = i; }
     }
+    dcPcL += pvoices[idx].last * pvoices[idx].lGain;   // declick de la voz robada
+    dcPcR += pvoices[idx].last * pvoices[idx].rGain;
   }
   PercVoice &v = pvoices[idx];
-  v.active = true; v.phase = 0.0f; v.env = 1.0f;
+  v.active = true; v.phase = 0.0f; v.env = 1.0f; v.last = 0.0f;
   v.lp = 0.0f; v.hipass = false;
   v.freqEnd = 0.0f; v.sweepCoef = 0.0f;
   float pan = 0.0f, dec = 0.1f;
@@ -978,6 +1050,7 @@ void startSong() {
     padGateSamples = 0; padGateDepth = 0.0f;      // sostenido
   }
   padGateAcc = 0;
+  padGateInv = padGateSamples ? 1.0f / (float)padGateSamples : 0.0f;
 
   // — Onda / nivel del pad y la melodía (melodía MÁS presente: es la voz principal) —
   padWave  = melWavePool[rndI(4)];                // el pad toma una onda del arquetipo
@@ -1041,7 +1114,7 @@ void startSong() {
 void stopSong() {
   releaseAllPad();
   for (int i = 0; i < NUM_VOICES; i++)             // melodía → cola rápida
-    if (voices[i].active && voices[i].kind == KIND_MEL && voices[i].stage != 3) {
+    if (voices[i].active && voices[i].kind == KIND_MEL && voices[i].stage < 3) {
       voices[i].stage = 3;
       voices[i].decCoef = expf(-6.5f / (0.12f * SAMPLE_RATE));
     }
@@ -1170,6 +1243,11 @@ void renderLEDs() {
     g_startFlash *= 0.62f;
   }
 
+  // Sobrecarga de CPU → LED 5 magenta 300 ms (si coincide con un chasquido, era falta de tiempo)
+  static uint32_t vSobre = 0; static unsigned long tSobre = 0;
+  if (contSobrecarga != vSobre) { vSobre = contSobrecarga; tSobre = t; }
+  if (tSobre && t - tSobre < 300) leds[5] = CRGB(255, 0, 200);
+
   // LED RGB del módulo = promedio de la tira, más tenue
   uint16_t sr = 0, sg = 0, sb = 0;
   for (int i = 0; i < NUM_LEDS; i++) { sr += leds[i].r; sg += leds[i].g; sb += leds[i].b; }
@@ -1221,13 +1299,21 @@ const char* resetReasonStr(esp_reset_reason_t r) {
   }
 }
 
+void renderBuffer();
+void iniciarLEDs();
+#ifndef SIMULADOR
+void audioTask(void *);
+void controlTask(void *);
+#endif
+
 void setup() {
   // — Diagnóstico de cuelgues —
   // Imprime por USB-CDC el motivo del ÚLTIMO reset. Tras un cuelgue, al reiniciar aquí sale la causa
   // (PANIC/WDT = código · BROWNOUT = alimentación). El panic-handler de la ESP-IDF además escribe el
-  // backtrace por debajo de esto (usar el "ESP Exception Decoder" del IDE). Solo corre una vez → no
-  // afecta el audio del loop.
+  // backtrace por debajo de esto (usar el "ESP Exception Decoder" del IDE). Es lo ÚNICO que se
+  // imprime: un Serial.print con el audio corriendo bloquea el core hasta que el PC lee.
   Serial.begin(115200);
+  Serial.setTxTimeoutMs(0);
   delay(300);
   esp_reset_reason_t rr = esp_reset_reason();
   Serial.printf("\n[BOOT] cancion_aleatoria_leds — motivo del ultimo reset: %d = %s\n",
@@ -1246,49 +1332,76 @@ void setup() {
   for (int i = 0; i < NUM_VOICES; i++) voices[i].active = false;
   for (int i = 0; i < PERC_VOICES; i++) pvoices[i].active = false;
 
+  // Los volúmenes arrancan donde están las perillas (sin rampa desde cero al encender)
+  float vp = readPot(POT1), vm = readPot(POT2), vq = readPot(POT3);
+  g_padVol = vp * vp; g_melVol = vm * vm; g_percVol = vq * vq;
+  padVolS = g_padVol; melVolS = g_melVol; percVolS = g_percVol;
+
+  computeFilter(coefL, cutoffBase, qBase);
+  computeFilter(coefR, cutoffBase, qBase);
+  i2s_init();
+
+#ifdef SIMULADOR
+  iniciarLEDs();
+#else
+  // El audio tiene el core 1 para él solo; botón, pots y LEDs van al core 0.
+  xTaskCreatePinnedToCore(audioTask,   "audio",   8192, NULL, 10, NULL, 1);
+  xTaskCreatePinnedToCore(controlTask, "control", 4096, NULL,  3, NULL, 0);
+#endif
+}
+
+// FastLED se inicia DESDE la tarea del core 0: las interrupciones del RMT quedan en el core que
+// llamó a addLeds, y en setup() (core 1) le robarían tiempo al audio.
+void iniciarLEDs() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.addLeds<LED_TYPE, ONBOARD_PIN, COLOR_ORDER>(onboard, 1);
   FastLED.setBrightness(LED_BRIGHT);
   FastLED.clear();
   FastLED.show();
-
-  computeFilter(coefL, cutoffBase, qBase);
-  computeFilter(coefR, cutoffBase, qBase);
-  i2s_init();
 }
 
-void loop() {
+// ==============================================================================================================================================
+// TAREA DE CONTROL — botón, pots y LEDs (core 0, 1 kHz). Nunca toca las voces ni el secuenciador:
+// deja pedidos que el audio aplica en el borde del buffer.
+// ==============================================================================================================================================
+void pasoControl() {
   // — BTN1: PLAY / STOP —
-  if (buttonPressed(bPlay)) {
-    if (playing) stopSong();
-    else         startSong();
-  }
+  if (buttonPressed(bPlay)) reqPlayStop = true;
 
   // — POT1: volumen PADS · POT2: volumen MELODÍA · POT3: volumen PERCUSIÓN (mezcla) —
-  static uint8_t potDiv = 0;
-  if (++potDiv >= 4) {
-    potDiv = 0;
-    float vp = readPot(POT1); g_padVol  = vp * vp;   // curva cuadrática (más control abajo)
-    float vm = readPot(POT2); g_melVol  = vm * vm;
-    float vq = readPot(POT3); g_percVol = vq * vq;
+  //   Un pot por pasada (rotación) + promedio lento → el ruido del ADC no llega al audio.
+  static float pf[3] = { -1.0f, -1.0f, -1.0f };
+  static uint8_t cual = 0;
+  static const uint8_t PIN[3] = { POT1, POT2, POT3 };
+  float v = readPot(PIN[cual]);
+  if (pf[cual] < 0.0f) pf[cual] = v;
+  else                 pf[cual] += (v - pf[cual]) * 0.15f;
+  float c = pf[cual] * pf[cual];                     // curva cuadrática (más control abajo)
+  if      (cual == 0) g_padVol  = c;
+  else if (cual == 1) g_melVol  = c;
+  else                g_percVol = c;
+  cual = (cual + 1) % 3;
+
+  renderLEDs();
+}
+
+// ==============================================================================================================================================
+// TAREA DE AUDIO — un buffer de 128 muestras (core 1)
+// ==============================================================================================================================================
+void renderBuffer() {
+  uint32_t t0Render = micros();
+
+  // — Borde del buffer: aplicar el pedido de la tarea de control —
+  if (reqPlayStop) {
+    reqPlayStop = false;
+    if (playing) stopSong();
+    else         startSong();
   }
 
   // — Progresión de acordes (avanza por tiempo) —
   if (playing) {
     chordAcc += BUFFER_SAMPLES;
     if (chordAcc >= chordSamples) { chordAcc = 0; nextChord(); }
-  }
-
-  // — Gate rítmico del pad (sincronizado al clock; pulso SUAVE y CONTINUO → sin clics) —
-  //   Coseno con pico en el beat (ph=0) y valle en el contratiempo; periódico → sin salto.
-  if (playing && padGateSamples > 0) {
-    padGateAcc += BUFFER_SAMPLES;
-    while (padGateAcc >= padGateSamples) padGateAcc -= padGateSamples;
-    float ph = (float)padGateAcc / (float)padGateSamples;
-    float shape = 0.5f + 0.5f * cosf(2.0f * (float)M_PI * ph);   // 1 en el beat, 0 entre beats
-    g_padGate = (1.0f - padGateDepth) + padGateDepth * shape;
-  } else {
-    g_padGate = 1.0f;
   }
 
   // — LFO de filtro (autónomo) — DOS fases desfasadas 90° → barrido distinto en L y R (estéreo)
@@ -1315,6 +1428,10 @@ void loop() {
   if (vsum > g_energy) g_energy = vsum;
   else                 g_energy = g_energy * 0.90f + vsum * 0.10f;
 
+  // Objetivos de volumen de este buffer (los pots los escribe el core 0)
+  const float padVolT = g_padVol, melVolT = g_melVol, percVolT = g_percVol;
+  const bool  gateOn  = playing && padGateSamples > 0;
+
   // — Generar buffer de audio (estéreo) —
   int16_t buffer[BUFFER_SAMPLES * 2];
 
@@ -1331,7 +1448,24 @@ void loop() {
       percSamplesToNext--;
     }
 
-    float padL = 0.0f, padR = 0.0f, melL = 0.0f, melR = 0.0f;
+    // Volúmenes suavizados muestra a muestra (un pot que se mueve o un pico del ADC no es un escalón)
+    padVolS  += (padVolT  - padVolS)  * SUAVE_VOL;
+    melVolS  += (melVolT  - melVolS)  * SUAVE_VOL;
+    percVolS += (percVolT - percVolS) * SUAVE_VOL;
+
+    // Gate rítmico del pad (sincronizado al clock): coseno con pico en el beat, calculado POR MUESTRA
+    // (antes iba por buffer = escalones de hasta 3 % cada 2.9 ms → zumbido/chasquidos) y suavizado
+    // ~3 ms, que también hace que al dar STOP vuelva a 1 sin salto.
+    float gateT = 1.0f;
+    if (gateOn) {
+      if (++padGateAcc >= padGateSamples) padGateAcc = 0;
+      float shape = 0.5f + 0.5f * oscSine((float)padGateAcc * padGateInv + 0.25f);   // coseno
+      gateT = (1.0f - padGateDepth) + padGateDepth * shape;
+    }
+    g_padGate += (gateT - g_padGate) * SUAVE_GATE;
+
+    float padL = dcPadL, padR = dcPadR, melL = dcMelL, melR = dcMelR;   // + colas de declick
+    dcPadL *= COEF_COLA; dcPadR *= COEF_COLA; dcMelL *= COEF_COLA; dcMelR *= COEF_COLA;
     for (int i = 0; i < NUM_VOICES; i++) {
       Voice &v = voices[i];
       if (!v.active) continue;
@@ -1341,12 +1475,12 @@ void loop() {
         v.freq += (v.freqTarget - v.freq) * v.glideCoef;
         if (v.vibRamp < 1.0f) { v.vibRamp += 0.00008f; if (v.vibRamp > 1.0f) v.vibRamp = 1.0f; }
         float vrate = melVibR0 + (melVibR1 - melVibR0) * v.vibRamp;   // rate DINÁMICO (acelera)
-        v.vibPhase += vrate / SAMPLE_RATE;
+        v.vibPhase += vrate * INV_SR;
         if (v.vibPhase >= 1.0f) v.vibPhase -= 1.0f;
         float vib = 1.0f + melVibDepth * v.vibRamp * oscSine(v.vibPhase);  // onset suave del vibrato
-        dt = v.freq * vib / SAMPLE_RATE;
+        dt = v.freq * vib * INV_SR;
       } else {
-        dt = v.freq / SAMPLE_RATE;
+        dt = v.freq * INV_SR;
       }
       v.phase += dt;
       if (v.phase >= 1.0f) v.phase -= 1.0f;
@@ -1358,12 +1492,15 @@ void loop() {
       if (v.stage == 0) {                         // attack
         v.env += v.atkInc;
         if (v.env >= 1.0f) { v.env = 1.0f; v.stage = v.afterAtk; }
-      } else if (v.stage == 2) {                  // release del pad
-        v.env *= padReleaseCoef;
-        if (v.env < 0.0008f) { v.active = false; v.env = 0.0f; continue; }
-      } else if (v.stage == 3) {                  // decay de la melodía
+      } else if (v.stage == 2 || v.stage == 3) {  // release del pad · decay de la melodía
+        v.env *= (v.stage == 2) ? padReleaseCoef : v.decCoef;
+        if (v.env < UMBRAL_COLA) {                // NO se corta: pasa a la cola corta
+          if (v.stage == 2 || v.decCoef > COEF_COLA) v.decCoef = COEF_COLA;
+          v.stage = STAGE_COLA;
+        }
+      } else if (v.stage == STAGE_COLA) {         // cola corta → recién aquí se libera
         v.env *= v.decCoef;
-        if (v.env < 0.0008f) { v.active = false; v.env = 0.0f; continue; }
+        if (v.env < UMBRAL_FIN) { v.active = false; v.env = 0.0f; continue; }
       }                                           // stage 1 = sustain del pad
 
       float a = wave * v.env * v.gain;
@@ -1372,7 +1509,8 @@ void loop() {
     }
 
     // — Voces de PERCUSIÓN (motor propio, sin ataque: solo caída) —
-    float pcL = 0.0f, pcR = 0.0f;
+    float pcL = dcPcL, pcR = dcPcR;
+    dcPcL *= COEF_COLA; dcPcR *= COEF_COLA;
     for (int i = 0; i < PERC_VOICES; i++) {
       PercVoice &p = pvoices[i];
       if (!p.active) continue;
@@ -1380,7 +1518,7 @@ void loop() {
       if (p.noiseMix >= 1.0f) {                   // hats: solo ruido (sin oscilador)
         x = noiseSample();
       } else {
-        p.phase += p.freq / SAMPLE_RATE;
+        p.phase += p.freq * INV_SR;
         if (p.phase >= 1.0f) p.phase -= 1.0f;
         if (p.sweepCoef > 0.0f) p.freq += (p.freqEnd - p.freq) * p.sweepCoef;
         x = oscSine(p.phase);
@@ -1389,8 +1527,12 @@ void loop() {
       p.lp += p.lpA * (x - p.lp);
       float y = p.hipass ? (x - p.lp) : p.lp;     // hats pasa-altos · resto pasa-bajos (tono)
       p.env *= p.decCoef;
-      if (p.env < 0.0008f) { p.active = false; continue; }
+      if (p.env < UMBRAL_COLA) {                  // umbral → cola corta; se libera a −82 dB
+        if (p.decCoef > COEF_COLA) p.decCoef = COEF_COLA;
+        if (p.env < UMBRAL_FIN) { p.active = false; p.last = 0.0f; continue; }
+      }
       float a = y * p.env * p.gain;
+      p.last = a;
       pcL += a * p.lGain; pcR += a * p.rGain;
     }
 
@@ -1400,8 +1542,8 @@ void loop() {
 
     // El filtro resonante + "tono" van SOLO al PAD (la melodía va SECA por encima → siempre corta)
     // POT1 = volumen del pad · el barrido de filtro es distinto en L/R → estéreo del pad
-    float padMixL = padL * padLevel * g_padGate * g_padVol + 1.0e-18f;   // (+ anti-denormal)
-    float padMixR = padR * padLevel * g_padGate * g_padVol - 1.0e-18f;
+    float padMixL = padL * padLevel * g_padGate * padVolS + 1.0e-18f;   // (+ anti-denormal)
+    float padMixR = padR * padLevel * g_padGate * padVolS - 1.0e-18f;
     float fL = applyFilter(bqL, coefL, padMixL);
     float fR = applyFilter(bqR, coefR, padMixR);
     toneL += toneCoef * (fL - toneL);             // "tono": one-pole LPF (solo oscurece el pad)
@@ -1409,8 +1551,8 @@ void loop() {
 
     // Melodía SECA (solo su LPF de brillo por voz) sumada encima del pad filtrado · POT2 = su volumen
     // Percusión también SECA (no pasa por el filtro resonante → pegada firme) · POT3 = su volumen
-    float vL = (toneL + melL * melLevel * g_melVol + pcL * percLevel * g_percVol) * 0.12f;
-    float vR = (toneR + melR * melLevel * g_melVol + pcR * percLevel * g_percVol) * 0.12f;
+    float vL = (toneL + melL * melLevel * melVolS + pcL * percLevel * percVolS) * 0.12f;
+    float vR = (toneR + melR * melLevel * melVolS + pcR * percLevel * percVolS) * 0.12f;
 
     if (vL >  3.0f) vL =  3.0f; if (vL < -3.0f) vL = -3.0f;
     if (vR >  3.0f) vR =  3.0f; if (vR < -3.0f) vR = -3.0f;
@@ -1421,8 +1563,21 @@ void loop() {
     buffer[n * 2 + 1] = (int16_t)(shR * 30000.0f);
   }
 
+  // Indicador de carga: un buffer de 128 muestras dura 2.9 ms; si calcularlo se come más del
+  // 80 %, el DMA queda al borde de vaciarse (ceros = chasquido). El LED 5 destella magenta.
+  if (micros() - t0Render > (uint32_t)(BUFFER_SAMPLES * 1000000ULL / SAMPLE_RATE * 8 / 10)) contSobrecarga++;
+
   size_t written;
   i2s_channel_write(tx_chan, buffer, sizeof(buffer), &written, portMAX_DELAY);
-
-  renderLEDs();
 }
+
+// ==============================================================================================================================================
+// Las dos tareas (y el `loop()` de Arduino, que acá no hace nada)
+// ==============================================================================================================================================
+#ifdef SIMULADOR
+void loop() { pasoControl(); renderBuffer(); }
+#else
+void audioTask(void *)   { for (;;) renderBuffer(); }                                   // core 1, prioridad 10
+void controlTask(void *) { iniciarLEDs(); for (;;) { pasoControl(); vTaskDelay(1); } }   // core 0, 1 kHz
+void loop() { vTaskDelay(1000 / portTICK_PERIOD_MS); }
+#endif

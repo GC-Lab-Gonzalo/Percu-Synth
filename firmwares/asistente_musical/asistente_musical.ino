@@ -50,6 +50,10 @@
 // ==============================================================================================================================================
 // DESCRIPCION
 // ==============================================================================================================================================
+// Una música de acordes que se compone sola suena SIEMPRE, y encima conversas con GPT por voz:
+// mantienes BTN1, le preguntas algo y te responde hablando encima de la música, que nunca para.
+// Los botones cambian canción, timbre y arpegio; las perillas, el filtro y las mezclas.
+//
 // Una cama armonica generativa suena SIEMPRE, y encima conversas con GPT por voz:
 //
 //   MUSICA (permanente, tarea de audio en core 1)
@@ -72,26 +76,31 @@
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
 // ── BOTONES ───────────────────────────────────────────────────────────────────
-// - BTN1 (GPIO44) MANTENER  -> grabar tu voz. La musica NO se corta: solo baja a REC_DUCK
-//                              (~-5 dB) con un fundido de 120 ms. El INMP441 igual escucha
+// - BTN1 (GPIO44) MANTENER  -> grabar tu pregunta para GPT (máx. 5 s). La musica NO se
+//                              corta: solo baja a REC_DUCK (~-5 dB) con un fundido de 120 ms. El INMP441 igual escucha
 //                              el parlante, asi que lo que protege la transcripcion es el
 //                              PASA-ALTOS de 250 Hz sobre el micro (updateMicHP): el pad
 //                              tiene casi toda su energia debajo de ese corte y la voz no,
 //                              porque la inteligibilidad vive en 300 Hz - 3.4 kHz.
 // - BTN2 (GPIO42)           -> CANCION NUEVA: re-sortea tonalidad, modo y progresion.
+//                              No responde mientras mantienes BTN5.
 // - BTN3 (GPIO0)            -> Forma de onda del pad: Seno -> Sierra -> Cuadrada -> Triangular.
+//                              Arranca en Triangular. No responde mientras mantienes BTN5.
 // - BTN4 (GPIO45)           -> Tipo de arpegio: UP / DOWN / UP-DOWN / DOWN-UP / RANDOM / CHORD.
+//                              Arranca en RANDOM. No responde mientras mantienes BTN5.
 // - BTN5 (GPIO47) MANTENER  -> PANEL B (mientras lo tengas apretado).
 //
-// ── PANEL A (pots sueltos, es donde vives) ────────────────────────────────────
+// ── PANEL A (normal) ──────────────────────────────────────────────────────────
+// (pots sueltos, sin apretar BTN5: es donde vives)
 // - POT1 (ADC1)  -> CUTOFF del filtro del pad   (200 Hz - 9 kHz)
 // - POT2 (ADC2)  -> RESONANCIA (Q) del pad      (0.7 - 12)
 // - POT3 (ADC8)  -> PASA-ALTOS de la voz de GPT (20 Hz limpio -> 2 kHz telefono/megafono)
 // - POT4 (ADC10) -> VOLUMEN del pad
 //
 // ── PANEL B (manteniendo BTN5) ────────────────────────────────────────────────
-// - POT1 (ADC1)  -> PROFUNDIDAD del ducking (0 = sin sidechain -> 1 = la musica casi mutea
-//                   cuando GPT habla). Es un sidechain real: sigue la envolvente de la voz.
+// - POT1 (ADC1)  -> PROFUNDIDAD del ducking: cuánto baja la música cuando GPT habla.
+//                   Con 0 no hay sidechain y con 1 la musica casi mutea cuando GPT habla.
+//                   Es un sidechain real: sigue la envolvente de la voz.
 // - POT2 (ADC2)  -> VOLUMEN de la voz de GPT
 // - POT3 (ADC8)  -> VELOCIDAD del arpegio (2 - 16 notas/s)
 // - POT4 (ADC10) -> VOLUMEN del arpegio (en 0 = arpegio apagado, queda solo el pad)
@@ -104,6 +113,16 @@
 // LED 0 = ESTADO:  verde = listo · rojo = grabando · ambar = procesando (Whisper/GPT)
 //                  cian = hablando · magenta parpadeante = error (sin WiFi / sin PSRAM)
 // LEDs 1-5 = VU:   nivel de la MUSICA normalmente, nivel de la VOZ mientras GPT habla.
+//
+// ── MICRÓFONO ─────────────────────────────────────────────────────────────────
+// - MIC → INMP441 por I2S: escucha tu voz mientras mantienes BTN1 (con pasa-altos de 250 Hz).
+//
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h (en esta carpeta) y escribe tu WiFi y tu OPENAI_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V), compila y sube el código (con PSRAM activada).
+// 3. Al prender ya suena la música; cuando el LED 0 queda en VERDE, el asistente está listo.
+// 4. Mantén BTN1, haz tu pregunta (máx. 5 s) y suéltalo: GPT te responde mientras la música sigue.
+// 5. Explora: BTN2 canción nueva, BTN3 timbre, BTN4 arpegio, POT1 filtro; mantén BTN5 para el panel B.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

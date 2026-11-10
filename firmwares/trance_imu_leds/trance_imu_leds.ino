@@ -34,6 +34,10 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Secuenciador de trance con luces: aprietas Play y suena una secuencia de acordes
+// en loop (16 patrones, 6 escalas). Al inclinar la placa el IMU abre y cierra el
+// filtro, y los 6 LEDs de la placa laten con cada paso en el color del panel activo.
+//
 // Igual que `trance_imu` (motor de audio I2S → PCM5102 a 44.1 kHz / 16-bit estéreo,
 // polifónico de 16 voces, osciladores anti-aliasing PolyBLEP, filtro biquad
 // resonante controlado por el IMU y soft-limiter), pero AHORA con un visualizador
@@ -69,25 +73,59 @@
 //   · BTN2 + BTN4 a la vez → Panel C (timbre / síntesis)
 //
 // ── PANEL A (normal) ──────────────────────────────────────────────────────────
-// - BTN1 (44) → Play / Stop  (al detener, las voces se apagan con su cola, sin clicks)
-// - BTN2 (42) → Cambiar escala  (Mayor · Menor · Armónica · Árabe · Lidia · Frigia)
-// - BTN3 (0)  → Cambiar patrón  (16 patrones)
-// - BTN4 (45) → Cambiar largo de secuencia  (4 → 8 → 16 pasos)
-// - BTN5 (47) → Octava  (-1 → 0 → +1 → +2 respecto a C3)
-// - POT1 (ADC1)  → Ataque · POT2 (ADC2) → Volumen · POT3 (ADC8) → Tempo · POT4 (ADC10) → Decay
+// LEDs en cian. BTN1, BTN2, BTN4 y BTN5 actúan al SOLTAR (así un combo no dispara
+// su función por accidente); BTN3 actúa al apretar.
+// - BTN1 (44) → Play / Stop. Arranca desde el paso 1; al detener, las voces se apagan con su cola.
+// - BTN2 (42) → Cambiar escala. Mayor · Menor · Armónica · Árabe · Lidia · Frigia.
+// - BTN3 (0)  → Cambiar patrón (16 patrones)
+// - BTN4 (45) → Cambiar largo de secuencia (16 → 4 → 8 → 16 pasos)
+// - BTN5 (47) → Octava (0 → +1 → +2 → −1 respecto a C3; arranca en 0)
+// - POT1 (ADC1)  → Ataque (0.5 ms muy percusivo → ~100 ms con fundido)
+// - POT2 (ADC2)  → Volumen master (curva cuadrática)
+// - POT3 (ADC8)  → Tempo (40 – 300 BPM, notas de 1/16)
+// - POT4 (ADC10) → Decay de cada nota (~50 ms corto → ~2.5 s con mucha cola)
 //
 // ── PANEL B (notas / tonalidad) — BTN1+BTN5 ───────────────────────────────────
-// - BTN1 → F# (+7) · BTN2 → C# (+2) · BTN3 → B/tónica (0) · BTN4 → D# (+4) · BTN5 → G# (+9)
-// - POT1..POT4 → grado de escala (0–7) de cada una de las 4 voces del acorde (persiste)
+// LEDs en violeta. Cada botón fija la tónica de la canción como una DISTANCIA en
+// semitonos sobre Do (C3). Los nombres F#·C#·B·D#·G# del trance_imu original son esas
+// mismas distancias leídas desde Si mayor; aquí la tónica de partida es Do.
+// - BTN1 → Tónica +7 semitonos (una quinta: Sol si partes de Do)
+// - BTN2 → Tónica +2 semitonos (Re)
+// - BTN3 → Tónica original, 0 semitonos (Do)
+// - BTN4 → Tónica +4 semitonos (Mi)
+// - BTN5 → Tónica +9 semitonos (La)
+// - POT1 → Grado de escala (0–7) de la voz 1 del acorde. Siempre en la escala; persiste.
+// - POT2 → Grado de escala (0–7) de la voz 2 del acorde. Siempre en la escala; persiste.
+// - POT3 → Grado de escala (0–7) de la voz 3 del acorde. Siempre en la escala; persiste.
+// - POT4 → Grado de escala (0–7) de la voz 4 del acorde. Siempre en la escala; persiste.
 //
 // ── PANEL C (timbre / síntesis) — BTN2+BTN4 ───────────────────────────────────
-// - BTN1 → forma de onda · BTN2 → octava arriba · BTN3 → unison/poly · BTN4 → quinta · BTN5 → sub-osc
-// - POT1 → detune · POT2 → drive · POT3 → piso de cutoff · POT4 → resonancia base
+// LEDs en naranja.
+// - BTN1 → Forma de onda (Sierra → Cuadrada → Triangular)
+// - BTN2 → Octava arriba (capa +12, brillo) on/off
+// - BTN3 → Unison (lead mono gordo) / Poly (acorde)
+// - BTN4 → Quinta (capa de quinta justa +7, power-chord) on/off
+// - BTN5 → Sub-osc (capa −12, cuerpo de bajo) on/off
+// - POT1 → Detune entre voces (0–25 cents: coro en poly, "supersaw" en unison)
+// - POT2 → Drive (saturación de salida: limpio → caliente)
+// - POT3 → Piso de cutoff del filtro (200 – 5000 Hz, aunque no muevas el IMU)
+// - POT4 → Resonancia base (Q) del filtro (el IMU suma encima)
 //
 // CONGELADO DE CONTROLES: al cambiar de panel los pots quedan congelados y sólo retoman
-// el control cuando se MUEVEN (≥ 2 %). La nota/tonalidad y el timbre PERSISTEN.
+// el control cuando se MUEVEN (> 2 %). La nota/tonalidad y el timbre PERSISTEN.
 //
-// - IMU (MPU6050): aceleración X → cutoff del LPF · aceleración Y → resonancia (Q).
+// - IMU (MPU6050) → Inclínalo para barrer el filtro (activo en los 3 paneles).
+//     Aceleración X → cutoff del LPF · aceleración Y → resonancia (Q).
+//
+// MODO DE USO:
+// 1. Aprieta BTN1 (Panel A, LEDs cian): arranca la secuencia y los LEDs laten con
+//    cada paso. POT2 es el volumen y POT3 el tempo.
+// 2. Inclina la placa: el IMU abre y cierra el filtro (el color de los LEDs se mueve).
+// 3. BTN2 cambia la escala, BTN3 el patrón y BTN5 la octava; POT4 alarga la cola.
+// 4. BTN1 + BTN5 juntos → Panel B (violeta): cada botón cambia la tónica y los 4 pots
+//    rearman el acorde. El mismo combo vuelve al Panel A.
+// 5. BTN2 + BTN4 juntos → Panel C (naranja): forma de onda, unison y capas de sub,
+//    quinta y octava; los pots dan detune, drive, cutoff y resonancia.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

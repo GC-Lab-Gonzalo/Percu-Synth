@@ -1,0 +1,2403 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Simulador PercuSynth</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23000%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%223%22 fill=%22%23F5B041%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet" crossorigin>
+<style>
+  /* La escena es una mesa de nogal de noche vista desde arriba. Todo se mide en "unidades de escenario":
+     1600 × 1000 u, y la escena entera se ajusta a la ventana (o a la pantalla completa) sin scroll. */
+  :root {
+    --tinta:#f3e3c4; --gris:#b9aa8e; --suave:#857760; --ambar:#F5B041;
+    --error:#ff8a73; --ok:#8fd99f; --aviso:#F5B041;
+    --mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#000; color:var(--tinta); font-family:Archivo, system-ui, sans-serif; overflow:hidden; }
+  .escenario { position:fixed; left:50%; top:50%; width:min(100vw, 160vh); width:min(100vw, 160dvh); aspect-ratio:1600 / 1000;
+    transform:translate(-50%, -50%); container-type:inline-size; user-select:none; -webkit-user-select:none; overflow:hidden;
+    --u:calc(100cqw / 1600); background:#000; }
+  /* celular en vertical: la mesa se ve igual de horizontal, girada */
+  @media (orientation:portrait) and (pointer:coarse) {
+    .escenario { width:min(100vh, 160vw); width:min(100dvh, 160vw); transform:translate(-50%, -50%) rotate(90deg); }
+  }
+  .escenario > svg, .escenario > canvas { position:absolute; left:0; top:0; width:100%; height:100%; display:block; }
+  #svg { touch-action:none; }
+  #sombra, #tinte, #emisivo, #guias { pointer-events:none; }
+  #tinte { mix-blend-mode:screen; }
+
+  /* ---- realidad aumentada: lo que se dibuja sobre la mesa ---- */
+  .capa { position:absolute; font-size:calc(13.5 * var(--u)); line-height:1.35; color:var(--tinta);
+    text-shadow:0 0 calc(5 * var(--u)) #000, 0 0 calc(2 * var(--u)) #000; opacity:.72; transition:opacity .3s; }
+  .capa:hover, .capa.cerca, .capa:focus-within { opacity:1; }
+  .ar { border-left:calc(2.5 * var(--u)) solid var(--ambar); padding-left:calc(14 * var(--u)); display:flex; flex-direction:column; }
+  .ar h2 { margin:0 0 calc(6 * var(--u)); font-size:calc(14.5 * var(--u)); font-weight:600; color:var(--ambar);
+    display:flex; justify-content:space-between; align-items:baseline; gap:calc(12 * var(--u)); }
+  select, button, input { font:inherit; color:inherit; }
+  .enlace { background:none; border:0; padding:0; cursor:pointer; color:var(--tinta); font-size:inherit; text-shadow:inherit;
+    text-decoration:underline; text-decoration-color:#f5b04170; text-underline-offset:.2em; }
+  .enlace:hover { color:var(--ambar); }
+  .enlace:disabled { color:var(--suave); cursor:default; text-decoration:none; }
+  .enlace.aviso { color:var(--ambar); font-weight:700; }
+  .mini { background:transparent; border:0; border-bottom:1px solid #f5b04155; color:var(--tinta); font-size:inherit;
+    padding:0 calc(2 * var(--u)); min-width:0; text-shadow:inherit; cursor:pointer; }
+  .mini option { background:#1b130b; color:var(--tinta); }
+  .enlace:focus-visible, .mini:focus-visible, input:focus-visible { outline:calc(2 * var(--u)) solid var(--ambar); outline-offset:2px; }
+  .tenue { color:var(--gris); font-family:var(--mono); font-size:calc(12 * var(--u)); font-weight:400; }
+
+  /* barra de arriba: una sola línea, chica */
+  .barra { left:calc(24 * var(--u)); right:calc(24 * var(--u)); top:calc(14 * var(--u)); display:flex; align-items:baseline;
+    gap:calc(20 * var(--u)); font-size:calc(13 * var(--u)); opacity:.55; white-space:nowrap; }
+  .barra b { color:var(--ambar); font-weight:600; font-size:calc(14 * var(--u)); }
+  .barra .mini { font-family:var(--mono); max-width:calc(260 * var(--u)); }
+  .barra .estado { display:flex; align-items:baseline; gap:calc(7 * var(--u)); overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+  .punto { width:calc(8 * var(--u)); height:calc(8 * var(--u)); border-radius:50%; background:var(--suave); flex:none; align-self:center; }
+  .punto.ok { background:var(--ok); } .punto.error { background:var(--error); } .punto.trabajo { background:var(--aviso); }
+
+  /* monitor serie */
+  .puertos { display:flex; gap:calc(14 * var(--u)); font-size:calc(12.5 * var(--u)); color:var(--gris); }
+  .puerto.off { color:var(--suave); text-decoration:line-through; text-decoration-color:#857760aa; }
+  pre { margin:0; font-family:var(--mono); font-size:calc(12.5 * var(--u)); line-height:1.38; white-space:pre-wrap; word-break:break-all; user-select:text; -webkit-user-select:text; }
+  #log { flex:1; overflow:auto; padding:calc(6 * var(--u)) 0; scrollbar-width:thin; scrollbar-color:#f5b04155 transparent; }
+  #log .com { color:var(--gris); }
+  #log .com::before { content:"COM  "; color:var(--suave); }
+  #log .sis { color:var(--suave); }
+  #log .err { color:var(--error); }
+  .enviar input { width:100%; border:0; border-bottom:1px solid #f5b04140; background:transparent; padding:calc(3 * var(--u)) 0;
+    font-family:var(--mono); font-size:calc(12.5 * var(--u)); text-shadow:inherit; }
+  .enviar input::placeholder { color:var(--suave); }
+  .enviar input:focus { outline:none; border-bottom-color:var(--ambar); }
+
+  /* MIDI */
+  #midiReloj { display:flex; gap:calc(7 * var(--u)); align-items:center; font-size:calc(13 * var(--u)); }
+  #midiReloj .pulso { width:calc(10 * var(--u)); height:calc(10 * var(--u)); background:#f5b04140; }
+  #midiReloj .pulso.on { background:var(--ambar); }
+  #midiReloj span:last-child { margin-left:calc(6 * var(--u)); }
+  #midiLog { height:calc(104 * var(--u)); overflow:hidden; padding-top:calc(4 * var(--u)); color:var(--gris); }
+
+  /* la placa: qué está enchufado */
+  .conex { display:grid; grid-template-columns:auto 1fr; column-gap:calc(14 * var(--u)); row-gap:calc(3 * var(--u)); align-items:center; }
+  .conex > span:nth-child(odd) { color:var(--gris); }
+  .conex .dos { display:flex; align-items:center; justify-content:space-between; gap:calc(6 * var(--u)); min-height:calc(20 * var(--u)); }
+  .chk { display:flex; align-items:center; gap:.35em; cursor:pointer; }
+  .chk input { accent-color:var(--ambar); margin:0; width:calc(12 * var(--u)); height:calc(12 * var(--u)); }
+  .imu { display:grid; grid-template-columns:calc(78 * var(--u)) 1fr; gap:calc(16 * var(--u)); margin-top:calc(12 * var(--u)); }
+  .pad { position:relative; width:calc(78 * var(--u)); height:calc(78 * var(--u)); border:1px solid #f5b04155; cursor:grab; touch-action:none;
+    background-image:linear-gradient(#f5b04133,#f5b04133), linear-gradient(#f5b04133,#f5b04133);
+    background-size:1px 100%, 100% 1px; background-position:center; background-repeat:no-repeat; }
+  .pad.off { opacity:.3; pointer-events:none; }
+  .pad i { position:absolute; left:50%; top:50%; width:calc(12 * var(--u)); height:calc(12 * var(--u)); transform:translate(-50%, -50%);
+    border-radius:50%; background:var(--ambar); }
+  .fila2 { display:flex; justify-content:space-between; align-items:center; gap:calc(10 * var(--u)); font-size:calc(13 * var(--u)); min-height:calc(21 * var(--u)); }
+  .fila2 b { font-family:var(--mono); font-weight:400; }
+  /* controles dibujados a la escala de la mesa (los nativos no achican en el celular) */
+  input[type=range] { -webkit-appearance:none; appearance:none; background:transparent; width:52%; height:calc(16 * var(--u)); margin:0; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height:calc(2 * var(--u)); background:#f5b04166; }
+  input[type=range]::-moz-range-track { height:calc(2 * var(--u)); background:#f5b04166; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:calc(11 * var(--u)); height:calc(11 * var(--u)); margin-top:calc(-4.5 * var(--u));
+    border-radius:50%; background:var(--ambar); border:0; }
+  input[type=range]::-moz-range-thumb { width:calc(11 * var(--u)); height:calc(11 * var(--u)); border-radius:50%; background:var(--ambar); border:0; }
+  select.mini { -webkit-appearance:none; appearance:none; padding-right:calc(14 * var(--u));
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23F5B041' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right calc(2 * var(--u)) center / calc(8 * var(--u)) auto; }
+  .chk input { -webkit-appearance:none; appearance:none; border:1px solid #f5b04199; background:transparent; cursor:pointer; }
+  .chk input:checked { background:var(--ambar); box-shadow:inset 0 0 0 calc(2 * var(--u)) #1b130b; }
+  .nota { margin-top:calc(10 * var(--u)); font-size:calc(12 * var(--u)); color:var(--suave); }
+  kbd { font-family:var(--mono); color:var(--gris); }
+
+  /* segundo monitor: la OLED en grande */
+  .monitor { padding-left:0; border-left:0; opacity:.92; }
+  .monitor canvas { display:block; image-rendering:pixelated; background:#000; box-shadow:0 0 0 1px #f5b04140, 0 calc(10 * var(--u)) calc(30 * var(--u)) #000; }
+  .monitor div { position:absolute; left:calc(100% + 12 * var(--u)); bottom:0; display:flex; flex-direction:column; gap:calc(4 * var(--u)); white-space:nowrap; }
+
+  /* tarjetas que se abren (microSD, DHT) y la consola de compilación */
+  .sdLista, .dhtCard { left:calc(24 * var(--u)); top:calc(752 * var(--u)); width:calc(400 * var(--u)); gap:calc(5 * var(--u)); opacity:1; z-index:3; }
+  .sdLista h2, .dhtCard h2 { margin-bottom:calc(4 * var(--u)); }
+  .sdLista p, .dhtCard p { margin:0; color:var(--gris); }
+  #sdArchivos div { display:grid; grid-template-columns:1fr auto auto auto; gap:calc(10 * var(--u)); align-items:center;
+    font-family:var(--mono); font-size:calc(12.5 * var(--u)); padding:calc(2 * var(--u)) 0; }
+  .dhtCard code { font-family:var(--mono); color:var(--tinta); }
+  .dhtCard input[type=range] { width:100%; }
+  .dhtCon { display:grid; grid-template-columns:auto 1fr; gap:calc(4 * var(--u)) calc(10 * var(--u)); align-items:center; }
+  .dhtCon .pin { color:#fff; font-weight:700; font-size:calc(11 * var(--u)); padding:0 calc(6 * var(--u)); text-align:center; text-shadow:none; }
+  .matrizCfg { display:flex; gap:calc(14 * var(--u)); align-items:baseline; font-size:calc(12.5 * var(--u)); color:var(--gris); opacity:.5; }
+  .consola { left:calc(300 * var(--u)); top:calc(800 * var(--u)); width:calc(1000 * var(--u)); height:calc(186 * var(--u));
+    background:#0b0805e6; padding:calc(10 * var(--u)) calc(16 * var(--u)); opacity:1; z-index:4; }
+  .consola pre { flex:1; overflow:auto; color:var(--tinta); }
+  .consola .e { color:var(--error); } .consola .w { color:var(--ambar); }
+  .soltar { position:fixed; inset:0; background:#000c; color:var(--tinta); display:none; align-items:center; justify-content:center;
+    font-size:24px; font-weight:600; z-index:10; }
+  .soltar.visible { display:flex; }
+  [hidden] { display:none !important; }
+  [data-tap] { cursor:pointer; }
+  [data-drag] { cursor:ns-resize; }
+  iframe.motor { position:absolute; width:1px; height:1px; border:0; left:-10px; top:-10px; }
+
+  /* ---- «cómo se usa»: la guía del código cargado, sobre una cortina opaca ---- */
+  .barra .flecha { width:calc(9 * var(--u)); height:calc(6 * var(--u)); margin-left:calc(5 * var(--u)); vertical-align:middle; transition:transform .3s; }
+  #guiaBtn { text-decoration:none; }
+  #guiaBtn:hover { text-decoration:underline; text-decoration-color:#f5b04170; }
+  /* La placa de la guía es la placa de verdad (se sigue tocando): un telón negro baja DENTRO del SVG, entre la mesa
+     y la placa, y todo lo demás (paneles, noche, matriz, cables) se apaga mientras la guía está abierta. */
+  .guia { position:absolute; inset:0; z-index:8; pointer-events:none; visibility:hidden; }
+  .guia.abierta { visibility:visible; }
+  .guia > svg { position:absolute; left:0; top:0; width:100%; height:100%; display:block; pointer-events:none; }
+  .guia .cab, .guia .et, .guia .pie, .guia .cerrarGuia { pointer-events:auto; }
+  #telon { transform-box:fill-box; transform-origin:50% 0; transform:scaleY(0); transition:transform .45s cubic-bezier(.3,.7,.2,1); pointer-events:none; }
+  .enGuia #telon { transform:scaleY(1); }
+  #sombra, #tinte, #guias, .fueraDeGuia { transition:opacity .35s; }
+  .escenario.enGuia > .capa:not(.consola), .escenario.enGuia > #sombra, .escenario.enGuia > #tinte,
+  .escenario.enGuia > #guias, .escenario.enGuia .fueraDeGuia { opacity:0 !important; pointer-events:none !important; }
+  .guia .paneles { display:flex; flex-wrap:wrap; align-items:baseline; gap:calc(4 * var(--u)) calc(14 * var(--u));
+    margin-top:calc(10 * var(--u)); font-size:calc(13.5 * var(--u)); color:var(--gris); }
+  .guia .paneles button { text-decoration:none; color:var(--suave); }
+  .guia .paneles button:hover { color:var(--tinta); }
+  .guia .paneles button.activo { color:var(--ambar); font-weight:700; }
+  .et.tocada { opacity:1 !important; }
+  .et.tocada b { color:#fff; }
+  #guiaSvg .tocada polyline { stroke-width:2.8px; }
+  .guia .cab { position:absolute; left:calc(40 * var(--u)); top:calc(30 * var(--u)); width:calc(1080 * var(--u));
+    opacity:0; transition:opacity .4s .25s; }
+  .guia.abierta .cab { opacity:1; }
+  .guia h2 { margin:0; font-size:calc(30 * var(--u)); font-weight:800; font-stretch:125%; text-transform:uppercase; line-height:1.05; }
+  .guia .sub { margin-top:calc(6 * var(--u)); font-size:calc(15 * var(--u)); color:var(--ambar); }
+  .guia .desc { margin:calc(10 * var(--u)) 0 0; max-width:calc(980 * var(--u)); font-size:calc(14.5 * var(--u)); line-height:1.45; color:var(--gris); }
+  .guia .cerrarGuia { position:absolute; right:calc(24 * var(--u)); top:calc(14 * var(--u)); font-size:calc(13 * var(--u)); }
+  .et { position:absolute; width:calc(330 * var(--u)); font-size:calc(13.5 * var(--u)); line-height:1.38; color:var(--tinta);
+    opacity:0; transition:opacity .35s; }
+  .et.vista { opacity:1; }
+  .et.izq { text-align:right; }
+  .et.atenuada { opacity:.25; }
+  .et b { color:var(--ambar); font-weight:700; font-stretch:125%; font-size:calc(14 * var(--u)); margin-right:calc(8 * var(--u)); }
+  .et div { margin-top:calc(2 * var(--u)); }
+  .et i { font-style:normal; color:var(--gris); margin-right:calc(7 * var(--u)); }
+  .et .nada { color:var(--suave); }
+  .guia .pie { position:absolute; font-size:calc(13 * var(--u)); line-height:1.4; color:var(--tinta); opacity:0; transition:opacity .4s; }
+  .guia .pie.vista { opacity:1; }
+  .guia .pie h3 { margin:0 0 calc(4 * var(--u)); font-size:calc(13.5 * var(--u)); font-weight:700; font-stretch:125%; color:var(--ambar); }
+  .guia .pie ol { margin:0; padding-left:calc(20 * var(--u)); }
+  .guia .pie b { color:var(--ambar); font-weight:600; margin-right:calc(6 * var(--u)); }
+  .guia .pie .tenue { display:block; margin-top:calc(8 * var(--u)); font-family:inherit; }
+
+  /* ---- los dos botones grandes: ver la placa a toda pantalla y cargar el código en la placa de verdad ---- */
+  .grandes { left:calc(24 * var(--u)); top:calc(838 * var(--u)); width:calc(400 * var(--u)); display:flex; flex-direction:column;
+    gap:calc(10 * var(--u)); opacity:1; text-shadow:none; }
+  .grande { height:calc(66 * var(--u)); border:calc(2 * var(--u)) solid var(--ambar); border-radius:0; cursor:pointer;
+    font-size:calc(17 * var(--u)); font-weight:800; font-stretch:125%; text-transform:uppercase; white-space:nowrap; padding:0; }
+  #placaGrande { background:var(--ambar); color:#000; }
+  #placaGrande:hover { background:#FFF8EC; border-color:#FFF8EC; }
+  #cargarPlaca { --avance:0%; color:var(--ambar); background:linear-gradient(90deg, #f5b04155 var(--avance), #000 var(--avance)); }
+  #cargarPlaca:hover:not(:disabled) { color:#000; background:var(--ambar); }
+  #cargarPlaca:disabled { cursor:progress; color:var(--tinta); }
+  .grande:focus-visible { outline:calc(2 * var(--u)) solid #FFF8EC; outline-offset:calc(2 * var(--u)); }
+  /* la placa sola: sólo se ve el botón de salir si el puntero llega a la esquina (con Esc también se sale) */
+  .salirGrande { position:absolute; right:0; top:0; width:calc(130 * var(--u)); height:calc(64 * var(--u)); z-index:9; display:none;
+    background:#000; color:var(--tinta); border:0; font-size:calc(17 * var(--u)); font-weight:700; cursor:pointer; opacity:0; transition:opacity .2s; }
+  .enPlaca .salirGrande { display:block; }
+  .salirGrande:hover, .salirGrande:focus-visible { opacity:1; }
+  @media (pointer:coarse) { .salirGrande { opacity:.5; } }
+  .escenario.enPlaca > .consola { display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="escenario" id="escenario">
+  <svg id="svg" viewBox="0 0 1600 1000" aria-label="PercuSynth V2.0 y su matriz sobre la mesa"></svg>
+  <canvas id="sombra" width="400" height="250"></canvas>
+  <canvas id="tinte" width="400" height="250"></canvas>
+  <svg id="emisivo" viewBox="0 0 1600 1000" aria-hidden="true"></svg>
+  <svg id="guias" viewBox="0 0 1600 1000" aria-hidden="true"></svg>
+
+  <div class="capa barra">
+    <b>PercuSynth</b>
+    <select class="mini" id="firmware" aria-label="Firmware del repositorio"><option>cargando…</option></select>
+    <button class="enlace" id="guiaBtn" aria-expanded="false" aria-controls="guia" title="Qué hace este código y qué hace cada control (tecla ?)">cómo se usa<svg class="flecha" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="#F5B041" stroke-width="1.4"/></svg></button>
+    <button class="enlace" id="abrir">abrir .ino</button>
+    <input type="file" id="archivo" multiple accept=".ino,.h,.hpp,.cpp,.c" hidden>
+    <span class="estado"><span class="punto" id="punto"></span><span id="estado">sin código</span></span>
+    <button class="enlace" id="sonido">activar sonido</button>
+    <button class="enlace" id="reiniciar">reiniciar</button>
+    <button class="enlace" id="completa">pantalla completa</button>
+  </div>
+
+  <div class="capa grandes">
+    <button class="grande" id="placaGrande" title="Sólo la placa, a toda la pantalla. Esc para volver.">Placa en grande</button>
+    <button class="grande" id="cargarPlaca" title="Escribe el código elegido en tu PercuSynth. Enchufa el cable al USB izquierdo (Chrome o Edge).">Cargar a la placa</button>
+  </div>
+  <button class="salirGrande" id="salirGrande">salir</button>
+
+  <div class="capa ar" id="arSerie" style="left:calc(1150 * var(--u));top:calc(432 * var(--u));width:calc(420 * var(--u));height:calc(270 * var(--u))">
+    <h2>Serial <button class="enlace" id="limpiar">limpiar</button></h2>
+    <div class="puertos"><span class="puerto" id="pUSB">USB nativo · Serial + USB-MIDI</span><span class="puerto off" id="pCOM">COM · Serial0</span></div>
+    <pre id="log"></pre>
+    <form class="enviar" id="enviar"><input id="entrada" placeholder="› enviar a Serial" autocomplete="off" aria-label="Enviar a Serial"></form>
+  </div>
+
+  <div class="capa ar" id="arMidi" style="left:calc(1150 * var(--u));top:calc(726 * var(--u));width:calc(420 * var(--u))">
+    <h2>MIDI <select class="mini" id="midiSalida" aria-label="Salida MIDI hacia un sinte real"><option value="">no sale del navegador</option></select></h2>
+    <div id="midiReloj"><span class="pulso"></span><span class="pulso"></span><span class="pulso"></span><span class="pulso"></span><span id="midiBpm">sin reloj</span></div>
+    <pre id="midiLog"></pre>
+  </div>
+
+  <div class="capa ar" id="arPlaca" style="left:calc(24 * var(--u));top:calc(432 * var(--u));width:calc(400 * var(--u))">
+    <h2>Placa <span class="tenue" id="tareas">—</span></h2>
+    <div class="conex">
+      <span>Header I2C</span>
+      <select class="mini" id="header" aria-label="Módulo en el header I2C">
+        <option value="imu">IMU · MPU6050</option><option value="oled">OLED · SSD1306</option><option value="">vacío</option></select>
+      <span>microSD</span>
+      <span class="dos"><label class="chk"><input type="checkbox" id="sdOn"> puesta</label><button class="enlace" id="sdVer">vacía</button></span>
+      <span>EXT1 · GPIO 3</span>
+      <select class="mini" id="ext3" aria-label="Sensor en EXT1"><option value="">nada</option><option value="fsr">FSR (presión)</option><option value="ldr">LDR + láser</option><option value="dht">DHT11 (temp. y humedad)</option><option value="dht22">DHT22 (temp. y humedad)</option></select>
+      <span>EXT2 · GPIO 9</span>
+      <select class="mini" id="ext9" aria-label="Sensor en EXT2"><option value="">nada</option><option value="fsr">FSR (presión)</option><option value="ldr">LDR + láser</option><option value="dht">DHT11 (temp. y humedad)</option><option value="dht22">DHT22 (temp. y humedad)</option></select>
+      <span>Piezos</span>
+      <span class="dos" id="piezosChk"></span>
+      <span>Micrófono</span>
+      <span class="dos"><button class="enlace" id="mic">usar el del PC</button><b class="tenue" id="micTxt"></b></span>
+    </div>
+    <div class="imu">
+      <div class="pad" id="pad" title="Arrastra para inclinar la placa · doble clic para dejarla plana"><i id="padPunto"></i></div>
+      <div>
+        <div class="fila2"><button class="enlace" id="piso">golpe al piso</button><input type="range" id="pisoFuerza" min="5" max="150" value="80" aria-label="Fuerza del golpe al piso"></div>
+        <div class="fila2"><span>Volumen</span><input type="range" id="volumen" min="0" max="100" value="70" aria-label="Volumen"></div>
+        <div class="fila2"><span>Huecos de audio</span><b id="huecos">0</b></div>
+        <div class="fila2 tenue" id="imuTxt">plana</div>
+      </div>
+    </div>
+    <div class="nota"><kbd>1</kbd>–<kbd>5</kbd> botones · <kbd>QWER</kbd> piezos · <kbd>G</kbd> piso · <kbd>F</kbd> FSR · <kbd>L</kbd> láser</div>
+  </div>
+
+  <div class="capa ar monitor" id="arOled" hidden>
+    <canvas id="oledGrande" aria-label="La pantalla OLED en grande"></canvas>
+    <div><button class="enlace" id="oledGirar">girar 90°</button></div>
+  </div>
+
+  <div class="capa ar sdLista" id="sdLista" hidden>
+    <h2>microSD <button class="enlace" id="sdCerrar">cerrar</button></h2>
+    <div id="sdArchivos"></div>
+    <p class="tenue">Suelta un .wav o un .txt sobre la página para ponerlo en la tarjeta.</p>
+  </div>
+
+  <section class="capa ar consola" id="consola" hidden><h2><span id="consolaTitulo">Compilación</span> <button class="enlace" id="consolaCerrar">cerrar</button></h2><pre id="consolaTexto"></pre></section>
+
+  <div class="guia" id="guia" role="dialog" aria-label="Cómo se usa este código" aria-hidden="true">
+    <svg id="guiaSvg" viewBox="0 0 1600 1000" aria-hidden="true"></svg>
+    <div class="cab" id="guiaCab"></div>
+    <div id="guiaEts"></div>
+    <button class="enlace cerrarGuia" id="guiaCerrar">cerrar</button>
+  </div>
+</div>
+
+<div class="soltar" id="soltar">Suelta el .ino (y sus .h) · un .wav va a la microSD</div>
+
+<script>
+// =============================================================================
+// Simulador del PercuSynth — interfaz.
+// La placa (el sketch compilado a WebAssembly) corre en un iframe invisible
+// (motor.html). Esta página dibuja la mesa y lee/escribe la memoria compartida
+// de la placa (SimBus, ver hal/include/sim_bus.h): botones y perillas hacia la
+// placa; LEDs, audio, Serial y MIDI desde la placa.
+//
+// Capas, de abajo hacia arriba:
+//   #svg      la mesa, la placa, la matriz y los cables (lo que se toca)
+//   #sombra   la noche: oscuridad que los LEDs van "abriendo" donde alumbran
+//   #tinte    el color de esa luz sobre la mesa (suma, en modo screen)
+//   #emisivo  lo que brilla: LEDs, matriz, OLED (por encima de la oscuridad)
+//   #guias    las líneas ámbar que unen cada panel con su pieza (sólo al acercarse)
+//   .capa     los paneles de realidad aumentada, dibujados sobre la mesa
+// =============================================================================
+const NS = 'http://www.w3.org/2000/svg';
+function E(tag, a = {}, p) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in a) { if (k === 'text') e.textContent = a[k]; else e.setAttribute(k, a[k]); }
+  if (p) p.appendChild(e);
+  return e;
+}
+const $ = id => document.getElementById(id);
+// polilínea con esquinas redondeadas (cables)
+function ruta(pts, r = 14) {
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const l1 = Math.hypot(x1 - x0, y1 - y0), l2 = Math.hypot(x2 - x1, y2 - y1), rr = Math.min(r, l1 / 2, l2 / 2);
+    d += ` L${x1 - (x1 - x0) / l1 * rr},${y1 - (y1 - y0) / l1 * rr} Q${x1},${y1} ${x1 + (x2 - x1) / l2 * rr},${y1 + (y2 - y1) / l2 * rr}`;
+  }
+  const u = pts[pts.length - 1];
+  return d + ` L${u[0]},${u[1]}`;
+}
+
+// ---------------------------------------------------------------- hardware
+const PIN_BTN = [44, 42, 0, 45, 47];          // BTN1..5
+const PIN_POT = [1, 2, 8, 10];                // POT1..4
+const OX = 130, OY = 140;                     // origen de la foto de la PCB en las coordenadas "de placa"
+const K = 0.5, TX = 495, TY = 370;            // coordenadas de placa → escenario: x·K + TX (la placa, lejos, a la mitad)
+const aMesa = (x, y) => [TX + x * K, TY + y * K];
+const L = {                                   // medido sobre la foto de la PCB V2 (1060×664)
+  jacks: [[97,100],[205,100],[325,95],[445,100]],
+  btn:   [[110,250],[272,575],[522,575],[783,575],[940,235]],
+  pot:   [[266,250],[775,240],[268,420],[775,415]],
+  led:   [[153,362],[153,467],[153,583],[893,352],[893,460],[895,581]],
+  ext:   [[50,400],[50,500]], t5v:[995,395], tStrip:[995,490],
+  dev:   {x:510,y:18,w:165,h:315}, usb:[[562,18],[623,18]],
+  pcm:   {x:700,y:32,w:165,h:96}, midi:{x:885,y:22,w:105,h:85},
+  mic:[560,430]
+};
+
+// ---------------------------------------------------------------- la mesa de nogal (textura hecha una vez)
+function texturaMesa() {
+  const W = 800, H = 500, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d'), img = g.createImageData(W, H), d = img.data;
+  const N = 256, tabla = new Float32Array(N * N);
+  let s = 7;
+  for (let i = 0; i < N * N; i++) { s = (s * 16807) % 2147483647; tabla[i] = s / 2147483647; }
+  const ruido = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+    const i0 = (yi & 255) * N, i1 = ((yi + 1) & 255) * N, j0 = xi & 255, j1 = (xi + 1) & 255;
+    const a = tabla[i0 + j0], b = tabla[i0 + j1], c2 = tabla[i1 + j0], dd = tabla[i1 + j1];
+    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + dd) * u * v;
+  };
+  const TABLA = 125;                                        // cada tabla: 250 u de ancho
+  for (let y = 0; y < H; y++) {
+    const t = Math.floor(y / TABLA), yy = y % TABLA, off = t * 37.1;
+    for (let x = 0; x < W; x++) {
+      const w = ruido(x * 0.004 + off, y * 0.02) * 6 + ruido(x * 0.02 + off, y * 0.08) * 1.5;
+      const veta = Math.sin(y * 0.35 + w * 6) * 0.5 + 0.5;
+      const fibra = ruido(x * 0.35 + off, y * 1.3);
+      let k = 0.78 + veta * 0.17 + (fibra - 0.5) * 0.12 + (ruido(x * 0.002 + off, t * 3.3) - 0.5) * 0.24;
+      if (yy < 1) k *= 0.3;                                 // la junta entre tablas
+      const o = (y * W + x) * 4;
+      d[o] = 96 * k; d[o + 1] = 63 * k; d[o + 2] = 38 * k; d[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.88);
+}
+
+// ---------------------------------------------------------------- dibujo (estilo A: la placa real)
+const svg = $('svg'), emisivo = $('emisivo'), guias = $('guias');
+svg.innerHTML = `<defs>
+  <filter id="sh" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity=".6"/></filter>
+  <filter id="sh2" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="3" stdDeviation="2.4" flood-color="#000" flood-opacity=".6"/></filter>
+  <filter id="shP" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity=".5"/></filter>
+  <filter id="grano"><feTurbulence type="fractalNoise" baseFrequency="0.0025 0.11" numOctaves="3" seed="7"/>
+    <feColorMatrix values="0 0 0 0 .28  0 0 0 0 .12  0 0 0 0 .05  0 0 0 .55 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+  <linearGradient id="madera" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C47447"/><stop offset=".5" stop-color="#B0603A"/><stop offset="1" stop-color="#9C5130"/></linearGradient>
+  <linearGradient id="tecla" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3a3a"/><stop offset="1" stop-color="#121212"/></linearGradient>
+  <radialGradient id="perilla" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#4a4a4a"/><stop offset="1" stop-color="#0b0b0b"/></radialGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e4e6"/><stop offset="1" stop-color="#a3a7ab"/></linearGradient>
+</defs>`;
+emisivo.innerHTML = `<defs><filter id="blur" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="9"/></filter></defs>`;
+E('image',{href:texturaMesa(),x:0,y:0,width:1600,height:1000,preserveAspectRatio:'none'},svg);
+// capas en coordenadas de placa: la escena (lo que se toca) y lo que brilla
+const M  = E('g',{transform:`translate(${TX},${TY}) scale(${K})`},svg);
+const Me = E('g',{transform:`translate(${TX},${TY}) scale(${K})`},emisivo);
+const capaTira = E('g',{},svg);                    // la matriz / tira, en coordenadas de escenario
+const capaTiraLuz = E('g',{},emisivo);
+
+// marco de madera + foto de la PCB
+E('rect',{x:OX-22,y:OY-22,width:1104,height:708,rx:5,fill:'url(#madera)',filter:'url(#sh)'},M);
+E('rect',{x:OX-22,y:OY-22,width:1104,height:708,rx:5,fill:'#000',filter:'url(#grano)'},M);
+E('image',{href:'img/pcb_v2.jpg',x:OX,y:OY,width:1060,height:664},M);
+E('rect',{x:OX,y:OY,width:1060,height:664,fill:'none',stroke:'#00000055','stroke-width':2},M);
+const B  = E('g',{transform:`translate(${OX},${OY})`},M);
+const Be = E('g',{transform:`translate(${OX},${OY})`},Me);
+
+// jacks hembra 6.3 mm de los piezos (la boca mira al borde de la placa)
+for (const [x,y] of L.jacks) {
+  const t = y-92;
+  for (const dx of [-26,0,26]) E('rect',{x:x+dx-4,y:t+138,width:8,height:16,fill:'url(#metal)'},B);
+  E('rect',{x:x-42,y:t+38,width:84,height:104,rx:3,fill:'#0e0e0e',filter:'url(#sh2)'},B);
+  for (let j=0;j<3;j++) { const fy=t+48+j*32;
+    E('rect',{x:x-42,y:fy,width:84,height:20,rx:2,fill:'#202020'},B);
+    E('rect',{x:x-42,y:fy,width:84,height:3,fill:'#353535'},B);
+    E('rect',{x:x+30,y:fy+21,width:10,height:9,fill:'url(#metal)'},B); }
+  E('rect',{x:x-34,y:t+22,width:68,height:17,rx:2,fill:'#1a1a1a'},B);
+  E('line',{x1:x-18,y1:t+22,x2:x-18,y2:t+39,stroke:'#2e2e2e','stroke-width':2},B);
+  E('line',{x1:x+18,y1:t+22,x2:x+18,y2:t+39,stroke:'#2e2e2e','stroke-width':2},B);
+  E('rect',{x:x-24,y:t+4,width:48,height:18,fill:'#161616'},B);
+  for (let j=0;j<5;j++) E('line',{x1:x-24,y1:t+7+j*3.3,x2:x+24,y2:t+7+j*3.3,stroke:'#2b2b2b','stroke-width':1.2},B);
+  E('rect',{x:x-24,y:t,width:48,height:5,fill:'url(#metal)'},B);
+}
+
+// DevKit ESP32-S3 (con su LED RGB en el GPIO 48)
+let rgb48El;
+{ const {x,y,w,h} = L.dev;
+  E('rect',{x,y,width:w,height:h,rx:4,fill:'#1a1a1a',filter:'url(#sh2)'},B);
+  for (let j=0;j<22;j++) { E('rect',{x:x+3,y:y+22+j*13,width:9,height:9,fill:'#d4a72c'},B); E('rect',{x:x+w-12,y:y+22+j*13,width:9,height:9,fill:'#d4a72c'},B); }
+  E('rect',{x:x+28,y:y+190,width:w-56,height:112,rx:3,fill:'url(#metal)'},B);
+  E('text',{x:x+w/2,y:y+240,'font-size':11,'text-anchor':'middle',fill:'#4a4a4a',text:'ESP32-S3'},B);
+  E('text',{x:x+w/2,y:y+256,'font-size':10,'text-anchor':'middle',fill:'#4a4a4a',text:'N16R8'},B);
+  E('rect',{x:x+68,y:y+108,width:12,height:12,fill:'#f1f0ec'},B);
+  E('circle',{cx:x+74,cy:y+114,r:4,fill:'#dedbd2'},B);
+  rgb48El = { halo:E('circle',{cx:x+74,cy:y+114,r:22,opacity:0,filter:'url(#blur)'},Be), lente:E('circle',{cx:x+74,cy:y+114,r:4,opacity:0},Be),
+              pos:aMesa(OX+x+74, OY+y+114) };
+  for (const [ux,uy] of L.usb) E('rect',{x:ux-15,y:uy-6,width:30,height:13,rx:6,fill:'url(#metal)',stroke:'#7c8084'},B);
+  E('text',{x:L.usb[0][0],y:y+28,'font-size':10,'text-anchor':'middle',fill:'#bbb',text:'USB'},B);
+  E('text',{x:L.usb[1][0],y:y+28,'font-size':10,'text-anchor':'middle',fill:'#bbb',text:'COM'},B);
+}
+// DAC PCM5102A con su jack de 3.5 mm
+{ const {x,y,w,h} = L.pcm;
+  E('rect',{x,y,width:w,height:h,rx:3,fill:'#5d2f91',filter:'url(#sh2)'},B);
+  E('rect',{x:x+10,y:y+2,width:34,height:54,rx:2,fill:'#151515',filter:'url(#sh2)'},B);
+  E('rect',{x:x+18,y:y-12,width:18,height:14,fill:'#1d1d1d'},B);
+  E('rect',{x:x+18,y:y-14,width:18,height:4,fill:'url(#metal)'},B);
+  E('rect',{x:x+80,y:y+30,width:28,height:16,fill:'#1a1a1a'},B);
+  for (let j=0;j<3;j++) E('rect',{x:x+58,y:y+12+j*14,width:12,height:7,fill:'#c9b48a'},B);
+  E('text',{x:x+94,y:y+76,'font-size':10,'text-anchor':'middle',fill:'#e9dcff',text:'PCM5102A'},B);
+  for (let j=0;j<6;j++) E('circle',{cx:x+w-12,cy:y+14+j*13,r:3.5,fill:'#d4a72c'},B);
+}
+// DIN-5 MIDI OUT
+{ const {x,y,w,h} = L.midi;
+  E('rect',{x,y,width:w,height:h,rx:4,fill:'#161616',filter:'url(#sh2)'},B);
+  E('circle',{cx:x+w/2,cy:y+h/2,r:28,fill:'#2b2b2b'},B);
+  E('circle',{cx:x+w/2,cy:y+h/2,r:20,fill:'#0b0b0b'},B);
+}
+// módulo IMU (MPU6050, azul) en su header; se saca o se pone desde el panel
+const imuEl = E('g',{},B);
+{ const x = 352, y = 362, w = 106, h = 90;
+  E('rect',{x,y,width:w,height:h,rx:3,fill:'#2156b3',filter:'url(#sh2)'},imuEl);
+  E('rect',{x:x+38,y:y+22,width:30,height:30,fill:'#141414'},imuEl);
+  E('text',{x:x+w/2,y:y+68,'font-size':10,'text-anchor':'middle',fill:'#cfe0ff',text:'GY-521'},imuEl);
+  for (let j=0;j<8;j++) E('circle',{cx:x+10+j*12.3,cy:y+h-10,r:3.3,fill:'#d4a72c'},imuEl);
+}
+// pantalla OLED 0.96" (SSD1306) en el conector OLED del mismo header: 4 pines arriba, el módulo cuelga hacia abajo.
+// El módulo está en la escena; lo que brilla (los puntos de la pantalla) va en la capa emisiva.
+const oledEl = E('g',{},B), oledLuzEl = E('g',{},Be);
+const OLED = { x:333, y:352, w:146, h:146, vx:349, vy:400, vw:115, vh:58 };   // vx..: área activa 128×64
+const oledCanvas = document.createElement('canvas');                          // la pantalla a 4× (con la rejilla de puntos)
+oledCanvas.width = 512; oledCanvas.height = 256;
+{ const {x,y,w,h} = OLED;
+  E('rect',{x,y,width:w,height:h,rx:4,fill:'#1f4fa8',filter:'url(#sh2)'},oledEl);
+  for (const [cx,cy] of [[x+8,y+8],[x+w-8,y+8],[x+8,y+h-8],[x+w-8,y+h-8]]) E('circle',{cx,cy,r:4.5,fill:'#cfd6e0'},oledEl);
+  for (let j=0;j<4;j++) { E('circle',{cx:x+w/2-20+j*13.5,cy:y+12,r:3.6,fill:'#d4a72c'},oledEl);
+    E('text',{x:x+w/2-20+j*13.5,y:y+27,'font-size':4.6,'text-anchor':'middle',fill:'#cfe0ff',text:['GND','VCC','SCL','SDA'][j]},oledEl); }
+  E('rect',{x:x+2,y:y+34,width:w-4,height:100,fill:'#0a0a0a'},oledEl);
+  E('rect',{x:x+w/2-28,y:y+134,width:56,height:8,fill:'#2a2a2a'},oledEl);
+  const fo = E('foreignObject',{x:OLED.vx,y:OLED.vy,width:OLED.vw,height:OLED.vh},oledLuzEl);
+  oledCanvas.style.cssText = 'width:100%;height:100%;display:block';
+  fo.appendChild(oledCanvas);
+}
+// micrófono INMP441
+E('circle',{cx:L.mic[0],cy:L.mic[1],r:30,fill:'#202020',filter:'url(#sh2)'},B);
+E('circle',{cx:L.mic[0],cy:L.mic[1],r:5,fill:'#d4a72c'},B);
+// borneras: EXT1, EXT2 (izquierda), 5V y LED STRIP (derecha)
+function bornera(x,y,n,lado){
+  const H = n*22+8;
+  E('rect',{x:x-20,y:y-H/2,width:40,height:H,rx:3,fill:'#1b1b1b',filter:'url(#sh2)'},B);
+  for (let j=0;j<n;j++) { const cy=y-H/2+15+j*22, cx=x+(lado==='izq'?6:-6);
+    E('circle',{cx,cy,r:7.5,fill:'url(#metal)'},B);
+    E('line',{x1:cx-7,y1:cy,x2:cx+7,y2:cy,stroke:'#555','stroke-width':2,transform:`rotate(45 ${cx} ${cy})`},B); }
+}
+bornera(L.ext[0][0],L.ext[0][1],3,'izq'); bornera(L.ext[1][0],L.ext[1][1],3,'izq');
+bornera(L.t5v[0],L.t5v[1],2,'der'); bornera(L.tStrip[0],L.tStrip[1],3,'der');
+
+// LEDs SMD de la placa: la cápsula en la escena, la luz en la capa emisiva
+const leds = L.led.map(([x,y]) => {
+  E('rect',{x:x-11,y:y-11,width:22,height:22,rx:2,fill:'#b9b6ae',stroke:'#8f8c84'},B);
+  E('circle',{cx:x,cy:y,r:7,fill:'#a6a39b'},B);
+  const halo = E('circle',{cx:x,cy:y,r:34,opacity:0,filter:'url(#blur)'},Be);
+  const lente = E('circle',{cx:x,cy:y,r:8,opacity:0},Be);
+  return { halo, lente, pos:aMesa(OX+x, OY+y) };
+});
+
+// teclas
+const teclas = L.btn.map(([x,y],i) => {
+  const g = E('g',{transform:`translate(${x},${y})`,'data-tap':'','aria-label':`BTN${i+1}`},B);
+  E('rect',{x:-36,y:-36,width:72,height:72,rx:3,fill:'#e7e5df',stroke:'#bdb9b0'},g);
+  const cap = E('g',{},g);
+  E('rect',{x:-32,y:-36,width:64,height:64,rx:7,fill:'url(#tecla)',filter:'url(#sh2)'},cap);
+  E('rect',{x:-24,y:-32,width:48,height:46,rx:6,fill:'#262626'},cap);
+  g.addEventListener('pointerdown', e => { e.preventDefault(); g.setPointerCapture(e.pointerId); apretar(i, true); });
+  const soltar = () => apretar(i, false);
+  g.addEventListener('pointerup', soltar); g.addEventListener('pointercancel', soltar);
+  return cap;
+});
+
+// un punto del puntero en unidades de escenario (vale también con la mesa girada en el celular)
+function aEscenario(ev) {
+  const m = svg.getScreenCTM();
+  if (!m) return { x:0, y:0 };
+  const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
+  return { x:p.x, y:p.y };
+}
+// el rectángulo de un elemento HTML de la escena, en unidades de escenario
+function rectEscenario(el) {
+  const esc = $('escenario'), k = 1600 / esc.offsetWidth;
+  let x = 0, y = 0, e = el;
+  while (e && e !== esc) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent; }
+  return { x:x * k, y:y * k, w:el.offsetWidth * k, h:el.offsetHeight * k };
+}
+
+// perillas
+const potVal = [2048, 2048, 2048, 2048];
+const perillas = L.pot.map(([x,y],i) => {
+  const g = E('g',{transform:`translate(${x},${y})`,'data-drag':'','aria-label':`POT${i+1}`},B);
+  E('rect',{x:-24,y:-24,width:48,height:48,rx:3,fill:'url(#metal)',filter:'url(#sh2)'},g);
+  const k = E('g',{},g);
+  E('circle',{r:20,fill:'url(#perilla)',filter:'url(#sh2)'},k);
+  E('circle',{r:17,fill:'none',stroke:'#2a2a2a','stroke-width':3,'stroke-dasharray':'1.6 2.2'},k);
+  E('line',{x1:0,y1:-6,x2:0,y2:-17,stroke:'#f2f2f2','stroke-width':2.6,'stroke-linecap':'round'},k);
+  // el valor aparece sobre la mesa mientras se gira (realidad aumentada: no lo apaga la noche)
+  const etiqueta = E('g',{transform:`translate(${x},${y})`,opacity:0},Be);
+  const txt = E('text',{x:0,y:-36,'font-size':26,'text-anchor':'middle',fill:'#F5B041','font-family':'Consolas, monospace',
+    stroke:'#000','stroke-width':5,'paint-order':'stroke',text:'2048'},etiqueta);
+  const pintar = () => { k.setAttribute('transform',`rotate(${potVal[i]/4095*270-135})`); txt.textContent = potVal[i]; };
+  pintar();
+  let y0 = 0, v0 = 0, ocultar;
+  const mostrar = () => { guiaToque('POT' + (i + 1)); etiqueta.setAttribute('opacity',1); clearTimeout(ocultar); ocultar = setTimeout(() => etiqueta.setAttribute('opacity',0), 900); };
+  g.addEventListener('pointerdown', e => {
+    e.preventDefault(); g.setPointerCapture(e.pointerId); y0 = aEscenario(e).y; v0 = potVal[i]; mostrar();
+    const mv = ev => { potVal[i] = Math.max(0, Math.min(4095, Math.round(v0 - (aEscenario(ev).y - y0) * 32))); pintar(); mostrar(); };
+    g.addEventListener('pointermove', mv);
+    g.addEventListener('pointerup', () => g.removeEventListener('pointermove', mv), { once:true });
+  });
+  g.addEventListener('wheel', e => { e.preventDefault(); potVal[i] = Math.max(0, Math.min(4095, potVal[i] - Math.sign(e.deltaY) * 64)); pintar(); mostrar(); }, { passive:false });
+  return { pintar };
+});
+
+// ---------------------------------------------------------------- cables y periféricos externos
+function cable(d, ancho = 10, color = '#34363a') {
+  const g = E('g',{},M);
+  E('path',{d,fill:'none',stroke:color,'stroke-width':ancho,'stroke-linecap':'round','stroke-linejoin':'round',filter:'url(#sh2)'},g);
+  E('path',{d,fill:'none',stroke:'#6a6d73','stroke-width':2,'stroke-linecap':'round',opacity:.6,transform:'translate(-1.5,-1.5)'},g);
+  return g;
+}
+function fichaUSB(x, y, rot = 0) {
+  const g = E('g',{transform:`translate(${x},${y}) rotate(${rot})`},M);
+  E('rect',{x:-12,y:-6,width:24,height:12,rx:4,fill:'url(#metal)'},g);
+  E('rect',{x:-16,y:-34,width:32,height:30,rx:5,fill:'#2b2d31',filter:'url(#sh2)'},g);
+  return g;
+}
+// los cables salen de la mesa por los costados: el USB hacia el computador (izquierda), MIDI y audio hacia la derecha.
+// (coordenadas de placa: x = 2400 ya está fuera de la mesa por la derecha, x = -1100 por la izquierda)
+// MIDI DIN-5 → afuera
+cable('M1120,205 H1150 Q1166,205 1166,189 V88 Q1166,72 1182,72 H2400', 10, '#2a2a2a');
+// audio: jack 3.5 mm del DAC → afuera
+{ const jx = OX+L.pcm.x+27;
+  E('path',{d:`M${jx},106 V72 Q${jx},56 ${jx+16},56 H2400`,fill:'none',stroke:'#1c1c1c','stroke-width':4.5,'stroke-linecap':'round',filter:'url(#sh2)'},M);
+  E('rect',{x:jx-3.5,y:136,width:7,height:26,fill:'url(#metal)'},M);
+  E('path',{d:`M${jx-4},104 L${jx+4},104 L${jx+10},120 L${jx+10},136 L${jx-10},136 L${jx-10},120 Z`,fill:'#1d1d1d',filter:'url(#sh2)'},M);
+  for (let j=0;j<3;j++) E('line',{x1:jx-10,y1:124+j*4,x2:jx+10,y2:124+j*4,stroke:'#383838','stroke-width':1.3},M);
+}
+// piezos de contacto con pinza: plug de 6.3 mm en cualquiera de los 4 jacks del borde (nunca en EXT).
+// Clic en un jack vacío = enchufar; clic en el plug = desenchufar; clic en la pinza = golpe.
+const piezoEn = [true, false, false, false];
+const pinzaPads = [null, null, null, null];
+const capaPiezos = E('g',{},M);
+for (let k = 0; k < 4; k++) {                 // zona de clic de cada jack (encima de la foto, debajo de los plugs)
+  const [x,y] = L.jacks[k];
+  const z = E('rect',{x:OX+x-44,y:OY+y-92,width:88,height:150,fill:'transparent','data-tap':'','aria-label':`Jack ${k+1}: enchufar piezo`},M);
+  z.addEventListener('click', () => { if (!piezoEn[k]) { piezoEn[k] = true; armarPiezos(); } });
+}
+function armarPiezos() {
+  capaPiezos.innerHTML = '';
+  const cables = E('g',{},capaPiezos), pinzas = E('g',{},capaPiezos);   // los cables pasan por detrás de las pinzas
+  let idx = 0;
+  for (let k = 0; k < 4; k++) {
+    pinzaPads[k] = null;
+    if (!piezoEn[k]) continue;
+    const jx = OX + L.jacks[k][0], jy = OY + L.jacks[k][1] - 92;     // boca del jack
+    const yc = 74 - idx * 5, xc = 70 - idx * 8;                      // cada cable por su carril
+    const cy = 214 + idx * 80;                                       // la pinza, a la izquierda de la placa
+    E('path',{d:`M${jx},${jy-68} Q${jx},${yc} ${jx-12},${yc} H${xc+12} Q${xc},${yc} ${xc},${yc+12} V${cy-30}`,
+      fill:'none',stroke:'#1c1c1c','stroke-width':4.5,'stroke-linecap':'round'},cables);
+    const plug = E('g',{'data-tap':'','aria-label':`Desenchufar el piezo del jack ${k+1}`},cables);
+    E('rect',{x:jx-6,y:jy-24,width:12,height:28,fill:'url(#metal)',filter:'url(#sh2)'},plug);
+    E('path',{d:`M${jx-4},${jy-70} L${jx+4},${jy-70} L${jx+11},${jy-48} L${jx+13},${jy-24} L${jx-13},${jy-24} L${jx-11},${jy-48} Z`,fill:'#1d1d1d',filter:'url(#sh2)'},plug);
+    for (let j=0;j<5;j++) E('line',{x1:jx-11,y1:jy-44+j*4,x2:jx+11,y2:jy-44+j*4,stroke:'#383838','stroke-width':1.5},plug);
+    plug.addEventListener('click', () => { piezoEn[k] = false; armarPiezos(); });
+    // pinza de contacto: la mandíbula arriba, la pastilla del piezo abajo
+    const g = E('g',{transform:`translate(54,${cy})`,'data-tap':'','aria-label':`Piezo del jack ${k+1}: golpear`},pinzas);
+    E('path',{d:'M-9,-32 Q0,-36 9,-32 L13,-14 L-13,-14 Z',fill:'#242424',filter:'url(#sh2)'},g);
+    E('circle',{cx:0,cy:-17,r:3,fill:'url(#metal)'},g);
+    pinzaPads[k] = E('circle',{cx:0,cy:12,r:26,fill:'#171717',filter:'url(#sh2)'},g);
+    E('circle',{cx:0,cy:12,r:18,fill:'none',stroke:'#2c2c2c','stroke-width':2},g);
+    E('text',{x:0,y:18,'font-size':16,'text-anchor':'middle',fill:'#6a6a6a','font-family':'Archivo, sans-serif','font-weight':700,text:k+1},g);
+    g.addEventListener('pointerdown', e => { e.preventDefault(); golpePiezo(k, 0.9); });
+    idx++;
+  }
+  // casillas del panel
+  const c = $('piezosChk');
+  if (c) c.querySelectorAll('input').forEach((el, k) => { el.checked = piezoEn[k]; });
+}
+
+// sensores en las borneras EXT1 (GPIO 3) y EXT2 (GPIO 9): [GND | PIN | 3V3] de arriba hacia abajo
+const ext = { 3:{ tipo:'', p:0, corte:0, amb:22, humAmb:45, soplo:0 }, 9:{ tipo:'', p:0, corte:0, amb:22, humAmb:45, soplo:0 } };
+const esDHT = t => t === 'dht' || t === 'dht22';
+const capaExt = E('g',{},M);
+const EXT_Y = { 3: OY + L.ext[0][1], 9: OY + L.ext[1][1] };
+const EXT_X = OX + L.ext[0][0] + 6;
+function armarExt() {
+  capaExt.innerHTML = '';
+  for (const pin of [3, 9]) {
+    const s = ext[pin], y0 = EXT_Y[pin], tGnd = y0 - 22, tPin = y0, t3v = y0 + 22;
+    if (!s.tipo) continue;
+    const cable = (y, c) => E('path',{d:`M${EXT_X-4},${y} H${EXT_X-56}`,stroke:c,'stroke-width':3,fill:'none','stroke-linecap':'round'},capaExt);
+    // la resistencia del divisor, de PIN a GND, justo afuera de la bornera
+    const resistencia = (y1, y2, valor) => {
+      const x = EXT_X - 40;
+      E('path',{d:`M${EXT_X-4},${y1} H${x} V${y2}`,stroke:'#b9b9b9','stroke-width':1.6,fill:'none'},capaExt);
+      const g = E('g',{},capaExt);
+      E('title',{text:`${valor} de PIN a GND`},g);
+      E('rect',{x:x-4,y:(y1+y2)/2-7,width:8,height:14,rx:3,fill:'#c8a96a'},g);
+      E('rect',{x:x-4,y:(y1+y2)/2-3,width:8,height:2,fill:'#6b3f1d'},g);
+    };
+    if (s.tipo === 'fsr') {
+      // FSR 402: disco con su cola; 3V3 → FSR → PIN, y 10 kΩ de PIN a GND
+      resistencia(tGnd, tPin, s.tipo === 'fsr' ? '10 kΩ' : '220 Ω');
+      cable(tPin, '#b3261e'); cable(t3v, '#1d1d1d');
+      E('rect',{x:94,y:y0-6,width:EXT_X-150,height:28,rx:3,fill:'#2d2b28'},capaExt);
+      const g = E('g',{'data-tap':'','aria-label':`FSR en ${pin === 3 ? 'EXT1' : 'EXT2'}: mantener apretado y arrastrar`},capaExt);
+      E('circle',{cx:58,cy:y0+8,r:36,fill:'#2d2b28',filter:'url(#sh2)'},g);
+      E('circle',{cx:58,cy:y0+8,r:29,fill:'#3b3833'},g);
+      for (let r = 6; r < 28; r += 5) E('circle',{cx:58,cy:y0+8,r,fill:'none',stroke:'#4a463f','stroke-width':1},g);
+      s.dedo = E('circle',{cx:58,cy:y0+8,r:0,fill:'#F5B041',opacity:.55},g);
+      s.txt = E('text',{x:58,y:y0+60,'font-size':11,'text-anchor':'middle',fill:'#6b655c','font-family':'Consolas, monospace',text:'FSR'},capaExt);
+      g.addEventListener('pointerdown', e => {
+        e.preventDefault(); g.setPointerCapture(e.pointerId);
+        const y1 = aEscenario(e).y;
+        s.p = 0.6; pintarExt();
+        const mv = ev => { s.p = Math.max(0.05, Math.min(1, 0.6 + (y1 - aEscenario(ev).y) / 45)); pintarExt(); };
+        g.addEventListener('pointermove', mv);
+        g.addEventListener('pointerup', () => { g.removeEventListener('pointermove', mv); s.p = 0; pintarExt(); }, { once:true });
+      });
+    } else if (esDHT(s.tipo)) {
+      // módulo DHT11/DHT22 de 3 pines (trae su pull-up de 10 kΩ): GND · DATA · VCC alineados con los
+      // tornillos GND · PIN · 3V3 de la bornera, así cada cable va derecho a su tornillo
+      const d22 = s.tipo === 'dht22', ROT = pin === 3 ? 'EXT1' : 'EXT2';
+      const g = E('g',{'data-tap':'','aria-label':`${d22 ? 'DHT22' : 'DHT11'} en ${ROT}: clic para ver cómo se conecta`},capaExt);
+      E('rect',{x:2,y:y0-38,width:96,height:76,rx:3,fill:'#1c1c1c',filter:'url(#sh2)'},g);
+      E('rect',{x:6,y:y0-34,width:46,height:68,rx:3,fill:d22 ? '#efeee9' : '#3b8ed0'},g);
+      for (let f = 0; f < 7; f++) for (let c = 0; c < 4; c++)
+        E('rect',{x:11 + c * 9.5,y:y0-29 + f * 9,width:6,height:5.5,rx:1,fill:d22 ? '#c9c7bf' : '#24618f'},g);
+      E('rect',{x:56,y:y0+10,width:8,height:5,fill:'#c8a96a'},g);          // pull-up 10 kΩ del módulo
+      const filas = [[tGnd,'GND','#1d1d1d','GND'],[tPin,'DATA','#e3b100',`GPIO ${pin}`],[t3v,'VCC','#c62828','3V3']];
+      for (const [y, et, color, destino] of filas) {
+        E('text',{x:69,y:y + 3.5,'font-size':8.5,'font-weight':700,'text-anchor':'middle',fill:'#f2f2f2','font-family':'Archivo, sans-serif',text:et},g);
+        E('rect',{x:84,y:y - 5,width:10,height:10,fill:'#0c0c0c'},g);
+        E('rect',{x:93,y:y - 1.5,width:9,height:3,fill:'#d4a72c'},g);
+        E('path',{d:`M101,${y} H${EXT_X-4}`,stroke:color,'stroke-width':3.2,fill:'none','stroke-linecap':'round'},capaExt);
+        const ancho = destino.length * 6 + 10;
+        E('rect',{x:146 - ancho / 2,y:y - 7,width:ancho,height:14,rx:7,fill:color,stroke:'#00000033'},capaExt);
+        E('text',{x:146,y:y + 3.5,'font-size':9,'font-weight':700,'text-anchor':'middle',fill:color === '#e3b100' ? '#1d1d1d' : '#fff','font-family':'Archivo, sans-serif',text:destino},capaExt);
+      }
+      s.txt = E('text',{x:4,y:y0+52,'font-size':10.5,'text-anchor':'start',fill:'#6b655c','font-family':'Consolas, monospace',text:''},capaExt);
+      g.addEventListener('click', () => abrirDHT(pin));
+    } else {
+      // LDR + 220 Ω, y un láser enfrente: cortar el haz con la mano (mantener apretado)
+      resistencia(tGnd, tPin, s.tipo === 'fsr' ? '10 kΩ' : '220 Ω');
+      cable(tPin, '#b3261e'); cable(t3v, '#1d1d1d');
+      E('path',{d:`M${EXT_X-56},${tPin} H108 Q100,${tPin} 100,${y0+11} M${EXT_X-56},${t3v} H108 Q100,${t3v} 100,${y0+11}`,stroke:'#1d1d1d','stroke-width':2.5,fill:'none'},capaExt);
+      E('circle',{cx:94,cy:y0+11,r:11,fill:'#d9a05b',filter:'url(#sh2)'},capaExt);
+      E('path',{d:`M90,${y0+4} h8 l-8,3 h8 l-8,3 h8 l-8,3 h8`,stroke:'#7a3e12','stroke-width':1.3,fill:'none'},capaExt);
+      E('rect',{x:6,y:y0+3,width:30,height:16,rx:3,fill:'#9aa0a6',filter:'url(#sh2)'},capaExt);
+      E('rect',{x:34,y:y0+6,width:6,height:10,fill:'#5f6368'},capaExt);
+      s.haz = E('line',{x1:40,y1:y0+11,x2:84,y2:y0+11,stroke:'#ff2a1a','stroke-width':2.5,opacity:.9},capaExt);
+      s.mano = E('rect',{x:52,y:y0-14,width:14,height:50,rx:7,fill:'#c98b62',opacity:0},capaExt);
+      s.txt = E('text',{x:46,y:y0+44,'font-size':11,'text-anchor':'middle',fill:'#6b655c','font-family':'Consolas, monospace',text:'láser'},capaExt);
+      const z = E('rect',{x:2,y:y0-20,width:96,height:56,fill:'transparent','data-tap':'','aria-label':`Láser en ${pin === 3 ? 'EXT1' : 'EXT2'}: mantener apretado para cortar el haz`},capaExt);
+      z.addEventListener('pointerdown', e => { e.preventDefault(); z.setPointerCapture(e.pointerId); cortarLaser(pin, true); });
+      const soltar = () => cortarLaser(pin, false);
+      z.addEventListener('pointerup', soltar); z.addEventListener('pointercancel', soltar);
+    }
+  }
+  pintarExt();
+  for (const pin of [3, 9]) { const sel = $('ext' + pin); if (sel) sel.value = ext[pin].tipo; }
+}
+// un corte de haz tiene que durar al menos 40 ms en la placa, como los botones
+function cortarLaser(pin, on) {
+  const s = ext[pin];
+  clearTimeout(s.pend);
+  if (on) { s.corte = 1; s.t0 = performance.now(); pintarExt(); return; }
+  const falta = 40 - (performance.now() - (s.t0 || 0));
+  const hacer = () => { s.corte = 0; pintarExt(); };
+  if (falta > 0) s.pend = setTimeout(hacer, falta); else hacer();
+}
+// lectura cruda que ve el ADC con cada sensor
+function lecturaExt(pin) {
+  const s = ext[pin];
+  if (s.tipo === 'fsr') {          // divisor FSR / 10 kΩ: suelto ≈ 0, a fondo ≈ 4000; casi lineal con la fuerza
+    if (s.p < 0.02) return 0;
+    return Math.round(4000 * (1 - Math.exp(-2.6 * s.p)) / (1 - Math.exp(-2.6)));
+  }
+  if (s.tipo === 'ldr') return s.corte ? 3180 : 4060;   // con el láser de lleno / luz ambiente sola
+  if (esDHT(s.tipo)) return 4095;                         // la línea de datos en reposo: el pull-up del módulo
+  return 0;
+}
+function pintarExt() {
+  for (const pin of [3, 9]) {
+    const s = ext[pin];
+    if (s.tipo === 'fsr' && s.dedo) { s.dedo.setAttribute('r', 8 + s.p * 20); s.dedo.setAttribute('opacity', s.p ? .55 : 0);
+      s.txt.textContent = s.p ? `FSR ${Math.round(s.p * 100)} %` : 'FSR'; }
+    if (s.tipo === 'ldr' && s.haz) { s.haz.setAttribute('x2', s.corte ? 52 : 84); s.mano.setAttribute('opacity', s.corte ? .85 : 0);
+      s.txt.textContent = s.corte ? 'cortado' : 'láser'; }
+    if (esDHT(s.tipo) && s.txt) { const a = aireDHT(s); s.txt.textContent = `${a.t.toFixed(1)} °C · ${Math.round(a.h)} %`; }
+  }
+  pintarDHT();
+  escribirEntradas();
+}
+// el aire que mide el DHT: el del ambiente, y si se le sopla, aire tibio y casi saturado de humedad
+function aireDHT(s) {
+  return { t: s.amb + (33 - s.amb) * 0.3 * s.soplo, h: s.humAmb + (95 - s.humAmb) * s.soplo };
+}
+// el sensor no cambia de golpe: sube en ~1 s mientras se sopla y vuelve en ~6 s (como un DHT11 de verdad)
+let dhtT = performance.now();
+function tickDHT() {
+  const t = performance.now(), dt = Math.min(0.5, (t - dhtT) / 1000);
+  dhtT = t;
+  let cambio = false;
+  for (const pin of [3, 9]) {
+    const s = ext[pin];
+    if (!esDHT(s.tipo)) continue;
+    const meta = s.soplando ? 1 : 0, tau = s.soplando ? 1.0 : 6.0;
+    const nuevo = s.soplo + (meta - s.soplo) * (1 - Math.exp(-dt / tau));
+    if (Math.abs(nuevo - s.soplo) > 1e-4) { s.soplo = nuevo; cambio = true; }
+  }
+  if (cambio) pintarExt();
+}
+let dhtAbierto = 0;
+function abrirDHT(pin) {
+  const otro = dhtAbierto !== pin;
+  cerrarDHT();
+  if (!otro) return;
+  dhtAbierto = pin;
+  const s = ext[pin], d22 = s.tipo === 'dht22', ROT = pin === 3 ? 'EXT1' : 'EXT2', mod = d22 ? 'DHT22' : 'DHT11';
+  const c = document.createElement('div');
+  c.className = 'capa ar dhtCard'; c.id = 'dhtCard';
+  c.innerHTML = `<h2>${mod} en ${ROT} <button class="enlace" data-a="cerrar">cerrar</button></h2>
+    <div class="dhtCon">
+      <span class="pin" style="background:#c62828">VCC</span><span>→ tornillo <b>3V3</b> (abajo)</span>
+      <span class="pin" style="background:#e3b100;color:#1d1d1d">DATA</span><span>→ tornillo <b>PIN</b> (al medio) = <b>GPIO ${pin}</b></span>
+      <span class="pin" style="background:#1d1d1d">GND</span><span>→ tornillo <b>GND</b> (arriba)</span>
+    </div>
+    <p>En el código: <code>DHT dht(${pin}, ${mod});</code> El módulo trae la resistencia de 10 kΩ de DATA a VCC.
+      ${d22 ? 'Lee cada 2 s, de −40 a 80 °C, con un decimal.' : 'Lee como mucho una vez por segundo, de 0 a 50 °C y de 20 a 90 % de humedad.'}</p>
+    <div class="fila2"><span>Temperatura del aire</span><b data-v="t"></b></div>
+    <input type="range" data-k="amb" min="${d22 ? -10 : 0}" max="50" step="0.5" value="${s.amb}" aria-label="Temperatura del aire">
+    <div class="fila2"><span>Humedad del aire</span><b data-v="h"></b></div>
+    <input type="range" data-k="humAmb" min="${d22 ? 0 : 20}" max="${d22 ? 100 : 90}" step="1" value="${s.humAmb}" aria-label="Humedad del aire">
+    <button class="enlace" data-a="soplar">mantener apretado: soplar al sensor</button>`;
+  $('escenario').appendChild(c);
+  c.addEventListener('input', e => { const k = e.target.dataset.k; if (k) { s[k] = +e.target.value; pintarExt(); } });
+  c.addEventListener('click', e => { if (e.target.dataset.a === 'cerrar') cerrarDHT(); });
+  const b = c.querySelector('[data-a=soplar]');
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); s.soplando = true; });
+  const parar = () => { s.soplando = false; };
+  b.addEventListener('pointerup', parar); b.addEventListener('pointercancel', parar);
+  pintarDHT();
+}
+function cerrarDHT() { const c = $('dhtCard'); if (c) c.remove(); dhtAbierto = 0; }
+function pintarDHT() {
+  const c = $('dhtCard');
+  if (!c) return;
+  const s = ext[dhtAbierto];
+  if (!esDHT(s.tipo)) { cerrarDHT(); return; }
+  const a = aireDHT(s);
+  c.querySelector('[data-v=t]').textContent = `${a.t.toFixed(1)} °C`;
+  c.querySelector('[data-v=h]').textContent = `${Math.round(a.h)} %`;
+}
+// cables USB: clic = enchufar / desenchufar
+const usbOn = [true, false];
+const RUTAS = [
+  { puesto:'M692,128 V48 Q692,32 676,32 H-1100', suelto:'M-1100,32 H470 C530,32 556,40 584,52', ficha:[692,152], fichaSuelta:[584,52], giro:-68 },
+  { puesto:'M753,128 V24 Q753,8 737,8 H-1100',   suelto:'M-1100,8 H540 C600,8 626,14 652,22',   ficha:[753,152], fichaSuelta:[652,22], giro:-74 },
+];
+const cablesUSB = RUTAS.map((r, i) => {
+  const puesto = [cable(r.puesto), fichaUSB(r.ficha[0], r.ficha[1])];
+  const suelto = [cable(r.suelto), fichaUSB(r.fichaSuelta[0], r.fichaSuelta[1], r.giro)];
+  for (const el of [...puesto, ...suelto]) {
+    el.setAttribute('data-tap','');
+    el.addEventListener('click', () => { usbOn[i] = !usbOn[i]; pintarUSB(); cambioAlimentacion(); });
+  }
+  return { puesto, suelto };
+});
+function pintarUSB() {
+  cablesUSB.forEach((c, i) => {
+    for (const el of c.puesto) el.style.display = usbOn[i] ? '' : 'none';
+    for (const el of c.suelto) el.style.display = usbOn[i] ? 'none' : '';
+  });
+  $('pUSB').classList.toggle('off', !usbOn[0]);
+  $('pCOM').classList.toggle('off', !usbOn[1]);
+}
+pintarUSB();
+
+// ---------------------------------------------------------------- tira / matriz externa
+// Si el sketch declara un número de LEDs que forma un rectángulo (256 = 32×8, 400 = 20×20…), se ofrece
+// dibujarlo como matriz. El orden del dato (por filas o por columnas, serpentina, espejos) se elige
+// abajo de la matriz y tiene que coincidir con el XY() del sketch, igual que con una matriz de verdad.
+let tiraN = 0, tiraEls = [], matriz = null;
+const matrizCfg = {};               // por cantidad de LEDs: { forma:'32x8' | 'tira', columnas, serp, espX, espY }
+function formasPosibles(n) {
+  const f = [];
+  for (let h = 4; h * h <= n; h++) if (n % h === 0 && n / h <= 64) { f.push(`${n / h}x${h}`); if (n / h !== h) f.push(`${h}x${n / h}`); }
+  return f;
+}
+function cfgMatriz(n) {
+  if (!matrizCfg[n]) {
+    let c = { forma:'tira', columnas:false, serp:false, espX:false, espY:false };
+    if (n === 256) c = { forma:'32x8', columnas:true, serp:true, espX:false, espY:false };    // panel flexible 8×32 (industrial_matriz)
+    else if (n === 400) c = { forma:'20x20', columnas:false, serp:false, espX:false, espY:false };   // 20×20 progresiva (trance_midi_leds)
+    else if (formasPosibles(n).length && (n === 64 || n === 1024 || n === 144)) { const r = Math.sqrt(n); c.forma = `${r}x${r}`; }
+    try { Object.assign(c, JSON.parse(localStorage.getItem('simulador.matriz.' + n) || '{}')); } catch {}
+    matrizCfg[n] = c;
+  }
+  return matrizCfg[n];
+}
+function guardarCfgMatriz(n) { try { localStorage.setItem('simulador.matriz.' + n, JSON.stringify(matrizCfg[n])); } catch {} }
+// índice del dato → (x, y) en la matriz (lo inverso del XY() del sketch)
+function posMatriz(i, W, H, c) {
+  let x, y;
+  if (c.columnas) { x = Math.floor(i / H); const yy = i % H; y = (c.serp && (x & 1)) ? H - 1 - yy : yy; }
+  else            { y = Math.floor(i / W); const xx = i % W; x = (c.serp && (y & 1)) ? W - 1 - xx : xx; }
+  if (c.espX) x = W - 1 - x;
+  if (c.espY) y = H - 1 - y;
+  return [x, y];
+}
+// La matriz (o la tira) está arriba de la placa, en su marco de madera. Sin LEDs externos en el sketch se ve
+// la matriz 32×8 apagada: está sobre la mesa, sólo que nadie le manda datos.
+const ZONA = { x0:300, x1:1300, y0:96, y1:344 };             // dónde cabe, en unidades de escenario
+const ENTRADA_TIRA = aMesa(OX + 1014, OY + 490);             // tornillo de datos de la bornera LED STRIP
+function cableTira(pts) {
+  E('path',{d:ruta([ENTRADA_TIRA, ...pts]),fill:'none',stroke:'#1d1d1d','stroke-width':3.5,'stroke-linecap':'round','stroke-linejoin':'round',filter:'url(#sh2)'},capaTira);
+}
+function armarTira(n) {
+  capaTira.innerHTML = ''; capaTiraLuz.innerHTML = ''; tiraEls = []; tiraN = n; matriz = null;
+  const cfg = $('arMatriz'); if (cfg) cfg.remove();
+  luzSucia = true;
+  if (n <= 0) { armarMatriz(256, cfgMatriz(256), [], true); return; }
+  const c = cfgMatriz(n), formas = formasPosibles(n);
+  if (c.forma !== 'tira' && formas.includes(c.forma)) { armarMatriz(n, c, formas, false); return; }
+  const filas0 = Math.ceil(n / 160);
+  const porFila = Math.ceil(n / filas0);
+  const filas = Math.ceil(n / porFila);
+  const { x0, x1 } = ZONA, paso = (x1 - x0) / porFila;
+  const lado = Math.max(3, Math.min(10, paso * 0.62));
+  const yc = (ZONA.y0 + ZONA.y1) / 2, yf = f => yc + (f - (filas - 1) / 2) * 30;
+  cableTira([[ENTRADA_TIRA[0] + 90, ENTRADA_TIRA[1]], [ENTRADA_TIRA[0] + 90, yf(filas - 1) + 40], [x1 + 24, yf(filas - 1) + 40], [x1 + 24, yf(0)], [x1 + 4, yf(0)]]);
+  for (let f = 0; f < filas; f++)
+    E('rect',{x:x0 - 4,y:yf(f) - 8,width:x1 - x0 + 8,height:16,rx:2,fill:'#e9e7e1',filter:'url(#shP)'},capaTira);
+  for (let i = 0; i < n; i++) {
+    const f = Math.floor(i / porFila), k = i % porFila;
+    const x = x1 - paso / 2 - k * paso, y = yf(f);              // la tira nace en la bornera (a la derecha)
+    E('rect',{x:x-lado/2,y:y-lado/2,width:lado,height:lado,fill:'#9a968e'},capaTira);
+    const halo = E('circle',{cx:x,cy:y,r:lado*2.2,opacity:0,filter:'url(#blur)'},capaTiraLuz);
+    const lente = E('circle',{cx:x,cy:y,r:lado*0.36,opacity:0},capaTiraLuz);
+    tiraEls.push({ halo, lente, pos:[x, y] });
+  }
+  if (formas.length) controlesMatriz(n, c, formas, x0, yf(filas - 1) + 18);
+}
+function armarMatriz(n, c, formas, vacia) {
+  const [W, H] = c.forma.split('x').map(Number);
+  const mx = 26, my = 22;                                     // el marco de madera
+  const celda = Math.min((ZONA.x1 - ZONA.x0 - 2 * mx) / W, (ZONA.y1 - ZONA.y0 - 2 * my) / H, 30);
+  const w = W * celda, h = H * celda;
+  const x0 = Math.round(800 - w / 2), y0 = Math.round((ZONA.y0 + ZONA.y1) / 2 - h / 2);
+  // el cable entra por abajo del marco, en la esquina derecha (pasa por debajo de la madera)
+  cableTira([[ENTRADA_TIRA[0] + 90, ENTRADA_TIRA[1]], [ENTRADA_TIRA[0] + 90, y0 + h + my + 34], [x0 + w - 30, y0 + h + my + 34], [x0 + w - 30, y0 + h + my - 6]]);
+  E('rect',{x:x0 - mx,y:y0 - my,width:w + 2 * mx,height:h + 2 * my,rx:4,fill:'url(#madera)',filter:'url(#sh)'},capaTira);
+  E('rect',{x:x0 - mx,y:y0 - my,width:w + 2 * mx,height:h + 2 * my,rx:4,fill:'#000',filter:'url(#grano)'},capaTira);
+  E('rect',{x:x0 - mx,y:y0 - my,width:w + 2 * mx,height:h + 2 * my,rx:4,fill:'none',stroke:'#00000066','stroke-width':1.5},capaTira);
+  E('rect',{x:x0 - 5,y:y0 - 5,width:w + 10,height:h + 10,fill:'#0c0c0c'},capaTira);
+  const pos = [];
+  for (let i = 0; i < n; i++) pos.push(posMatriz(i, W, H, c));
+  for (const [x, y] of pos)                                   // las cápsulas de los LEDs, apagadas
+    E('rect',{x:x0 + x * celda + celda * 0.22,y:y0 + y * celda + celda * 0.22,width:celda * 0.56,height:celda * 0.56,fill:'#625f5a'},capaTira);
+  // lo que brilla va en un canvas de la capa emisiva, con margen para que el halo no se corte
+  const mg = celda * 1.6, esc = 2;
+  const fo = E('foreignObject',{x:x0 - mg,y:y0 - mg,width:w + 2 * mg,height:h + 2 * mg},capaTiraLuz);
+  const cv = document.createElement('canvas');
+  cv.width = Math.round((w + 2 * mg) * esc); cv.height = Math.round((h + 2 * mg) * esc);
+  cv.style.cssText = 'width:100%;height:100%;display:block';
+  fo.appendChild(cv);
+  matriz = { cv, ctx:cv.getContext('2d'), W, H, celda:celda * esc, mg:mg * esc, pos, vacia, x0, y0, cu:celda, luces:[] };
+  pintarMatriz(null);
+  if (!vacia) controlesMatriz(n, c, formas, x0 - mx, y0 + h + my + 6);
+}
+function controlesMatriz(n, c, formas, x, y) {
+  const d = document.createElement('div');
+  d.className = 'capa matrizCfg'; d.id = 'arMatriz';
+  d.style.left = `calc(${x} * var(--u))`; d.style.top = `calc(${y} * var(--u))`;
+  const opciones = ['tira', ...formas].map(f => `<option value="${f}"${f === c.forma ? ' selected' : ''}>${f === 'tira' ? 'tira' : 'matriz ' + f.replace('x', ' × ')}</option>`).join('');
+  d.innerHTML = `<span>${n} LEDs</span><select class="mini" data-k="forma">${opciones}</select>` +
+    (c.forma === 'tira' ? '' :
+      `<select class="mini" data-k="columnas"><option value="0"${c.columnas ? '' : ' selected'}>dato por filas</option><option value="1"${c.columnas ? ' selected' : ''}>dato por columnas</option></select>` +
+      ['serp:serpentina', 'espX:espejo X', 'espY:espejo Y'].map(s => { const [k, t] = s.split(':');
+        return `<label class="chk"><input type="checkbox" data-k="${k}"${c[k] ? ' checked' : ''}> ${t}</label>`; }).join(''));
+  d.addEventListener('change', e => {
+    const k = e.target.dataset.k;
+    if (!k) return;
+    c[k] = e.target.type === 'checkbox' ? e.target.checked : (k === 'columnas' ? e.target.value === '1' : e.target.value);
+    guardarCfgMatriz(n);
+    armarTira(n);
+    ledSeq = -1;                    // repintar aunque el sketch no haya hecho show()
+  });
+  $('escenario').appendChild(d);
+}
+// la matriz en un canvas: cada LED es una estela amplia + el punto, sumados (como la luz).
+// De paso junta los LEDs en bloques de 4×2: esas son las fuentes que alumbran la mesa.
+function pintarMatriz(base) {
+  const m = matriz, g = m.ctx, s = m.celda, mg = m.mg;
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, m.cv.width, m.cv.height);
+  m.luces = [];
+  luzSucia = true;
+  if (!base || m.vacia) return;
+  const BW = 4, BH = 2, nbx = Math.ceil(m.W / BW), nby = Math.ceil(m.H / BH);
+  const blo = new Float32Array(nbx * nby * 4);
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < m.pos.length; i++) {
+    const k = base + (6 + i) * 3;
+    const r = P.U8[k], gg = P.U8[k + 1], b = P.U8[k + 2];
+    if (!(r | gg | b)) continue;
+    const c = colorLed(r, gg, b);
+    const [x, y] = m.pos[i];
+    const cx = mg + x * s + s / 2, cy = mg + y * s + s / 2;
+    const gr = g.createRadialGradient(cx, cy, 0, cx, cy, s * 1.6);
+    gr.addColorStop(0, c.c); gr.addColorStop(0.35, c.cA(0.35)); gr.addColorStop(1, c.cA(0));
+    g.globalAlpha = c.a * 0.8; g.fillStyle = gr;
+    g.fillRect(cx - s * 1.6, cy - s * 1.6, s * 3.2, s * 3.2);
+    g.globalAlpha = 1; g.fillStyle = c.c;
+    g.fillRect(cx - s * 0.22, cy - s * 0.22, s * 0.44, s * 0.44);
+    const o = (Math.floor(y / BH) * nbx + Math.floor(x / BW)) * 4;
+    blo[o] += c.l[0]; blo[o + 1] += c.l[1]; blo[o + 2] += c.l[2]; blo[o + 3]++;
+  }
+  g.globalAlpha = 1;
+  for (let by = 0; by < nby; by++) for (let bx = 0; bx < nbx; bx++) {
+    const o = (by * nbx + bx) * 4;
+    if (!blo[o + 3]) continue;
+    const n = BW * BH;
+    m.luces.push({ x:m.x0 + (bx + 0.5) * BW * m.cu, y:m.y0 + (by + 0.5) * BH * m.cu, c:[blo[o] / n, blo[o + 1] / n, blo[o + 2] / n], f:0.42, R:640 });
+  }
+}
+
+// color de un LED en pantalla. De noche un LED a 10/255 ya encandila, así que el punto nunca se ve "gris":
+// el brillo va de 0.45 a 1 con la raíz del valor, y el tono se conserva. l = la luz que cae sobre la mesa,
+// que sí es proporcional a lo que el LED emite de verdad.
+function colorLed(r, g, b) {
+  const m = Math.max(r, g, b);
+  if (m === 0) return null;
+  const q = Math.sqrt(m / 255), I = 0.45 + 0.55 * q;
+  const t = v => Math.pow(v / m, 0.7);
+  const R = Math.round(255 * I * t(r)), G = Math.round(255 * I * t(g)), Bb = Math.round(255 * I * t(b));
+  const e = 0.25 + 0.75 * q;
+  return { c:`rgb(${R},${G},${Bb})`, cA:a => `rgba(${R},${G},${Bb},${a})`, l:[t(r) * e, t(g) * e, t(b) * e],
+           a:Math.min(0.9, 0.4 + q * 0.5) };
+}
+function pintarLed(el, r, g, b) {
+  const c = colorLed(r, g, b);
+  el.lente.setAttribute('fill', c ? c.c : '#000');
+  el.lente.setAttribute('opacity', c ? 1 : 0);
+  el.halo.setAttribute('fill', c ? c.c : '#000');
+  el.halo.setAttribute('opacity', c ? c.a : 0);
+  el.luz = c ? c.l : null;
+  luzSucia = true;
+}
+function apagarLeds() {
+  for (const l of leds) pintarLed(l, 0, 0, 0);
+  for (const l of tiraEls) pintarLed(l, 0, 0, 0);
+  if (matriz) pintarMatriz(null);
+  pintarLed(rgb48El, 0, 0, 0);
+  oledLuz = 0;
+}
+
+// ---------------------------------------------------------------- la luz de noche
+// La mesa está a oscuras (#sombra). Cada LED abre la oscuridad a su alrededor con una caída suave y larga
+// (casi como el inverso del cuadrado) y le pone su color a la mesa (#tinte). La matriz alumbra por bloques.
+// Se recalcula sólo cuando cambia algún LED, en un canvas chico que el navegador estira (la luz es suave).
+const AMBIENTE = 0.6;                 // cuánta noche hay con todo apagado (0 = de día, 1 = negro)
+let luzSucia = true, oledLuz = 0;
+function fuentesLuz() {
+  const f = [];
+  for (const l of leds) if (l.luz) f.push({ x:l.pos[0], y:l.pos[1], c:l.luz, f:0.9, R:340 });
+  if (rgb48El.luz) f.push({ x:rgb48El.pos[0], y:rgb48El.pos[1], c:rgb48El.luz, f:0.45, R:170 });
+  if (matriz) f.push(...matriz.luces);
+  for (let i = 0; i < tiraEls.length; i += 4) {                // la tira, de a 4 LEDs
+    const acc = [0, 0, 0];
+    let n = 0;
+    for (let j = i; j < Math.min(i + 4, tiraEls.length); j++) {
+      const l = tiraEls[j].luz;
+      if (l) { acc[0] += l[0]; acc[1] += l[1]; acc[2] += l[2]; n++; }
+    }
+    if (n) f.push({ x:tiraEls[i].pos[0], y:tiraEls[i].pos[1], c:acc.map(v => v / 4), f:0.8, R:460 });
+  }
+  if (oledLuz > 0.003 && header === 'oled') {
+    const [x, y] = aMesa(OX + OLED.vx + OLED.vw / 2, OY + OLED.vy + OLED.vh / 2);
+    f.push({ x, y, c:[0.8, 0.9, 1], f:oledLuz, R:180 });
+  }
+  return f;
+}
+function pintarLuz() {
+  const cs = $('sombra'), ct = $('tinte'), gs = cs.getContext('2d'), gt = ct.getContext('2d');
+  const W = cs.width, H = cs.height, k = W / 1600;
+  gs.globalCompositeOperation = 'source-over';
+  gs.clearRect(0, 0, W, H);
+  gs.fillStyle = `rgba(0,0,0,${AMBIENTE})`; gs.fillRect(0, 0, W, H);
+  const v = gs.createRadialGradient(W * 0.5, H * 0.48, H * 0.35, W * 0.5, H * 0.48, W * 0.66);   // los bordes de la mesa, más oscuros
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.42)');
+  gs.fillStyle = v; gs.fillRect(0, 0, W, H);
+  gt.globalCompositeOperation = 'source-over';
+  gt.clearRect(0, 0, W, H);
+  gs.globalCompositeOperation = 'destination-out';
+  gt.globalCompositeOperation = 'lighter';
+  for (const L of fuentesLuz()) {
+    const m = Math.max(L.c[0], L.c[1], L.c[2]);
+    if (m < 0.01) continue;
+    const a = Math.min(1, m * L.f), x = L.x * k, y = L.y * k, R = L.R * k;
+    const gr = gs.createRadialGradient(x, y, 0, x, y, R);
+    gr.addColorStop(0, `rgba(0,0,0,${a * 0.8})`); gr.addColorStop(0.1, `rgba(0,0,0,${a * 0.45})`);
+    gr.addColorStop(0.35, `rgba(0,0,0,${a * 0.2})`); gr.addColorStop(0.7, `rgba(0,0,0,${a * 0.05})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    gs.fillStyle = gr; gs.fillRect(x - R, y - R, 2 * R, 2 * R);
+    const c = L.c.map(v => Math.round(v / m * 255)).join(',');
+    const gc = gt.createRadialGradient(x, y, 0, x, y, R);
+    gc.addColorStop(0, `rgba(${c},${a * 0.55})`); gc.addColorStop(0.1, `rgba(${c},${a * 0.3})`);
+    gc.addColorStop(0.35, `rgba(${c},${a * 0.1})`); gc.addColorStop(0.7, `rgba(${c},${a * 0.025})`); gc.addColorStop(1, `rgba(${c},0)`);
+    gt.fillStyle = gc; gt.fillRect(x - R, y - R, 2 * R, 2 * R);
+  }
+}
+
+// ---------------------------------------------------------------- entradas
+const apretado = [false, false, false, false, false];
+const tApretado = [0, 0, 0, 0, 0], soltarPend = [0, 0, 0, 0, 0];
+// un toque rápido (tecla o clic) tiene que durar en la placa al menos 40 ms,
+// o cae entre dos lecturas del sketch y se pierde (la placa real nunca ve un botón de 2 ms)
+function apretar(i, on) {
+  clearTimeout(soltarPend[i]);
+  if (on) {
+    panelTecla(i, true);
+    guiaToque('BTN' + (i + 1));
+    apretado[i] = true; tApretado[i] = performance.now();
+    teclas[i].setAttribute('transform', 'translate(0,5)');
+    escribirEntradas();
+    return;
+  }
+  const falta = 40 - (performance.now() - tApretado[i]);
+  const hacer = () => { apretado[i] = false; teclas[i].setAttribute('transform', ''); escribirEntradas(); panelTecla(i, false); };
+  if (falta > 0) soltarPend[i] = setTimeout(hacer, falta); else hacer();
+}
+const piezo = { seq:[0,0,0,0], amp:[0,0,0,0] };
+function golpePiezo(k, amp) {
+  if (!piezoEn[k]) return;                    // jack vacío: nada que golpear
+  piezo.amp[k] = amp; piezo.seq[k]++;
+  const pad = pinzaPads[k];
+  if (pad) { pad.setAttribute('fill', '#3a3a3a'); setTimeout(() => pad.setAttribute('fill', '#171717'), 120); }
+  escribirEntradas();
+}
+{ const c = $('piezosChk');
+  c.innerHTML = [1,2,3,4].map(k => `<label class="chk"><input type="checkbox" aria-label="Piezo en el jack ${k}"> ${k}</label>`).join('');
+  c.querySelectorAll('input').forEach((el, k) => el.onchange = () => { piezoEn[k] = el.checked; armarPiezos(); });
+  armarPiezos();
+}
+for (const pin of [3, 9]) $('ext' + pin).onchange = e => { ext[pin].tipo = e.target.value; ext[pin].p = 0; ext[pin].corte = 0; armarExt(); };
+
+// golpe al piso: una sacudida en el acelerómetro (impact_chimes, seismic_drone)
+const piso = { seq:0, amp:0, visto:0 };
+function golpePiso() {
+  piso.amp = $('pisoFuerza').value / 100; piso.seq++;
+  guiaToque('IMU');
+  for (const capa of [svg, emisivo])
+    capa.animate([{ transform:'translate(0,0)' }, { transform:'translate(0,6px)' }, { transform:'translate(0,-3px)' }, { transform:'translate(0,0)' }],
+                 { duration:160, easing:'ease-out' });
+  escribirEntradas();
+}
+$('piso').onclick = golpePiso;
+
+// header I2C compartido: IMU (MPU6050, 0x68) u OLED (SSD1306, 0x3C), o nada
+let header = 'imu';
+function ponerHeader(h) {
+  header = h;
+  imu.on = h === 'imu';
+  $('header').value = h;
+  oledEl.style.display = oledLuzEl.style.display = h === 'oled' ? '' : 'none';
+  $('arOled').hidden = h !== 'oled';
+  if (h === 'oled') medirMonitor();
+  luzSucia = true;
+  pintarIMU();
+  escribirEntradas();
+}
+$('header').onchange = e => ponerHeader(e.target.value);
+
+// IMU: inclinación desde el cuadro del panel (x, y entre -1 y 1 = ±90°)
+const imu = { on:true, x:0, y:0, gx:0, gy:0, ax0:0, ay0:0, t0:performance.now() };
+function pintarIMU() {
+  imuEl.style.display = imu.on ? '' : 'none';
+  $('pad').classList.toggle('off', !imu.on);
+  $('piso').disabled = !imu.on;
+  $('padPunto').style.left = `${50 + imu.x * 42}%`;
+  $('padPunto').style.top = `${50 + imu.y * 42}%`;
+  $('imuTxt').textContent = !imu.on ? 'sin IMU' : (imu.x || imu.y)
+    ? `x ${(imu.x * 90).toFixed(0)}°  y ${(imu.y * 90).toFixed(0)}°` : 'plana';
+}
+{ const pad = $('pad');
+  const mover = ev => {
+    const r = rectEscenario(pad), p = aEscenario(ev);
+    imu.x = Math.max(-1, Math.min(1, ((p.x - r.x) / r.w - 0.5) * 2));
+    imu.y = Math.max(-1, Math.min(1, ((p.y - r.y) / r.h - 0.5) * 2));
+    pintarIMU();
+  };
+  pad.addEventListener('pointerdown', e => { e.preventDefault(); pad.setPointerCapture(e.pointerId); mover(e);
+    pad.addEventListener('pointermove', mover); pad.addEventListener('pointerup', () => pad.removeEventListener('pointermove', mover), { once:true }); });
+  pad.addEventListener('dblclick', () => { imu.x = 0; imu.y = 0; pintarIMU(); });
+}
+function escribirIMU() {
+  const t = performance.now(), dt = Math.max(1, t - imu.t0) / 1000;
+  const angX = imu.x * 90, angY = imu.y * 90;
+  // el giroscopio ve la VELOCIDAD de la inclinación (suavizada)
+  imu.gx += ((angY - imu.ay0) / dt - imu.gx) * 0.5;
+  imu.gy += ((angX - imu.ax0) / dt - imu.gy) * 0.5;
+  imu.ax0 = angX; imu.ay0 = angY; imu.t0 = t;
+  const ax = Math.sin(angX * Math.PI / 180), ay = Math.sin(angY * Math.PI / 180);
+  const az = Math.sqrt(Math.max(0, 1 - ax * ax - ay * ay));
+  const a = P.dir('imu_acc') >> 2, g = P.dir('imu_gyr') >> 2;
+  P.I32[P.dir('imu_on') >> 2] = imu.on ? 1 : 0;
+  P.F32[a] = ax; P.F32[a + 1] = ay; P.F32[a + 2] = az;
+  P.F32[g] = imu.gx; P.F32[g + 1] = imu.gy; P.F32[g + 2] = 0;
+}
+
+const TECLAS = { '1':0, '2':1, '3':2, '4':3, '5':4 };
+const TECLAS_PIEZO = { q:0, w:1, e:2, r:3 };
+const extCon = t => [3, 9].find(p => ext[p].tipo === t);
+addEventListener('keydown', e => {
+  if ((e.target.closest && e.target.closest('input,select,textarea')) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (e.key in TECLAS) apretar(TECLAS[e.key], true);
+  if (k in TECLAS_PIEZO) golpePiezo(TECLAS_PIEZO[k], 0.9);
+  if (k === 'p') { const j = piezoEn.indexOf(true); if (j >= 0) golpePiezo(j, 0.9); }
+  if (k === 'g' && imu.on) golpePiso();
+  if (k === 'f') { const p = extCon('fsr'); if (p) { ext[p].p = 1; pintarExt(); } }
+  if (k === 'l') { const p = extCon('ldr'); if (p) cortarLaser(p, true); }
+});
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (e.key in TECLAS) apretar(TECLAS[e.key], false);
+  if (k === 'f') { const p = extCon('fsr'); if (p) { ext[p].p = 0; pintarExt(); } }
+  if (k === 'l') { const p = extCon('ldr'); if (p) cortarLaser(p, false); }
+});
+
+// ---------------------------------------------------------------- pantalla OLED
+// Se arma la imagen del panel desde la RAM del chip, como la barre la SSD1306: columna según A0/A1,
+// fila según C0/C8 + línea de inicio + desplazamiento, inversión, contraste, encendida/apagada.
+// (Con A1 + C8 la imagen queda derecha con los pines arriba, como la ponen los firmwares del repo.)
+const oledPix = document.createElement('canvas'); oledPix.width = 128; oledPix.height = 64;
+const oledImg = oledPix.getContext('2d').createImageData(128, 64);
+let oledSeq = -1, oledRot = 0;
+try { oledRot = +localStorage.getItem('simulador.oledGiro') || 0; } catch {}
+const rejilla = (() => {                       // separación entre puntos, como el vidrio real
+  const c = document.createElement('canvas'); c.width = 4; c.height = 4;
+  const g = c.getContext('2d'); g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(3, 0, 1, 4); g.fillRect(0, 3, 4, 1);
+  return c;
+})();
+function pintarOLED() {
+  const d = oledImg.data;
+  if (P) {
+    const ram = P.dir('oled_ram'), cfg = P.dir('oled_cfg') >> 2;
+    const on = P.I32[cfg], inv = P.I32[cfg + 1], contraste = P.I32[cfg + 2], a1 = P.I32[cfg + 3], c8 = P.I32[cfg + 4];
+    const inicio = P.I32[cfg + 5], desp = P.I32[cfg + 6], todo = P.I32[cfg + 7];
+    const brillo = 0.3 + 0.7 * Math.sqrt(contraste / 255);
+    var prendidos = 0;
+    const R = Math.round(205 * brillo), G = Math.round(232 * brillo), Bb = Math.round(255 * brillo);
+    for (let sy = 0; sy < 64; sy++) {
+      const fila = ((c8 ? sy : 63 - sy) + inicio + desp) & 63;
+      const pag = ram + (fila >> 3) * 128, bit = 1 << (fila & 7);
+      for (let sx = 0; sx < 128; sx++) {
+        let v = (P.U8[pag + (a1 ? sx : 127 - sx)] & bit) ? 1 : 0;
+        if (inv) v ^= 1;
+        if (todo) v = 1;
+        if (!on) v = 0;
+        const o = (sy * 128 + sx) * 4;
+        prendidos += v;
+        d[o] = v ? R : 8; d[o + 1] = v ? G : 9; d[o + 2] = v ? Bb : 11; d[o + 3] = 255;
+      }
+    }
+  } else for (let o = 0; o < d.length; o += 4) { d[o] = 8; d[o + 1] = 9; d[o + 2] = 11; d[o + 3] = 255; }
+  oledPix.getContext('2d').putImageData(oledImg, 0, 0);
+  const luz = P ? Math.min(1, prendidos / 8192 * 2) * (0.3 + 0.7 * Math.sqrt(P.I32[(P.dir('oled_cfg') >> 2) + 2] / 255)) : 0;
+  if (Math.abs(luz - oledLuz) > 0.01) { oledLuz = luz; luzSucia = true; }
+  dibujarOLED(oledCanvas, 0);
+  if (header === 'oled') dibujarOLED($('oledGrande'), oledRot);
+}
+function dibujarOLED(cv, giro) {
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.save();
+  g.translate(cv.width / 2, cv.height / 2);
+  g.rotate(giro * Math.PI / 180);
+  const w = giro % 180 ? cv.height : cv.width, h = giro % 180 ? cv.width : cv.height;
+  g.drawImage(oledPix, -w / 2, -h / 2, w, h);
+  g.fillStyle = g.createPattern(rejilla, 'repeat');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1;
+  const k = cv.width / (giro % 180 ? 64 : 128) / 4;      // la rejilla sigue al tamaño del pixel
+  g.scale(k, k);
+  g.fillRect(0, 0, cv.width / k, cv.height / k);
+  g.restore();
+}
+// el segundo monitor: la OLED en grande, sobre la mesa, debajo de la placa
+function medirMonitor() {
+  const cv = $('oledGrande'), vertical = oledRot % 180 !== 0;
+  cv.width = vertical ? 256 : 512; cv.height = vertical ? 512 : 256;
+  const w = vertical ? 92 : 340, h = vertical ? 184 : 170;
+  cv.style.width = `calc(${w} * var(--u))`; cv.style.height = `calc(${h} * var(--u))`;
+  const el = $('arOled');
+  el.style.left = `calc(${MONITOR_X - w / 2} * var(--u))`; el.style.top = `calc(${MONITOR_Y} * var(--u))`;
+  pintarOLED();
+  dibujarGuias(true);
+}
+const [MONITOR_X] = aMesa(OX + OLED.vx + OLED.vw / 2, 0), MONITOR_Y = 808;
+$('oledGirar').onclick = () => { oledRot = (oledRot + 90) % 360; try { localStorage.setItem('simulador.oledGiro', oledRot); } catch {} medirMonitor(); };
+
+// ---------------------------------------------------------------- microSD
+// La tarjeta vive en esta página (sdArch): sobrevive a reinicios y recompilaciones. Al arrancar la placa
+// se le copian los archivos; al apagarla se traen de vuelta los que haya grabado el sketch.
+const sdArch = new Map();
+let sdOn = false, sdSeqVisto = -1, sdRefresco = 0;
+function ponerSD(on) { sdOn = on; $('sdOn').checked = on; escribirEntradas(); pintarSD(); }
+$('sdOn').onchange = e => ponerSD(e.target.checked);
+// (un build hecho por un servidor.py anterior no trae las funciones de la microSD: se la trata como sin tarjeta)
+function placaViva() { const pl = motor && motor.contentWindow && motor.contentWindow.placa; return pl && P && pl._sim_sd_lista ? pl : null; }
+function traerSD() {                           // de la placa a la página
+  const pl = placaViva();
+  if (!pl) return;
+  try {
+    const lista = JSON.parse(pl.UTF8ToString(pl._sim_sd_lista()));
+    const vivos = new Set(lista.map(f => f.n));
+    for (const k of [...sdArch.keys()]) if (!vivos.has(k)) sdArch.delete(k);
+    for (const f of lista) {
+      const ptr = pl.ccall('sim_sd_copia', 'number', ['string'], [f.n]);
+      sdArch.set(f.n, pl.HEAPU8.slice(ptr, ptr + pl._sim_sd_largo()));
+    }
+  } catch (e) { console.warn('microSD', e); }
+}
+function llevarSD(pl) {                        // de la página a una placa recién arrancada
+  if (!pl._sim_sd_reservar) return;
+  for (const [n, datos] of sdArch) ponerArchivoSD(pl, n, datos);
+}
+function ponerArchivoSD(pl, n, datos) {
+  const ptr = pl._sim_sd_reservar(datos.length);
+  pl.HEAPU8.set(datos, ptr);
+  pl.ccall('sim_sd_poner', null, ['string', 'number', 'number'], [n, ptr, datos.length]);
+}
+function listaSD() {                           // nombres y tamaños, en vivo si la placa corre
+  const pl = placaViva();
+  if (pl) try { return JSON.parse(pl.UTF8ToString(pl._sim_sd_lista())); } catch {}
+  return [...sdArch].map(([n, d]) => ({ n, b:d.length }));
+}
+const tam = b => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(2)} MB`;
+function pintarSD() {
+  const l = listaSD();
+  $('sdVer').textContent = l.length ? `${l.length} archivo${l.length > 1 ? 's' : ''}` : 'vacía';
+  if ($('sdLista').hidden) return;
+  $('sdArchivos').innerHTML = l.length ? '' : '<p class="tenue">La tarjeta está vacía.</p>';
+  for (const f of l) {
+    const fila = document.createElement('div');
+    fila.innerHTML = `<span></span><span class="tenue">${tam(f.b)}</span><button class="enlace" data-a="bajar">bajar</button><button class="enlace" data-a="borrar">borrar</button>`;
+    fila.firstChild.textContent = f.n.replace(/^\//, '');
+    fila.onclick = e => {
+      const a = e.target.dataset.a;
+      if (a === 'bajar') bajarSD(f.n);
+      if (a === 'borrar') { const pl = placaViva(); if (pl) pl.ccall('sim_sd_borrar', null, ['string'], [f.n]); sdArch.delete(f.n); pintarSD(); }
+    };
+    $('sdArchivos').appendChild(fila);
+  }
+}
+function bajarSD(n) {
+  traerSD();
+  const d = sdArch.get(n);
+  if (!d) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([d]));
+  a.download = n.replace(/^.*\//, '');
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('sdVer').onclick = () => { $('sdLista').hidden = !$('sdLista').hidden; pintarSD(); };
+$('sdCerrar').onclick = () => { $('sdLista').hidden = true; };
+async function soltarEnSD(archivos) {
+  for (const f of archivos) {
+    const datos = new Uint8Array(await f.arrayBuffer()), n = '/' + f.name;
+    sdArch.set(n, datos);
+    const pl = placaViva();
+    if (pl) ponerArchivoSD(pl, n, datos);
+  }
+  if (!sdOn) ponerSD(true);
+  $('sdLista').hidden = false;
+  pintarSD();
+  logSistema(`— microSD: ${archivos.map(f => f.name).join(', ')} —`);
+}
+
+// ---------------------------------------------------------------- micrófono del PC → INMP441
+const mic = { nodo:null, stream:null, vivo:false };
+async function activarMic() {
+  if (mic.vivo) { apagarMic(); return; }
+  try {
+    await audio.activar();
+    mic.stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false } });
+    const src = audio.ctx.createMediaStreamSource(mic.stream);
+    mic.nodo = new AudioWorkletNode(audio.ctx, 'microfono', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1] });
+    const mudo = audio.ctx.createGain(); mudo.gain.value = 0;
+    src.connect(mic.nodo).connect(mudo).connect(audio.ctx.destination);
+    mic.vivo = true;
+    conectarMic();
+  } catch (e) {
+    logSistema(`Micrófono: ${e.message || e}`, 'err');
+  }
+  pintarMic();
+}
+function apagarMic() {
+  if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
+  if (mic.nodo) mic.nodo.disconnect();
+  mic.nodo = null; mic.stream = null; mic.vivo = false;
+  if (P) Atomics.store(P.I32, P.dir('mic_live') >> 2, 0);
+  pintarMic();
+}
+function conectarMic() {
+  if (!P || !mic.nodo) return;
+  P.I32[P.dir('mic_rate') >> 2] = audio.ctx.sampleRate;
+  mic.nodo.port.postMessage({ sab:P.buf, w:P.dir('mic_w'), mic:P.dir('mic'), frames:P.lay.mic_frames });
+  Atomics.store(P.I32, P.dir('mic_live') >> 2, 1);
+}
+function pintarMic() {
+  const usa = P && P.I32[P.dir('i2s_rx') >> 2];
+  $('mic').textContent = mic.vivo ? 'apagar' : 'usar el del PC';
+  $('mic').classList.toggle('aviso', !mic.vivo && !!usa);
+  $('micTxt').textContent = mic.vivo ? 'escuchando' : (usa ? 'el código lo usa' : '');
+}
+$('mic').onclick = activarMic;
+
+// ---------------------------------------------------------------- salida Web MIDI hacia un sinte de verdad
+let midiAcceso = null, midiSal = null;
+async function pedirMidi() {
+  if (midiAcceso || !navigator.requestMIDIAccess) return;
+  try {
+    midiAcceso = await navigator.requestMIDIAccess();
+    midiAcceso.onstatechange = listarMidi;
+    listarMidi();
+  } catch (e) { logSistema(`Web MIDI: ${e.message || e}`, 'err'); }
+}
+function listarMidi() {
+  const sel = $('midiSalida'), actual = sel.value;
+  sel.innerHTML = '<option value="">no sale del navegador</option>';
+  for (const o of midiAcceso.outputs.values()) sel.add(new Option('→ ' + o.name, o.id));
+  sel.value = [...sel.options].some(o => o.value === actual) ? actual : '';
+}
+$('midiSalida').addEventListener('pointerdown', pedirMidi);
+$('midiSalida').addEventListener('focus', pedirMidi);
+$('midiSalida').onchange = e => {
+  midiTodoApagado();
+  midiSal = e.target.value && midiAcceso ? midiAcceso.outputs.get(e.target.value) : null;
+  e.target.blur();
+};
+function midiEnviar(st, d1, d2) {
+  if (!midiSal) return;
+  const hi = st & 0xF0;
+  const msg = st >= 0xF0 ? [st] : (hi === 0xC0 || hi === 0xD0) ? [st, d1] : [st, d1, d2];
+  try { midiSal.send(msg); } catch {}
+}
+function midiTodoApagado() {                  // al reiniciar la placa o cambiar de salida: que no quede una nota colgada
+  if (!midiSal) return;
+  try { midiSal.send([0xFC]); for (let c = 0; c < 16; c++) midiSal.send([0xB0 | c, 123, 0]); } catch {}
+}
+
+// ---------------------------------------------------------------- la placa (iframe + memoria compartida)
+let build = null;          // { id, principal }
+let motor = null;          // iframe
+let P = null;              // { lay, U8, I32, U32, F32 }
+let encendida = false;
+let reinicios = [];
+
+function alimentada() { return usbOn[0] || usbOn[1]; }
+
+function estado(texto, tipo = '') {
+  $('estado').textContent = texto;
+  $('punto').className = 'punto ' + tipo;
+}
+
+function apagar() {
+  traerSD();                       // lo que grabó el sketch queda en la tarjeta
+  if (motor) { motor.remove(); motor = null; }
+  P = null; encendida = false;
+  audio.desconectar();
+  if (mic.nodo) mic.nodo.port.postMessage({ apagar:true });
+  apagarLeds();
+  midiTodoApagado();
+  midiReset();
+  oledSeq = -1; pintarOLED();
+  $('tareas').textContent = '—';
+}
+function encender() {
+  apagar();
+  reiniciarPaneles();
+  rehacerGuia();
+  if (!build) { estado('sin código'); return; }
+  if (!alimentada()) { estado('apagada · sin cables USB'); return; }
+  estado('arrancando…', 'trabajo');
+  motor = document.createElement('iframe');
+  motor.className = 'motor';
+  motor.src = `motor.html?b=${build.id}`;
+  motor.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(motor);
+}
+function cambioAlimentacion() {
+  if (!alimentada()) { if (encendida || motor) { apagar(); logSistema('— placa sin alimentación —'); } estado('apagada · sin cables USB'); }
+  else if (!motor && build) { logSistema('— placa encendida —'); encender(); }
+}
+
+addEventListener('message', e => {
+  if (!motor || e.source !== motor.contentWindow) return;
+  const m = e.data || {};
+  if (m.tipo === 'lista') conectar(motor.contentWindow.placa);
+  if (m.tipo === 'aborto') {
+    logSistema(`La placa se detuvo: ${m.motivo}`, 'err');
+    estado('se detuvo · revisa el monitor', 'error');
+    // como el ESP32 tras un pánico: se reinicia sola (máximo 3 veces seguidas)
+    const t = performance.now();
+    reinicios = reinicios.filter(x => t - x < 30000);
+    if (reinicios.length < 3) { reinicios.push(t); setTimeout(() => { if (alimentada()) encender(); }, 1500); }
+  }
+});
+
+function conectar(placa) {
+  const lay = JSON.parse(placa.UTF8ToString(placa._sim_layout()));
+  const buf = placa.HEAPU8.buffer;
+  P = { lay, U8:new Uint8Array(buf), I32:new Int32Array(buf), U32:new Uint32Array(buf), F32:new Float32Array(buf), buf };
+  const b = lay.base;
+  P.dir = k => b + lay[k];
+  // entradas antes de arrancar: todos los pines en alto (botones sueltos, con pull-up)
+  for (let i = 0; i < 64; i++) P.I32[(P.dir('pin_in') >> 2) + i] = 1;
+  escribirEntradas();
+  piezoVisto = piezo.seq.slice();
+  piso.visto = piso.seq;
+  llevarSD(placa);
+  Atomics.store(P.I32, P.dir('arranque') >> 2, 1);
+  encendida = true;
+  estado(`corriendo · ${build.principal}`, 'ok');
+  ledSeq = -1; rgbSeq = -1; oledSeq = -1; sdSeqVisto = -1;
+  audio.conectar();
+  conectarMic();
+}
+
+let piezoVisto = [0,0,0,0];
+function escribirEntradas() {
+  if (!P) return;
+  const pin = P.dir('pin_in') >> 2, adc = P.dir('adc') >> 2;
+  PIN_BTN.forEach((p, i) => { P.I32[pin + p] = apretado[i] ? 0 : 1; });
+  PIN_POT.forEach((p, i) => { P.I32[adc + p] = potVal[i]; });
+  P.I32[P.dir('usb_nativo') >> 2] = usbOn[0] ? 1 : 0;
+  P.I32[P.dir('usb_com') >> 2] = usbOn[1] ? 1 : 0;
+  P.I32[adc + 3] = lecturaExt(3);
+  P.I32[adc + 9] = lecturaExt(9);
+  if (P.lay.dht_tipo !== undefined) for (const pin of [3, 9]) {
+    const s = ext[pin], a = aireDHT(s);
+    P.F32[(P.dir('dht_temp') >> 2) + pin] = a.t;
+    P.F32[(P.dir('dht_hum') >> 2) + pin] = a.h;
+    P.I32[(P.dir('dht_tipo') >> 2) + pin] = s.tipo === 'dht' ? 11 : s.tipo === 'dht22' ? 22 : 0;
+  }
+  P.I32[P.dir('oled_on') >> 2] = header === 'oled' ? 1 : 0;
+  P.I32[P.dir('sd_on') >> 2] = sdOn ? 1 : 0;
+  escribirIMU();
+  if (piso.seq !== piso.visto) {
+    P.F32[P.dir('piso_amp') >> 2] = piso.amp;
+    Atomics.add(P.U32, P.dir('piso_seq') >> 2, 1);
+    piso.visto = piso.seq;
+  }
+  for (let k = 0; k < 4; k++) {
+    if (piezo.seq[k] !== piezoVisto[k]) {
+      P.F32[(P.dir('piezo_amp') >> 2) + k] = piezo.amp[k];
+      Atomics.add(P.U32, (P.dir('piezo_seq') >> 2) + k, 1);
+      piezoVisto[k] = piezo.seq[k];
+    }
+  }
+}
+
+// lectura de un anillo (un escritor = la placa, un lector = esta página)
+function leerAnillo(dir) {
+  const iw = dir >> 2, ir = iw + 1, n0 = P.lay.ring_bytes;
+  const w = Atomics.load(P.U32, iw), r = Atomics.load(P.U32, ir);
+  const n = (w - r) >>> 0;
+  if (!n) return null;
+  const out = new Uint8Array(n), base = dir + 8;
+  for (let i = 0; i < n; i++) out[i] = P.U8[base + ((r + i) & (n0 - 1))];
+  Atomics.store(P.U32, ir, (r + n) >>> 0);
+  return out;
+}
+function escribirAnillo(dir, bytes) {
+  const iw = dir >> 2, ir = iw + 1, n0 = P.lay.ring_bytes;
+  const w = Atomics.load(P.U32, iw), r = Atomics.load(P.U32, ir);
+  const libre = n0 - ((w - r) >>> 0);
+  const n = Math.min(libre, bytes.length);
+  for (let i = 0; i < n; i++) P.U8[dir + 8 + ((w + i) & (n0 - 1))] = bytes[i];
+  Atomics.store(P.U32, iw, (w + n) >>> 0);
+}
+
+// ---------------------------------------------------------------- monitor serie
+const logEl = $('log');
+const dec = [new TextDecoder(), new TextDecoder()];
+const pendiente = ['', ''];
+let lineasLog = 0;
+function agregarLinea(texto, clase) {
+  const pegado = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 4;
+  const s = document.createElement('span');
+  if (clase) s.className = clase;
+  s.textContent = texto + '\n';
+  logEl.appendChild(s);
+  if (++lineasLog > 500) { logEl.removeChild(logEl.firstChild); lineasLog--; }
+  if (pegado) logEl.scrollTop = logEl.scrollHeight;
+}
+function logSistema(t, clase = 'sis') { agregarLinea(t, clase); }
+function recibirSerie(i, bytes) {
+  let t = pendiente[i] + dec[i].decode(bytes, { stream:true });
+  const partes = t.split(/\r?\n|\r(?!$)/);
+  pendiente[i] = partes.pop();
+  for (const p of partes) agregarLinea(p, i === 1 ? 'com' : '');
+}
+$('limpiar').onclick = () => { logEl.textContent = ''; lineasLog = 0; };
+$('enviar').onsubmit = e => {
+  e.preventDefault();
+  if (!P) return;
+  const t = $('entrada').value + '\n';
+  const k = usbOn[0] ? 0 : (usbOn[1] ? 1 : -1);
+  if (k < 0) return;
+  escribirAnillo(P.dir('rx') + k * P.lay.ring_size, new TextEncoder().encode(t));
+  $('entrada').value = '';
+};
+
+// ---------------------------------------------------------------- MIDI (DIN-5 por Serial1 y USB-MIDI)
+const NOMBRES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const nota = n => NOMBRES[n % 12] + (Math.floor(n / 12) - 1);
+const midiEv = [];
+let din = { st:0, datos:[] }, ticks = [], tickN = 0, transporte = '', midiCambio = false;
+function midiReset() { din = { st:0, datos:[] }; ticks = []; tickN = 0; transporte = ''; midiEv.length = 0; midiCambio = true; }
+function midiMensaje(fuente, st, d1, d2) {
+  midiEnviar(st, d1, d2);
+  if (st === 0xF8) { ticks.push(performance.now()); if (ticks.length > 48) ticks.shift(); tickN++; midiCambio = true; return; }
+  if (st === 0xFA) { transporte = 'Start'; tickN = 0; }
+  else if (st === 0xFB) transporte = 'Continue';
+  else if (st === 0xFC) transporte = 'Stop';
+  let t;
+  const tipo = st & 0xF0, ch = (st & 15) + 1;
+  if (st >= 0xF0) t = { 0xFA:'Start', 0xFB:'Continue', 0xFC:'Stop', 0xFE:'Active sensing', 0xFF:'Reset' }[st] || ('0x' + st.toString(16));
+  else if (tipo === 0x90 && d2 > 0) t = `nota ${nota(d1).padEnd(4)} vel ${String(d2).padStart(3)}  ch ${ch}`;
+  else if (tipo === 0x80 || tipo === 0x90) t = `suelta ${nota(d1).padEnd(4)}         ch ${ch}`;
+  else if (tipo === 0xB0) t = `CC ${String(d1).padStart(3)} = ${String(d2).padStart(3)}   ch ${ch}`;
+  else if (tipo === 0xC0) t = `programa ${d1}   ch ${ch}`;
+  else if (tipo === 0xE0) t = `pitch ${((d2 << 7) | d1) - 8192}   ch ${ch}`;
+  else t = `${tipo.toString(16)} ${d1} ${d2}`;
+  midiEv.push(`${fuente}  ${t}`);
+  if (midiEv.length > 6) midiEv.shift();
+  midiCambio = true;
+}
+function recibirDin(bytes) {
+  for (const b of bytes) {
+    if (b >= 0xF8) { midiMensaje('DIN', b, 0, 0); continue; }
+    if (b & 0x80) { din.st = b; din.datos = []; if (b >= 0xF0) { midiMensaje('DIN', b, 0, 0); din.st = 0; } continue; }
+    if (!din.st) continue;
+    din.datos.push(b);
+    const hi = din.st & 0xF0, falta = (hi === 0xC0 || hi === 0xD0) ? 1 : 2;
+    if (din.datos.length >= falta) { midiMensaje('DIN', din.st, din.datos[0], din.datos[1] || 0); din.datos = []; }
+  }
+}
+function pintarMidi() {
+  if (!midiCambio) return;
+  midiCambio = false;
+  $('midiLog').textContent = midiEv.join('\n');
+  const pulsos = document.querySelectorAll('#midiReloj .pulso');
+  const negra = Math.floor(tickN / 24) % 4;
+  pulsos.forEach((p, i) => p.classList.toggle('on', ticks.length > 1 && i === negra && (tickN % 24) < 8));
+  const ahora = performance.now();
+  if (ticks.length > 4 && ahora - ticks[ticks.length - 1] < 600) {
+    const dt = (ticks[ticks.length - 1] - ticks[0]) / (ticks.length - 1);
+    $('midiBpm').textContent = `${(60000 / (dt * 24)).toFixed(1)} BPM${transporte ? ' · ' + transporte : ''}`;
+  } else $('midiBpm').textContent = transporte ? transporte : 'sin reloj';
+}
+
+// ---------------------------------------------------------------- audio (Web Audio a 44.1 kHz)
+const CODIGO_WORKLET = `
+class Placa extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.ok = false; this.vol = 0.7; this.frac = 0; this.sonando = false; this.vivo = 0;
+    this.port.onmessage = e => {
+      const d = e.data;
+      if (d.sab) {
+        this.i16 = new Int16Array(d.sab); this.u32 = new Uint32Array(d.sab); this.i32 = new Int32Array(d.sab);
+        this.w = d.a_w >> 2; this.r = d.a_r >> 2; this.a = d.audio >> 1; this.n = d.frames;
+        this.rate = d.audio_rate >> 2; this.h = d.huecos >> 2; this.ok = true; this.sonando = false; this.frac = 0;
+      }
+      if (d.apagar) this.ok = false;
+      if ('vol' in d) this.vol = d.vol;
+    };
+  }
+  process(_, outputs) {
+    const L = outputs[0][0], R = outputs[0][1] || outputs[0][0];
+    if (!this.ok) { L.fill(0); if (R !== L) R.fill(0); return true; }
+    const tasa = Atomics.load(this.i32, this.rate) || 44100, paso = tasa / sampleRate;
+    let r = Atomics.load(this.u32, this.r);
+    const w = Atomics.load(this.u32, this.w);
+    let hay = (w - r) >>> 0;
+    // colchón antes de empezar a sonar, para no arrancar en hueco
+    if (!this.sonando && hay >= 768) this.sonando = true;
+    if (!this.sonando) { L.fill(0); if (R !== L) R.fill(0); return true; }
+    const n = this.n - 1, v = this.vol / 32768;
+    for (let i = 0; i < L.length; i++) {
+      if (hay < 2) {
+        L[i] = 0; R[i] = 0;
+        if (this.sonando) { this.sonando = false; Atomics.add(this.i32, this.h, 1); }
+        continue;
+      }
+      const k = (r & n) * 2 + this.a;
+      L[i] = this.i16[k] * v; R[i] = this.i16[k + 1] * v;
+      this.frac += paso;
+      while (this.frac >= 1) { this.frac -= 1; r = (r + 1) >>> 0; hay--; }
+    }
+    Atomics.store(this.u32, this.r, r);
+    return true;
+  }
+}
+registerProcessor('placa', Placa);
+// micrófono del PC → anillo del INMP441 en la memoria de la placa
+class Microfono extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.ok = false;
+    this.port.onmessage = e => {
+      const d = e.data;
+      if (d.sab) { this.f32 = new Float32Array(d.sab); this.u32 = new Uint32Array(d.sab); this.w = d.w >> 2; this.m = d.mic >> 2; this.n = d.frames; this.ok = true; }
+      if (d.apagar) this.ok = false;
+    };
+  }
+  process(inputs) {
+    const x = inputs[0] && inputs[0][0];
+    if (this.ok && x) {
+      const w = Atomics.load(this.u32, this.w), n = this.n - 1;
+      for (let i = 0; i < x.length; i++) this.f32[this.m + ((w + i) & n)] = x[i];
+      Atomics.store(this.u32, this.w, (w + x.length) >>> 0);
+    }
+    return true;
+  }
+}
+registerProcessor('microfono', Microfono);`;
+
+const audio = {
+  ctx: null, nodo: null, ganancia: null,
+  quiere: true,              // el sonido parte activado: sólo «silenciar» lo apaga
+  async activar() {
+    this.quiere = true;
+    if (!this.ctx) {
+      this.ctx = new AudioContext({ sampleRate: 44100, latencyHint: 'interactive' });
+      this.ctx.onstatechange = () => { this.conectar(); pintarSonido(); };
+      const url = URL.createObjectURL(new Blob([CODIGO_WORKLET], { type: 'text/javascript' }));
+      await this.ctx.audioWorklet.addModule(url);
+      this.nodo = new AudioWorkletNode(this.ctx, 'placa', { numberOfInputs: 0, outputChannelCount: [2] });
+      this.ganancia = this.ctx.createGain();
+      this.nodo.connect(this.ganancia).connect(this.ctx.destination);
+      this.volumen($('volumen').value / 100);
+    }
+    await this.ctx.resume();
+    this.conectar();
+    pintarSonido();
+  },
+  activo() { return this.ctx && this.ctx.state === 'running'; },
+  conectar() {
+    if (!P) return;
+    if (this.activo() && this.nodo) {
+      const d = k => P.dir(k);
+      this.nodo.port.postMessage({ sab: P.buf, a_w: d('a_w'), a_r: d('a_r'), audio: d('audio'), frames: P.lay.audio_frames,
+                                   audio_rate: d('audio_rate'), huecos: d('audio_huecos') });
+      Atomics.store(P.I32, d('audio_live') >> 2, 1);
+    } else {
+      Atomics.store(P.I32, P.dir('audio_live') >> 2, 0);
+    }
+  },
+  desconectar() { if (this.nodo) this.nodo.port.postMessage({ apagar: true }); },
+  async silenciar() {
+    this.quiere = false;
+    if (P) Atomics.store(P.I32, P.dir('audio_live') >> 2, 0);
+    this.desconectar();
+    if (this.ctx) await this.ctx.suspend();
+    pintarSonido();
+  },
+  volumen(v) { if (this.ganancia) this.ganancia.gain.value = v * v; },
+};
+function pintarSonido() {
+  $('sonido').textContent = audio.activo() ? 'silenciar' : 'activar sonido';
+  $('sonido').classList.toggle('aviso', !audio.activo());
+}
+$('sonido').onclick = () => audio.activo() ? audio.silenciar() : audio.activar();
+// Sonido activado desde el arranque. El navegador no deja sonar nada hasta que la persona toca la página,
+// así que se pide al cargar y, si quedó en espera, arranca solo con el primer clic o tecla (en cualquier parte).
+audio.activar().catch(() => {});
+for (const ev of ['pointerdown', 'keydown'])
+  addEventListener(ev, e => {
+    if (audio.quiere && !audio.activo() && e.target !== $('sonido')) audio.activar().catch(() => {});
+  }, { capture:true });
+$('volumen').oninput = e => audio.volumen(e.target.value / 100);
+
+// ---------------------------------------------------------------- bucle de la interfaz
+let ledSeq = -1, rgbSeq = -1, cuadros = 0;
+function bombear() {
+  tickDHT();
+  if (!P) return;
+  escribirEntradas();
+  for (let i = 0; i < 2; i++) {
+    const bytes = leerAnillo(P.dir('tx') + i * P.lay.ring_size);
+    if (bytes) recibirSerie(i, bytes);
+  }
+  const din = leerAnillo(P.dir('tx') + 2 * P.lay.ring_size);
+  if (din && P.I32[P.dir('serial1_baud') >> 2] === 31250) recibirDin(din);
+  const usb = leerAnillo(P.dir('usbmidi'));
+  if (usb) for (let i = 0; i + 2 < usb.length; i += 3) midiMensaje('USB', usb[i], usb[i + 1], usb[i + 2]);
+  if (Atomics.load(P.I32, P.dir('reinicio') >> 2)) { logSistema('— ESP.restart() —'); encender(); }
+}
+function cuadro() {
+  bombear();
+  if (P) {
+    const seq = Atomics.load(P.U32, P.dir('led_seq') >> 2);
+    if (seq !== ledSeq) {
+      ledSeq = seq;
+      const n = P.I32[P.dir('led_count') >> 2], base = P.dir('led_rgb');
+      if (Math.max(0, n - 6) !== tiraN) armarTira(Math.max(0, n - 6));
+      for (let i = 0; i < 6; i++) {
+        if (i < n) pintarLed(leds[i], P.U8[base + i * 3], P.U8[base + i * 3 + 1], P.U8[base + i * 3 + 2]);
+        else pintarLed(leds[i], 0, 0, 0);
+      }
+      if (matriz) pintarMatriz(base);
+      else for (let i = 6; i < n; i++) pintarLed(tiraEls[i - 6], P.U8[base + i * 3], P.U8[base + i * 3 + 1], P.U8[base + i * 3 + 2]);
+    }
+    const s48 = Atomics.load(P.U32, P.dir('rgb48_seq') >> 2);
+    if (s48 !== rgbSeq) { rgbSeq = s48; const b = P.dir('rgb48'); pintarLed(rgb48El, P.U8[b], P.U8[b + 1], P.U8[b + 2]); }
+    const so = Atomics.load(P.U32, P.dir('oled_seq') >> 2);
+    if (so !== oledSeq && header === 'oled') { oledSeq = so; pintarOLED(); }
+    const ss = Atomics.load(P.U32, P.dir('sd_seq') >> 2), t = performance.now();
+    if (ss !== sdSeqVisto && t - sdRefresco > 500) { sdSeqVisto = ss; sdRefresco = t; pintarSD(); }
+    if (!(cuadros++ & 31)) pintarMic();
+    $('huecos').textContent = P.U32[P.dir('audio_huecos') >> 2];
+    const h = P.I32[P.dir('hilos') >> 2];
+    $('tareas').textContent = h ? `loop + ${h}` : 'sólo loop()';
+  }
+  pintarMidi();
+  if (luzSucia) { luzSucia = false; pintarLuz(); }
+  requestAnimationFrame(cuadro);
+}
+requestAnimationFrame(cuadro);
+setInterval(bombear, 40);          // aunque la pestaña no pinte, Serial y MIDI no se atascan
+
+// ---------------------------------------------------------------- pantalla completa
+// En el celular, además, se pide la pantalla horizontal; si el navegador no deja (iPhone), la mesa se gira sola
+// con CSS cuando el teléfono está vertical.
+async function pantallaCompleta() {
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      return;
+    }
+    const raiz = document.documentElement;
+    await (raiz.requestFullscreen || raiz.webkitRequestFullscreen).call(raiz, { navigationUI:'hide' });
+    if (matchMedia('(pointer:coarse)').matches && screen.orientation && screen.orientation.lock)
+      await screen.orientation.lock('landscape').catch(() => {});
+  } catch {}
+}
+function pintarCompleta() {
+  $('completa').textContent = (document.fullscreenElement || document.webkitFullscreenElement) ? 'salir de pantalla completa' : 'pantalla completa';
+}
+$('completa').onclick = pantallaCompleta;
+document.addEventListener('fullscreenchange', pintarCompleta);
+document.addEventListener('webkitfullscreenchange', pintarCompleta);
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('completa').hidden = true;
+
+// ---------------------------------------------------------------- guías ámbar
+// Cada panel está unido a la pieza que lo produce con una línea, pero la línea sólo aparece cuando la mano
+// (el puntero) se acerca al panel. Los puntos van en unidades de escenario: de la pieza al panel.
+const GUIAS = [
+  { el:'arSerie', pts:() => { const [x, y] = aMesa(OX + L.usb[0][0], OY + L.usb[0][1] + 8); return [[x, y], [x, 418], [1150, 418], [1150, 432]]; } },
+  { el:'arMidi',  pts:() => { const [x, y] = aMesa(OX + L.midi.x + L.midi.w / 2, OY + L.midi.y + L.midi.h / 2); return [[x, y], [1112, y], [1112, 735], [1150, 735]]; } },
+  { el:'arPlaca', pts:() => { const [x, y] = aMesa(OX + L.ext[0][0] - 14, OY + L.ext[0][1]); return [[x, y], [462, y], [462, 444], [424, 444]]; } },
+  { el:'arOled',  pts:() => { const [x, y] = aMesa(OX + OLED.vx + OLED.vw / 2, OY + OLED.vy + OLED.vh); return [[x, y], [x, MONITOR_Y]]; } },
+];
+function dibujarGuias(rehacer) {
+  if (rehacer || !GUIAS[0].g) {
+    guias.innerHTML = '';
+    for (const G of GUIAS) {
+      G.g = E('g',{opacity:0,style:'transition:opacity .35s'},guias);
+      const p = G.pts();
+      E('polyline',{points:p.map(q => q.join(',')).join(' '),fill:'none',stroke:'#F5B041','stroke-width':1.3,opacity:.9},G.g);
+      E('circle',{cx:p[0][0],cy:p[0][1],r:4,fill:'#F5B041'},G.g);
+      E('circle',{cx:p[0][0],cy:p[0][1],r:9,fill:'none',stroke:'#F5B041','stroke-width':1,opacity:.6},G.g);
+      G.op = 0;
+    }
+  }
+}
+let soltarGuias = 0;
+function acercar(ev) {
+  const p = aEscenario(ev);
+  for (const G of GUIAS) {
+    const el = $(G.el);
+    let op = 0;
+    if (!el.hidden) {
+      const r = rectEscenario(el);
+      const dx = Math.max(r.x - p.x, 0, p.x - (r.x + r.w)), dy = Math.max(r.y - p.y, 0, p.y - (r.y + r.h));
+      op = Math.max(0, Math.min(1, 1 - (Math.hypot(dx, dy) - 30) / 90));       // a 30 u ya está entera, a 120 u desaparece
+    }
+    if (Math.abs(op - G.op) > 0.02) { G.op = op; G.g.setAttribute('opacity', op.toFixed(2)); el.classList.toggle('cerca', op > 0.5); }
+  }
+  clearTimeout(soltarGuias);
+  if (ev.pointerType === 'touch') soltarGuias = setTimeout(() => acercar({ clientX:-1e4, clientY:-1e4 }), 1800);
+}
+dibujarGuias(true);
+addEventListener('pointermove', acercar, { passive:true });
+addEventListener('pointerdown', acercar, { passive:true });
+document.documentElement.addEventListener('pointerleave', () => acercar({ clientX:-1e4, clientY:-1e4 }));
+
+// ---------------------------------------------------------------- «cómo se usa»: la guía del código cargado
+// Baja una cortina negra sobre la mesa, la misma placa se agranda al centro y de cada botón y perilla sale una
+// línea ámbar hasta lo que hace en ESTE código. El texto lo arma servidor.py leyendo el encabezado del .ino
+// (guia.py), así que sirve igual para un firmware del repo que para uno recién escrito en el taller.
+let guiaDatos = null, guiaAbierta = false, guiaTurno = 0;
+const guiaEl = $('guia'), guiaSvg = $('guiaSvg'), guiaEts = $('guiaEts');
+const gLineas = E('g',{},guiaSvg);
+// el telón: tapa la mesa pero queda DEBAJO de la placa, que sigue siendo la de verdad y se sigue tocando
+svg.insertBefore(E('rect',{id:'telon',x:0,y:0,width:1600,height:1000,fill:'#000'}), M);
+capaTira.classList.add('fueraDeGuia');
+capaTiraLuz.classList.add('fueraDeGuia');
+const MARCO = { x:OX - 22, y:OY - 22, w:1104, h:708 };   // el marco de madera, en coordenadas de placa
+const ZOOM = [0.7, 0.63, 0.56];                           // la placa agrandada; si el texto no cabe, un poco menos
+const BORDE = { izq:-22, der:1082, abajo:686 };           // bordes del marco en coordenadas de la foto de la PCB
+const IMU_C = [405, 407];                                 // el módulo del header I2C
+// Por dónde sale la línea de cada control hasta el borde del marco, sin pasar por encima de otro control.
+// Coordenadas de la foto de la PCB; el orden de cada lado es el orden de arriba a abajo de sus textos.
+const SALIDAS = {
+  izq:    [ { n:'POT1', pts:[L.pot[0], [L.pot[0][0], 172], [BORDE.izq, 172]] },
+            { n:'BTN1', pts:[L.btn[0], [BORDE.izq, L.btn[0][1]]] },
+            { n:'POT3', pts:[L.pot[2], [BORDE.izq, L.pot[2][1]]] },
+            { n:'BTN2', pts:[L.btn[1], [L.btn[1][0], BORDE.abajo]], abajo:true } ],
+  der:    [ { n:'POT2', pts:[L.pot[1], [L.pot[1][0], 172], [BORDE.der, 172]] },
+            { n:'BTN5', pts:[L.btn[4], [BORDE.der, L.btn[4][1]]] },
+            { n:'POT4', pts:[L.pot[3], [BORDE.der, L.pot[3][1]]] },
+            { n:'BTN4', pts:[L.btn[3], [L.btn[3][0], BORDE.abajo]], abajo:true } ],
+  centro: [ { n:'IMU',  pts:[IMU_C, [IMU_C[0], BORDE.abajo]], alinear:'izq' },
+            { n:'BTN3', pts:[L.btn[2], [L.btn[2][0], BORDE.abajo]], alinear:'der' } ],
+};
+const escala = () => 1600 / $('escenario').offsetWidth;        // px de pantalla → unidades de escenario
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const NADA = /^(libres?|sin funci[oó]n|sin uso|disponibles?|no se usan?|no act[uú]an?)\b/i;
+
+// lo que en la mesa cuelga de la placa (cables USB, piezos, sensores de las borneras) se apaga en la guía
+function soloPlaca() {
+  let pasado = false;
+  for (const el of M.children) { if (pasado) el.classList.add('fueraDeGuia'); if (el === B) pasado = true; }
+}
+// mueve la placa de verdad (lo que se toca y lo que brilla, juntos)
+let placaAhora = { x:TX, y:TY, s:K };
+function ponerPlaca(z) {
+  placaAhora = { x:z.x, y:z.y, s:z.s };
+  const t = `translate(${z.x},${z.y}) scale(${z.s})`;
+  M.setAttribute('transform', t);
+  Me.setAttribute('transform', t);
+}
+function animarPlaca(desde, hasta, ms, fin) {
+  const turno = ++guiaTurno, t0 = performance.now();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) ms = 0;
+  const paso = t => {
+    if (turno !== guiaTurno) return;
+    const k = ms ? Math.min(1, (t - t0) / ms) : 1, e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    ponerPlaca({ x:desde.x + (hasta.x - desde.x) * e, y:desde.y + (hasta.y - desde.y) * e, s:desde.s + (hasta.s - desde.s) * e });
+    if (k < 1) requestAnimationFrame(paso); else if (fin) fin();
+  };
+  requestAnimationFrame(paso);
+}
+
+// arma el encabezado y los textos de cada control, y calcula dónde va cada cosa
+let guiaLayout = null;
+function armarGuia(intento = 0) {
+  const g = guiaDatos, k = escala(), zs = ZOOM[intento];
+  const titulo = g ? g.titulo : (build ? build.principal : 'Todavía no hay código cargado');
+  $('guiaCab').innerHTML = `<h2>${esc(titulo)}</h2>` + (g && g.subtitulo ? `<div class="sub">${esc(g.subtitulo)}</div>` : '')
+    + (g && g.descripcion ? `<p class="desc">${esc(g.descripcion)}</p>` : '') + filaPaneles();
+  const cabFin = ($('guiaCab').offsetTop + $('guiaCab').offsetHeight) * k;
+  const top = Math.max(196, Math.min(250, cabFin + 24));
+  const z = { s:zs, x:800 - MARCO.w * zs / 2 - MARCO.x * zs, y:top - MARCO.y * zs };
+  const aG = ([bx, by]) => [z.x + (OX + bx) * z.s, z.y + (OY + by) * z.s];
+  const abajo = aG([0, BORDE.abajo])[1], bordeIzq = aG([BORDE.izq, 0])[0], bordeDer = aG([BORDE.der, 0])[0];
+
+  guiaEts.innerHTML = '';
+  const ctl = (g && g.controles) || {};
+  const hay = Object.keys(ctl).some(n => /^(BTN|POT)/.test(n));
+  const items = [];
+  const etiqueta = (n, lado, ancho) => {
+    const todas = ctl[n] || [];
+    if (!todas.length && (n === 'IMU' || !hay)) return null;
+    const ents = enEstePanel(todas);
+    const el = document.createElement('div');
+    el.className = 'et ' + lado;
+    el.style.width = `calc(${ancho} * var(--u))`;
+    const fila = e => `<span class="${NADA.test(e.texto) ? 'nada' : ''}">${e.ctx && !panelEstado ? `<i>${esc(e.ctx)}</i>` : ''}${esc(e.texto)}</span>`;
+    if (!ents.length) el.innerHTML = `<b>${n}</b><span class="nada">${todas.length ? 'sin función en este panel' : 'sin función descrita'}</span>`;
+    else if (ents.length === 1 && (!ents[0].ctx || panelEstado)) el.innerHTML = `<b>${n}</b>${fila(ents[0])}`;
+    else el.innerHTML = `<b>${n}</b>` + ents.slice(0, 5).map(e => `<div>${fila(e)}</div>`).join('')
+      + (ents.length > 5 ? `<div class="nada">y ${ents.length - 5} más</div>` : '');
+    el.title = ents.map(e => (e.ctx ? e.ctx + ': ' : '') + e.largo).join('\n');
+    guiaEts.appendChild(el);
+    return el;
+  };
+  const medir = el => el.offsetHeight * k;
+  const poner = (el, x, y) => { el.style.left = `calc(${x} * var(--u))`; el.style.top = `calc(${y} * var(--u))`; };
+  // los dos costados: cada texto a la altura de donde sale su línea, sin pisarse
+  let bajoLados = abajo;
+  for (const lado of ['izq', 'der']) {
+    let suelo = -Infinity, i = 0;
+    for (const s of SALIDAS[lado]) {
+      const el = etiqueta(s.n, lado, 330);
+      if (!el) continue;
+      const salida = aG(s.pts[s.pts.length - 1]);
+      const y = Math.max(s.abajo ? abajo + 22 : salida[1] - 11, suelo + 14);
+      const x = lado === 'izq' ? bordeIzq - 34 - 330 : bordeDer + 34;
+      poner(el, x, y);
+      suelo = y + medir(el);
+      const ly = y + 11, xEt = lado === 'izq' ? x + 330 + 4 : x - 4;
+      const pts = s.pts.map(aG);
+      if (s.abajo) pts.push([salida[0], ly], [xEt, ly]);
+      else if (Math.abs(ly - salida[1]) < 1) pts.push([xEt, ly]);
+      else { const gx = lado === 'izq' ? bordeIzq - 8 - i * 5 : bordeDer + 8 + i * 5; pts.push([gx, salida[1]], [gx, ly], [xEt, ly]); }
+      items.push({ n:s.n, el, pts, x, y, w:330 });
+      if (s.abajo) bajoLados = Math.max(bajoLados, ly);
+      i++;
+    }
+  }
+  // abajo al centro: IMU y BTN3, debajo de las líneas que van a BTN2 y BTN4
+  for (const s of SALIDAS.centro) {
+    const el = etiqueta(s.n, s.alinear === 'izq' ? 'izq' : '', 250);
+    if (!el) continue;
+    const [x0] = aG(s.pts[0]), y = Math.max(abajo + 30, bajoLados + 16), x = s.alinear === 'izq' ? x0 + 6 - 250 : x0 - 6;
+    poner(el, x, y);
+    items.push({ n:s.n, el, pts:[...s.pts.map(aG), [x0, y - 3]], x, y, w:250 });
+  }
+  // lo más bajo que llega un texto entre x0 y x1
+  const fondoEntre = (x0, x1) => Math.max(abajo, ...items.filter(it => it.x < x1 && it.x + it.w > x0).map(it => it.y + medir(it.el)));
+
+  // al pie, bajo la columna izquierda: cómo empezar y cómo se tocan los controles en el simulador;
+  // arriba a la derecha, donde no llega el encabezado: los botones que se aprietan juntos
+  const pasos = (g && g.pasos) || [], combos = (g && g.combos) || [];
+  const pies = [];
+  const pie = (html, x, y, ancho) => {
+    const el = document.createElement('div');
+    el.className = 'pie'; el.innerHTML = html; el.style.width = `calc(${ancho} * var(--u))`;
+    guiaEts.appendChild(el); poner(el, x, y === null ? fondoEntre(x, x + ancho) + 26 : y); pies.push(el);
+  };
+  const tocar = '<span class="tenue">En el simulador: clic o teclas 1–5 en los botones · arrastra o gira la rueda sobre las perillas</span>';
+  if (!hay) pie(`<h3>Controles</h3>El encabezado de este código no describe sus botones ni sus perillas.${tocar}`, 40, null, 700);
+  else if (pasos.length) pie(`<h3>Para empezar</h3><ol>${pasos.slice(0, 5).map(p => `<li>${esc(p)}</li>`).join('')}</ol>${tocar}`, 40, null, 700);
+  else pie(tocar, 40, null, 700);
+  if (combos.length) pie(`<h3>Botones juntos</h3>${combos.slice(0, 6).map(c => `<div><b>${c.teclas.join(' + ')}</b>${esc(c.texto)}</div>`).join('')}`, 1150, 52, 410);
+
+  const fondo = Math.max(...pies.map(el => (el.offsetTop + el.offsetHeight) * k), ...items.map(it => it.y + medir(it.el)));
+  if (fondo > 988 && intento + 1 < ZOOM.length) return armarGuia(intento + 1);
+  guiaLayout = { z, items, pies };
+}
+
+// las líneas: un punto en el control y una línea ámbar que se desprende hasta su texto
+function dibujarLineasGuia(animar) {
+  gLineas.innerHTML = '';
+  if (!guiaLayout) return;
+  const lento = animar && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  guiaLayout.items.forEach((it, i) => {
+    const g = E('g',{style:'transition:opacity .25s'},gLineas);
+    const [cx, cy] = it.pts[0];
+    E('circle',{cx,cy,r:13,fill:'none',stroke:'#F5B041','stroke-width':1,opacity:.55},g);
+    E('circle',{cx,cy,r:3.6,fill:'#F5B041'},g);
+    const linea = E('polyline',{points:it.pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' '),fill:'none',stroke:'#F5B041','stroke-width':1.3},g);
+    it.g = g;
+    const retardo = i * 55;
+    if (lento) {
+      const largo = linea.getTotalLength();
+      linea.style.strokeDasharray = largo;
+      linea.animate([{ strokeDashoffset:largo }, { strokeDashoffset:0 }], { duration:420, delay:retardo, easing:'ease-out', fill:'both' });
+      g.animate([{ opacity:0 }, { opacity:1 }], { duration:160, delay:retardo, fill:'both' });
+    }
+    setTimeout(() => it.el.classList.add('vista'), lento ? retardo + 300 : 0);
+    // al pasar sobre un texto se queda sólo su línea
+    it.el.onpointerenter = () => guiaLayout.items.forEach(o => { o.el.classList.toggle('atenuada', o !== it); if (o.g) o.g.style.opacity = o === it ? 1 : .2; });
+    it.el.onpointerleave = () => guiaLayout.items.forEach(o => { o.el.classList.remove('atenuada'); if (o.g) o.g.style.opacity = 1; });
+  });
+  setTimeout(() => guiaLayout.pies.forEach(p => p.classList.add('vista')), lento ? guiaLayout.items.length * 55 + 300 : 0);
+}
+
+// ---- en qué panel está la placa
+// guia.py lee del encabezado cómo se pasa de un panel a otro (BTN4 → siguiente panel, BTN2+BTN4 → entra y sale del
+// MENÚ, BTN2 → PANEL A, mantener BTN5 → panel B…). La página sigue esos botones aunque la guía esté cerrada, y la guía
+// muestra sólo lo que hace cada control en el panel de ahora. Si la cuenta se pierde, se corrige con un clic arriba.
+let panelEstado = null, panelAntes = null, panelPrevio = {};
+const panelAbajo = new Set();
+function reiniciarPaneles() {
+  const m = guiaDatos && guiaDatos.paneles;
+  panelEstado = m ? Object.fromEntries(Object.entries(m.dims).map(([d, v]) => [d, v.inicial])) : null;
+  panelPrevio = {}; panelAbajo.clear();
+}
+function enEstePanel(ents) {
+  if (!panelEstado) return ents;
+  const aqui = ents.filter(e => e.ctx && panelEstado[e.dim] === e.ctx);
+  return aqui.length ? aqui : ents.filter(e => !e.ctx);
+}
+function aplicarPanel(c, on) {
+  const d = c.dim, ahora = panelEstado[d];
+  if (c.tipo === 'ciclo') { const i = c.orden.indexOf(ahora); panelEstado[d] = c.orden[(i + 1) % c.orden.length]; }
+  else if (c.tipo === 'ir') panelEstado[d] = c.a;
+  else if (c.tipo === 'alternar') {
+    if (c.b !== undefined) panelEstado[d] = ahora === c.a ? c.b : c.a;
+    else if (ahora === c.a) panelEstado[d] = panelPrevio[d] ?? guiaDatos.paneles.dims[d].inicial;   // el mismo combo vuelve
+    else { panelPrevio[d] = ahora; panelEstado[d] = c.a; }
+  } else if (c.tipo === 'mantener') {
+    if (on) { panelPrevio[d] = ahora; panelEstado[d] = c.a; } else panelEstado[d] = panelPrevio[d] ?? ahora;
+  }
+}
+function panelTecla(i, on) {
+  const m = guiaDatos && guiaDatos.paneles;
+  if (!m || !panelEstado) return;
+  const n = 'BTN' + (i + 1), antes = JSON.stringify(panelEstado);
+  if (on) {
+    if (!panelAbajo.size) panelAntes = { ...panelEstado };
+    panelAbajo.add(n);
+    const combo = panelAbajo.size > 1 && m.cambios.find(c => c.teclas.length > 1 && c.teclas.every(t => panelAbajo.has(t)));
+    if (combo) { panelEstado = { ...panelAntes }; aplicarPanel(combo, true); }   // el combo deshace lo del primer botón
+    else { const c = m.cambios.find(c => c.teclas.length === 1 && c.teclas[0] === n); if (c) aplicarPanel(c, true); }
+  } else {
+    panelAbajo.delete(n);
+    const c = m.cambios.find(c => c.tipo === 'mantener' && c.teclas[0] === n);
+    if (c) aplicarPanel(c, false);
+  }
+  if (JSON.stringify(panelEstado) !== antes) rehacerGuia();
+}
+const nombrePanel = o => o === '' ? 'principal' : o.replace(/^(panel|modo)\s+/i, '').split(/\s+·\s+|\s*\(/)[0];
+function filaPaneles() {
+  const m = guiaDatos && guiaDatos.paneles;
+  if (!m || !panelEstado) return '';
+  return Object.entries(m.dims).map(([d, v]) =>
+    `<div class="paneles" title="Si la placa quedó en otro ${d}, elígelo aquí"><span>${d === 'modo' ? 'Modo' : 'Panel'}</span>`
+    + v.opciones.map(o => `<button class="enlace${o === panelEstado[d] ? ' activo' : ''}" data-dim="${d}" data-op="${esc(o)}">${esc(nombrePanel(o))}</button>`).join('')
+    + '</div>').join('');
+}
+$('guiaCab').addEventListener('click', e => {
+  const b = e.target.closest('[data-dim]');
+  if (!b || !panelEstado) return;
+  panelEstado[b.dataset.dim] = b.dataset.op;
+  rehacerGuia();
+});
+
+// al tocar un control con la guía abierta, su texto y su línea se encienden: se lee y se prueba a la vez
+function guiaToque(n) {
+  if (!guiaAbierta || !guiaLayout) return;
+  const it = guiaLayout.items.find(o => o.n === n);
+  if (!it) return;
+  it.el.classList.add('tocada');
+  if (it.g) it.g.classList.add('tocada');
+  clearTimeout(it.apagar);
+  it.apagar = setTimeout(() => { it.el.classList.remove('tocada'); if (it.g) it.g.classList.remove('tocada'); }, 700);
+}
+const ZOOM_MESA = { x:TX, y:TY, s:K };              // donde está la placa en la mesa: de ahí parte el zoom
+function abrirGuia() {
+  if (guiaAbierta || enPlaca) return;
+  guiaAbierta = true;
+  soloPlaca();
+  gLineas.getAnimations().forEach(a => a.cancel());
+  gLineas.innerHTML = '';
+  $('escenario').classList.add('enGuia');
+  guiaEl.classList.add('abierta');
+  guiaEl.setAttribute('aria-hidden', 'false');
+  $('guiaBtn').setAttribute('aria-expanded', 'true');
+  armarGuia();
+  // la cortina baja, y recién ahí la placa se acerca
+  const desde = { ...placaAhora };
+  setTimeout(() => guiaAbierta && animarPlaca(desde, guiaLayout.z, 750, () => dibujarLineasGuia(true)), 280);
+  $('guiaCerrar').focus({ preventScroll:true });
+}
+function cerrarGuia() {
+  if (!guiaAbierta) return;
+  guiaAbierta = false;
+  guiaEts.querySelectorAll('.vista').forEach(e => e.classList.remove('vista'));
+  gLineas.animate([{ opacity:1 }, { opacity:0 }], { duration:180, fill:'forwards' });
+  $('guiaBtn').setAttribute('aria-expanded', 'false');
+  animarPlaca({ ...placaAhora }, ZOOM_MESA, 480, () => {
+    $('escenario').classList.remove('enGuia');
+    guiaEl.classList.remove('abierta');
+    guiaEl.setAttribute('aria-hidden', 'true');
+    gLineas.getAnimations().forEach(a => a.cancel());
+    gLineas.innerHTML = '';
+  });
+  $('guiaBtn').focus({ preventScroll:true });
+}
+// cambió el código (u otra cosa) con la guía abierta: se rehace sin repetir la animación
+function rehacerGuia() {
+  if (!guiaAbierta) return;
+  guiaTurno++;
+  soloPlaca();
+  armarGuia();
+  ponerPlaca(guiaLayout.z);
+  dibujarLineasGuia(false);
+}
+$('guiaBtn').onclick = () => guiaAbierta ? cerrarGuia() : abrirGuia();
+$('guiaCerrar').onclick = cerrarGuia;
+addEventListener('keydown', e => {
+  if ((e.target.closest && e.target.closest('input,select,textarea')) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape' && enPlaca) cerrarPlacaGrande();
+  else if (e.key === 'Escape' && guiaAbierta) cerrarGuia();
+  else if (e.key === '?') guiaAbierta ? cerrarGuia() : abrirGuia();
+});
+addEventListener('resize', () => { if (guiaAbierta && guiaLayout) rehacerGuia(); });
+
+// ---------------------------------------------------------------- la placa sola, a toda la pantalla
+// Usa el mismo telón y la misma placa viva de la guía, pero sin textos: la foto de la PCB (1060×664) llena la escena.
+var enPlaca = false;
+let pantallaPropia = false;
+const pantallaActiva = () => document.fullscreenElement || document.webkitFullscreenElement;
+function ajustePlaca() {
+  const s = Math.max(1600 / 1060, 1000 / 664);      // llena la escena: recorta 1 u del borde para que no asome el marco
+  return { s, x:(1600 - 1060 * s) / 2 - OX * s, y:(1000 - 664 * s) / 2 - OY * s };
+}
+function abrirPlacaGrande() {
+  if (enPlaca || guiaAbierta) return;
+  enPlaca = true;
+  pantallaPropia = !pantallaActiva();
+  if (pantallaPropia) pantallaCompleta();           // antes de cualquier espera: el navegador lo exige dentro del clic
+  soloPlaca();
+  $('escenario').classList.add('enGuia', 'enPlaca');
+  animarPlaca({ ...placaAhora }, ajustePlaca(), 550);
+}
+function cerrarPlacaGrande() {
+  if (!enPlaca) return;
+  enPlaca = false;
+  if (pantallaPropia && pantallaActiva()) pantallaCompleta();
+  animarPlaca({ ...placaAhora }, ZOOM_MESA, 420, () => $('escenario').classList.remove('enGuia', 'enPlaca'));
+}
+$('placaGrande').onclick = e => { e.currentTarget.blur(); abrirPlacaGrande(); };
+$('salirGrande').onclick = cerrarPlacaGrande;
+const alSalirDePantalla = () => { if (enPlaca && !pantallaActiva()) cerrarPlacaGrande(); };
+document.addEventListener('fullscreenchange', alSalirDePantalla);
+document.addEventListener('webkitfullscreenchange', alSalirDePantalla);
+
+// ---------------------------------------------------------------- cargar el código en la placa de verdad
+// Web Serial + esptool-js, por el USB izquierdo (el mismo que usa Arduino IDE). En la web la imagen ya viene compilada
+// (exportar_web.py la deja en placa/); con servidor.py se compila con arduino-cli en el momento, también un .ino propio.
+let pedidoActual = null, cargando = false;
+const cargarBtn = $('cargarPlaca');
+if (!('serial' in navigator)) cargarBtn.hidden = true;
+function pintarCarga(texto, fraccion = 0) {
+  cargarBtn.textContent = texto;
+  cargarBtn.style.setProperty('--avance', (fraccion * 100).toFixed(1) + '%');
+}
+async function imagenDe(pedido, nombre) {
+  if (WEB) {
+    const f = WEB.firmwares.find(x => x.nombre === pedido.carpeta);
+    if (!f || !f.placa) throw Object.assign(new Error('sin imagen'), { titulo:'Este código no está listo para la placa', detalle:`${nombre} no tiene una imagen compilada para el ESP32-S3.` });
+    return `placa/${f.placa}.bin`;
+  }
+  pintarCarga('Compilando…');
+  estado(`compilando ${nombre} para la placa…`, 'trabajo');
+  const r = await (await fetch('/api/placa', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(pedido) })).json();
+  if (!r.ok) throw Object.assign(new Error('no compila'), { titulo:`${nombre} no compila para la placa`, detalle:traducirLog(r.log) });
+  return `build/_placa/${r.id}.bin`;
+}
+function explicarErrorCarga(e, salida) {
+  const m = String(e && e.message || e);
+  if (/open|Access denied|NetworkError|already/i.test(m) && !/connect/i.test(m))
+    return ['El puerto está ocupado', 'Cierra Arduino IDE, su monitor serie o cualquier otra pestaña que esté usando la placa, e intenta de nuevo.'];
+  if (/connect|boot mode|timeout|sync/i.test(m))
+    return ['La placa no entró en modo de carga', 'Revisa que el cable esté en el USB izquierdo y sea de datos.\nSi sigue igual: mantén apretado BOOT en el módulo ESP32, pulsa RESET, suelta los dos y vuelve a intentar.\n\n' + salida.slice(-12).join('\n')];
+  return ['No se pudo cargar', m + '\n\n' + salida.slice(-12).join('\n')];
+}
+async function cargarAPlaca() {
+  if (cargando) return;
+  if (!pedidoActual) { estado('primero elige un código', 'error'); return; }
+  const nombre = build.principal, antes = [$('estado').textContent, $('punto').className.replace('punto', '').trim()];
+  const volver = () => estado(antes[0], antes[1]);
+  estado('elige el puerto · cable en el USB izquierdo', 'trabajo');
+  let puerto;
+  try { puerto = await navigator.serial.requestPort(); }      // primero esto: necesita el clic reciente, y compilar tarda
+  catch { volver(); return; }                                 // cerró la ventana sin elegir
+  cargando = true;
+  cargarBtn.disabled = true;
+  const salida = [];
+  let transporte = null, listo = false;
+  try {
+    const url = await imagenDe(pedidoActual, nombre);
+    pintarCarga('Preparando…');
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`no pude bajar la imagen (${resp.status})`);
+    const datos = new Uint8Array(await resp.arrayBuffer());
+    let binario = '';                                          // esptool-js pide un string binario
+    for (let i = 0; i < datos.length; i += 0x8000) binario += String.fromCharCode.apply(null, datos.subarray(i, i + 0x8000));
+    const { ESPLoader, Transport } = await import('./esptool/bundle.js');
+    transporte = new Transport(puerto, false);
+    const anotar = t => { if (t && t.trim()) salida.push(t.trim()); };
+    const cargador = new ESPLoader({ transport:transporte, baudrate:460800, romBaudrate:115200,
+                                     terminal:{ clean() {}, write:anotar, writeLine:anotar } });
+    pintarCarga('Conectando…');
+    estado(`conectando con la placa…`, 'trabajo');
+    const chip = await cargador.main();
+    if (!/ESP32-S3/i.test(chip)) throw new Error(`esta placa tiene un ${chip}, no un ESP32-S3`);
+    estado(`cargando ${nombre}…`, 'trabajo');
+    await cargador.writeFlash({ fileArray:[{ data:binario, address:0 }], flashSize:'keep', flashMode:'keep', flashFreq:'keep',
+                                eraseAll:false, compress:true,
+                                reportProgress:(_, hecho, total) => pintarCarga(`Cargando ${Math.round(hecho / total * 100)} %`, hecho / total) });
+    await cargador.after('hard_reset');
+    listo = true;
+    logSistema(`— ${nombre} cargado en la placa —`);
+    estado(`${nombre} ya está en la placa`, 'ok');
+    pintarCarga('Cargado en la placa', 1);
+  } catch (e) {
+    const [titulo, detalle] = e && e.titulo ? [e.titulo, e.detalle] : explicarErrorCarga(e, salida);
+    estado(titulo, 'error');
+    mostrarConsola(titulo, detalle);
+  }
+  try { if (transporte) await transporte.disconnect(); else await puerto.close(); } catch {}
+  cargando = false;
+  cargarBtn.disabled = false;
+  setTimeout(() => { if (!cargando) pintarCarga('Cargar a la placa'); }, listo ? 2500 : 0);
+}
+cargarBtn.onclick = e => { e.currentTarget.blur(); cargarAPlaca(); };
+
+// ---------------------------------------------------------------- compilar y cargar
+const consola = $('consola'), consolaTexto = $('consolaTexto');
+function mostrarConsola(titulo, log, errores) {
+  if (!log) { consola.hidden = true; return; }
+  $('consolaTitulo').textContent = titulo;
+  consolaTexto.textContent = '';
+  for (const linea of log.split('\n')) {
+    const s = document.createElement('span');
+    if (/\berror\b/.test(linea)) s.className = 'e'; else if (/\bwarning\b/.test(linea)) s.className = 'w';
+    s.textContent = linea + '\n';
+    consolaTexto.appendChild(s);
+  }
+  consola.hidden = false;
+}
+$('consolaCerrar').onclick = () => { consola.hidden = true; };
+// Versión web (gclabchile.com/simulador): no hay servidor que compile; exportar_web.py deja los firmwares del repo
+// ya compilados en build/ y su lista, guía y periféricos en firmwares.json. Un .ino propio sólo corre en el
+// simulador del taller (servidor.py), así que «abrir .ino» no aparece.
+let WEB = null;
+async function compilar(pedido, nombre) {
+  estado(`${WEB ? 'cargando' : 'compilando'} ${nombre}…`, 'trabajo');
+  mostrarConsola('', '');
+  const t0 = performance.now();
+  let r;
+  if (WEB) {
+    const f = pedido.carpeta && WEB.firmwares.find(x => x.nombre === pedido.carpeta);
+    if (!f) { estado('aquí sólo corren los códigos de la lista', 'error'); return; }
+    r = { ok:true, id:f.id, principal:f.principal, perifericos:f.perifericos, guia:f.guia };
+  } else try {
+    const resp = await fetch('/api/compilar', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(pedido) });
+    r = await resp.json();
+  } catch (e) {
+    estado('sin servidor · ejecuta servidor.py', 'error');
+    mostrarConsola('No hay servidor', 'La página necesita servidor.py corriendo:\n  python tools/simulador/servidor.py');
+    return;
+  }
+  if (!r.ok) {
+    // como en Arduino IDE: si no compila, la placa sigue con el código que tenía
+    const n = (r.errores || []).filter(e => e.tipo !== 'warning').length;
+    const sigue = encendida && build ? ` · sigue ${build.principal}` : '';
+    estado((n ? `${n} ${n === 1 ? 'error' : 'errores'} de compilación` : 'error de compilación') + sigue, 'error');
+    mostrarConsola(`Error al compilar ${nombre}`, traducirLog(r.log));
+    return;
+  }
+  const otro = !build || build.principal !== (r.principal || nombre);
+  build = { id:r.id, principal:r.principal || nombre };
+  pedidoActual = pedido;
+  guiaDatos = r.guia || null;                      // encender() la deja en el panel inicial y rehace la guía
+  const seg = ((performance.now() - t0) / 1000).toFixed(1);
+  logSistema(WEB ? `— ${build.principal} —` : `— ${build.principal} compilado (${seg} s) —`);
+  if (otro && r.perifericos) enchufarLoQueUsa(r.perifericos);
+  encender();
+}
+// Al cargar OTRO firmware se enchufa lo que su código espera (como armar la placa antes de flashear);
+// después cada cosa se puede cambiar a mano y se respeta mientras se siga con el mismo firmware.
+function enchufarLoQueUsa(u) {
+  const puesto = [];
+  const h = u.oled ? 'oled' : u.imu ? 'imu' : header;
+  if (h !== header) { ponerHeader(h); puesto.push(h === 'oled' ? 'pantalla OLED en el header' : 'IMU en el header'); }
+  if (u.sd && !sdOn) { ponerSD(true); puesto.push('microSD'); }
+  for (const pin of [3, 9]) {
+    let t = (u.ext || {})[pin] || '';
+    if (t === 'dht' && u.dht22) t = 'dht22';
+    if (t && ext[pin].tipo !== t) { ext[pin].tipo = t; puesto.push(`${{ fsr:'FSR', ldr:'LDR + láser', dht:'DHT11', dht22:'DHT22' }[t]} en ${pin === 3 ? 'EXT1' : 'EXT2'}`); }
+  }
+  if (puesto.length) { armarExt(); logSistema(`— enchufado: ${puesto.join(', ')} —`); }
+}
+// los mensajes de librerías que no existen en la placa virtual, en palabras claras
+function traducirLog(log) {
+  return log.replace(/fatal error: '([^']+)' file not found/g, (m, h) => {
+    const nota = { 'WiFi.h':'el WiFi no se simula', 'HTTPClient.h':'el WiFi no se simula', 'WiFiClientSecure.h':'el WiFi no se simula',
+                   'MPU6050.h':'la librería MPU6050 todavía no está en el simulador' }[h];
+    return `${m}   ← ${nota || 'esta librería no está en el simulador'}`;
+  });
+}
+$('firmware').onchange = e => {
+  const d = e.target.value;
+  e.target.blur();                  // si no, las teclas 1–5 se las come el selector
+  if (!d) return;
+  try { localStorage.setItem('simulador.firmware', d); } catch {}
+  compilar({ carpeta:d }, d + '.ino');
+};
+$('abrir').onclick = () => $('archivo').click();
+$('archivo').onchange = e => abrirArchivos([...e.target.files]);
+async function abrirArchivos(lista) {
+  // audio y texto van a la microSD (mezclador_pistas lee /cancion.wav y /cancion.txt)
+  const paraSD = lista.filter(f => /\.(wav|txt|raw|bin|csv|json|mid)$/i.test(f.name));
+  if (paraSD.length) await soltarEnSD(paraSD);
+  if (!lista.some(f => /\.ino$/i.test(f.name)) && paraSD.length) return;
+  const archivos = {};
+  for (const f of lista) if (/\.(ino|h|hpp|cpp|c)$/i.test(f.name)) archivos[f.name] = await f.text();
+  const inos = Object.keys(archivos).filter(k => k.endsWith('.ino'));
+  if (!inos.length) { estado('falta el archivo .ino', 'error'); return; }
+  const sel = $('firmware');
+  if (![...sel.options].some(o => o.value === '')) sel.add(new Option('', ''), 0);
+  sel.options[0].textContent = inos[0] + ' (archivo)';
+  sel.value = '';
+  compilar({ archivos, principal:inos[0] }, inos[0]);
+}
+// arrastrar y soltar
+let arrastres = 0;
+addEventListener('dragenter', e => { e.preventDefault(); arrastres++; $('soltar').classList.add('visible'); });
+addEventListener('dragleave', () => { if (--arrastres <= 0) { arrastres = 0; $('soltar').classList.remove('visible'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  e.preventDefault(); arrastres = 0; $('soltar').classList.remove('visible');
+  abrirArchivos([...e.dataTransfer.files]);
+});
+$('reiniciar').onclick = () => { if (build) { logSistema('— reinicio —'); encender(); } };
+armarExt();
+armarTira(0);
+pintarSonido();
+ponerHeader('imu');
+pintarSD();
+pintarOLED();
+
+// lista de firmwares del repositorio
+(async () => {
+  const sel = $('firmware');
+  try {
+    let r = null;
+    try { const w = await fetch('firmwares.json', { cache:'no-cache' }); if (w.ok) r = WEB = await w.json(); } catch {}
+    if (WEB) { r = { firmwares:WEB.firmwares.map(f => f.nombre) }; $('abrir').hidden = true; }
+    else r = await (await fetch('/api/firmwares')).json();
+    sel.innerHTML = '';
+    for (const f of r.firmwares) sel.add(new Option(f + '.ino', f));
+    let ultimo = 'bajo_8_pasos';
+    try { ultimo = localStorage.getItem('simulador.firmware') || ultimo; } catch {}
+    ultimo = new URLSearchParams(location.search).get('fw') || ultimo;      // ?fw=industrial_matriz
+    if (!r.firmwares.includes(ultimo)) ultimo = r.firmwares[0];
+    sel.value = ultimo;
+    compilar({ carpeta:ultimo }, ultimo + '.ino');
+  } catch {
+    sel.innerHTML = '<option>sin servidor</option>';
+    estado('sin servidor · ejecuta servidor.py', 'error');
+  }
+  if (!self.crossOriginIsolated) {
+    mostrarConsola('Falta aislamiento', WEB
+      ? 'Este navegador no activó la memoria compartida que necesita la placa. Prueba con Chrome, Edge o Firefox al día.'
+      : 'El navegador no activó la memoria compartida (crossOriginIsolated = false).\nAbre la página desde servidor.py, que manda las cabeceras COOP/COEP.');
+  }
+})();
+</script>
+</body>
+</html>

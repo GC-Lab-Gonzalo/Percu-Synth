@@ -46,7 +46,7 @@
 // octava abajo (peso grave). El desafine reparte los osciladores entre L y R →
 // ANCHO ESTÉREO espacial. Todo pasa por un FILTRO PASO-BAJOS RESONANTE (lows
 // profundos + un pico de agudos que silba como un coro/formante = lo "épico").
-// Base muy grave (A1 = 55 Hz). Sin LEDs, sin Serial.
+// Base muy grave (A1 = 55 Hz). Sin LEDs; por Serial sólo avisa si encontró el IMU.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
@@ -80,7 +80,10 @@
 // - Al encender el DRON de base ya suena (tónica+quinta tenue) → confirma firmware + audio.
 //   Si NO escuchas nada, el problema no es el IMU.
 // - Si NO se detecta el IMU, el dron PULSA fuerte cada ~1.2 s ("latido" de error).
-//   Revisa el MPU6050 (cableado/soldadura). Autodetecta 0x68 y 0x69.
+//   Revisa el MPU6050 (cableado/soldadura). Autodetecta 0x68 y 0x69, acepta MPU6050
+//   clones (WHO_AM_I 0x70/0x72/0x98) y lo sigue buscando cada segundo: el latido se
+//   calla solo cuando aparece. Por Serial (115200) dice "IMU OK en 0x68 (WHO_AM_I =
+//   0x..)" o "IMU NO responde". En la V2.0 el IMU y la OLED comparten conector.
 // ==============================================================================================================================================
 
 #include <Arduino.h>
@@ -240,50 +243,96 @@ void onImpact(float sh) {
   triggerNote(noteFreq(walkDeg), vel, false);
 }
 
-// ─── IMU: detección de dirección (0x68 / 0x69) ─────────────
-bool detectIMU(uint8_t addr) {
-  Wire.beginTransmission(addr);
-  Wire.write(0x75);                       // WHO_AM_I
-  if (Wire.endTransmission(false) != 0) return false;
-  Wire.requestFrom((int)addr, 1, true);
-  return (Wire.available() && (Wire.read() == 0x68));
+// ─── IMU: despertar, detectar y leer ───────────────────────
+// El IMU se da por VIVO si entrega los 6 bytes del acelerómetro, NO por su WHO_AM_I:
+// muchos MPU6050 clones contestan 0x70 / 0x72 / 0x98 en vez de 0x68 y funcionan igual
+// (la versión anterior exigía 0x68, daba "sin IMU" y quedaba en el latido de error sin
+// reaccionar a nada). Tampoco se mira el retorno de endTransmission(false): en el core
+// del ESP32 ese repeated-start puede dar != 0 con el IMU presente. Y nunca se decide con
+// una sola lectura en frío: setup() reintenta y loop() lo vuelve a buscar cada
+// IMU_REINTENTO_MS mientras no esté (sin delay, para no cortar el audio).
+const unsigned long IMU_REINTENTO_MS = 1000;
+unsigned long lastImuProbe = 0;
+uint8_t imuFallos = 0;             // lecturas fallidas seguidas (si se suelta el IMU)
+bool    imuBaseNueva = true;       // la primera lectura fija la línea base (sin golpe falso)
+
+void imuConfigurar(uint8_t addr) {
+  Wire.beginTransmission(addr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // despertar
+  Wire.beginTransmission(addr); Wire.write(0x1A); Wire.write(0x00); Wire.endTransmission(true); // DLPF off (rápido)
+  Wire.beginTransmission(addr); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); // ACCEL ±2g (MÁS sensible)
 }
 
-// ─── IMU: init (autodetecta dirección, ±2g = máx. sensibilidad) ──
+// Lee los 6 bytes del acelerómetro. Devuelve false si el IMU no contestó.
+bool imuLeer(uint8_t addr, int16_t &ax, int16_t &ay, int16_t &az) {
+  Wire.beginTransmission(addr);
+  Wire.write(0x3B);                            // ACCEL_XOUT_H
+  Wire.endTransmission(false);                 // retorno ignorado a propósito (ver arriba)
+  Wire.requestFrom((int)addr, 6, true);
+  if (Wire.available() < 6) { while (Wire.available()) Wire.read(); return false; }
+  ax = (Wire.read() << 8) | Wire.read();
+  ay = (Wire.read() << 8) | Wire.read();
+  az = (Wire.read() << 8) | Wire.read();
+  return true;
+}
+
+uint8_t imuWhoAmI(uint8_t addr) {             // solo informativo (Serial)
+  Wire.beginTransmission(addr); Wire.write(0x75); Wire.endTransmission(false);
+  Wire.requestFrom((int)addr, 1, true);
+  return Wire.available() ? Wire.read() : 0xFF;
+}
+
+void imuAviso() {
+  char msg[96];
+  if (imuOK) snprintf(msg, sizeof msg, "IMU OK en 0x%02X (WHO_AM_I = 0x%02X)", imuAddr, imuWhoAmI(imuAddr));
+  else       snprintf(msg, sizeof msg, "IMU NO responde (0x68/0x69): latido de error y se sigue buscando");
+  Serial.println(msg);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial0.println(msg);        // la DevKitC-1 tiene dos conectores USB: se imprime en los dos
+#endif
+}
+
+// Despierta el MPU en sus dos direcciones posibles y se queda con la que entrega datos.
+bool imuBuscar() {
+  const uint8_t dirs[2] = {0x68, 0x69};        // 0x69 = AD0 en alto
+  for (int k = 0; k < 2; k++) {
+    imuConfigurar(dirs[k]);
+    int16_t ax, ay, az;
+    if (imuLeer(dirs[k], ax, ay, az)) {
+      imuAddr = dirs[k]; imuOK = true; imuFallos = 0; imuBaseNueva = true;
+      return true;
+    }
+  }
+  imuOK = false;
+  return false;
+}
+
 void initIMU() {
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
-
-  if      (detectIMU(0x68)) { imuAddr = 0x68; imuOK = true; }
-  else if (detectIMU(0x69)) { imuAddr = 0x69; imuOK = true; }   // AD0 en alto
-  else                       imuOK = false;
-
-  Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // wake
-  Wire.beginTransmission(imuAddr); Wire.write(0x1A); Wire.write(0x00); Wire.endTransmission(true); // DLPF off (respuesta rápida a la vibración)
-  Wire.beginTransmission(imuAddr); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); // ACCEL ±2g (MÁS sensible)
-  delay(100);
+  Wire.setTimeOut(5);                          // ms: un bus colgado no frena el audio mucho rato
+  for (int intento = 0; intento < 10 && !imuBuscar(); intento++) delay(20);
+  delay(50);                                   // deja asentar el acelerómetro recién despierto
+  imuAviso();
 }
 
 void readAccel() {
-  Wire.beginTransmission(imuAddr);
-  Wire.write(0x3B);                       // ACCEL_XOUT_H
-  Wire.endTransmission(false);
-  Wire.requestFrom((int)imuAddr, 6, true);
-  if (Wire.available() >= 6) {
-    int16_t ax = (Wire.read() << 8) | Wire.read();
-    int16_t ay = (Wire.read() << 8) | Wire.read();
-    int16_t az = (Wire.read() << 8) | Wire.read();
-    float x = ax / ACCEL_LSB_PER_G, y = ay / ACCEL_LSB_PER_G, z = az / ACCEL_LSB_PER_G;
-    float mag = sqrtf(x * x + y * y + z * z);            // ≈ 1 g en reposo (cualquier orientación)
-    accelBaseline += 0.01f * (mag - accelBaseline);      // línea base lenta → quita gravedad/bias
-    shock = fabsf(mag - accelBaseline);                  // vibración instantánea
-
-    // Energía del dron: sube rápido con la vibración, baja lento (respiración)
-    float target = shock / VIB_FULL;
-    if (target > 1.0f) target = 1.0f;
-    if (target > energy) energy += (target - energy) * 0.25f;   // ataque rápido
-    else                 energy += (target - energy) * 0.02f;   // release lento
+  int16_t ax, ay, az;
+  if (!imuLeer(imuAddr, ax, ay, az)) {
+    if (++imuFallos >= 50) { imuOK = false; lastImuProbe = millis(); imuAviso(); }  // se soltó
+    return;
   }
+  imuFallos = 0;
+  float x = ax / ACCEL_LSB_PER_G, y = ay / ACCEL_LSB_PER_G, z = az / ACCEL_LSB_PER_G;
+  float mag = sqrtf(x * x + y * y + z * z);            // ≈ 1 g en reposo (cualquier orientación)
+  if (imuBaseNueva) { accelBaseline = mag; imuBaseNueva = false; }
+  accelBaseline += 0.01f * (mag - accelBaseline);      // línea base lenta → quita gravedad/bias
+  shock = fabsf(mag - accelBaseline);                  // vibración instantánea
+
+  // Energía del dron: sube rápido con la vibración, baja lento (respiración)
+  float target = shock / VIB_FULL;
+  if (target > 1.0f) target = 1.0f;
+  if (target > energy) energy += (target - energy) * 0.25f;   // ataque rápido
+  else                 energy += (target - energy) * 0.02f;   // release lento
 }
 
 // ─── Filtro LPF resonante — cutoff modulado por la vibración ──
@@ -341,7 +390,12 @@ void i2s_init() {
 
 // ─── Setup ─────────────────────────────────────────────────
 void setup() {
-  esp_log_level_set("*", ESP_LOG_NONE);   // sin logs (no usamos Serial)
+  esp_log_level_set("*", ESP_LOG_NONE);
+  Serial.begin(115200);        // sólo dice si encontró el IMU (al encender y si cambia)
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial.setTxTimeoutMs(0);    // sin PC conectado, un print por USB CDC nunca bloquea el audio
+  Serial0.begin(115200);
+#endif
 
   for (int i = 0; i < NUM_BTN; i++) { pinMode(BTN_PINS[i], INPUT_PULLUP); btnLast[i] = HIGH; }
   analogReadResolution(12);
@@ -385,8 +439,13 @@ void loop() {
     }
     if (shock < HIT_LOW) hitArmed = true;
   } else {
-    // — Sin IMU: "latido" de error (pulso de energía cada ~1.2 s) para avisar audiblemente —
-    if (t - lastBeat > 1200) { energy = 1.0f; lastBeat = t; }
+    // — Sin IMU: se sigue buscando (no se decide nunca con una sola lectura) —
+    if (t - lastImuProbe >= IMU_REINTENTO_MS) {
+      lastImuProbe = t;
+      if (imuBuscar()) imuAviso();
+    }
+    // — y mientras no aparece: "latido" de error (pulso de energía cada ~1.2 s) —
+    if (!imuOK && t - lastBeat > 1200) { energy = 1.0f; lastBeat = t; }
     energy *= 0.97f;
   }
 

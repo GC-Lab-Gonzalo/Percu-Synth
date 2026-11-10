@@ -1,17 +1,32 @@
 // ==============================================================================================================================================
 // PERCU-SYNTH — Test IMU con sonido (sin USB / sin Serial) — GC Lab Chile
 // ==============================================================================================================================================
-// Desarrollado por: Gonzalo - GC Lab Chile · MIT License
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
 // ==============================================================================================================================================
-// HARDWARE
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
 // ==============================================================================================================================================
-// - ESP32-S3 + DAC PCM5102 vía I2S |LCK -> 39, DIN -> 40, BCK -> 41|
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3
+// - DAC PCM5102 vía I2S — estéreo 44.1 kHz · 16-bit |LCK -> 39, DIN -> 40, BCK -> 41|
 // - IMU MPU6050 (I2C) |SDA -> 21, SCL -> 38|  (dir. 0x68 o 0x69, autodetectada)
+// - No usa botones, potenciómetros ni LEDs.
 // ==============================================================================================================================================
-// ARDUINO IDE
+// ARDUINO IDE — settings críticos
 // ==============================================================================================================================================
-// - Board: ESP32S3 Dev Module · Flash Mode: DIO · PSRAM: OPI PSRAM
-// - Librerías: ESP32 core ≥ 3.x (driver/i2s_std.h) + Wire.h
+// - Board              : ESP32S3 Dev Module
+// - Flash Mode         : DIO          (¡OPI rompe I2S!)
+// - PSRAM              : OPI PSRAM
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h)
+// - Wire.h (incluida en el core ESP32)
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
@@ -24,6 +39,30 @@
 //   · IMU NO detectado  → un bip GRAVE intermitente (~220 Hz, on/off) = error de IMU.
 // Autodetecta la dirección I2C 0x68 y 0x69. Volumen alto y rango agudo para que se
 // oiga en cualquier parlante (un seno grave a bajo volumen casi no se escucha).
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → sin uso
+// - BTN2 → sin uso
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → sin uso (el volumen es fijo y alto: baja el de tus audífonos)
+// - POT2 → sin uso
+// - POT3 → sin uso
+// - POT4 → sin uso
+// - IMU → Inclina el equipo: el tono sube o baja (eje X, 350–1400 Hz).
+//
+// Solo cuenta el eje X del acelerómetro: inclinado a un lado (−1 g) suena a 350 Hz, plano
+// a ~875 Hz y al otro lado (+1 g) a 1400 Hz, con un glide suave entre medio. Girarlo
+// sobre la mesa sin inclinarlo no cambia el tono. Si al inclinarlo hacia adelante no
+// pasa nada, inclínalo hacia el costado (o al revés): solo cuenta un eje.
+//
+// MODO DE USO:
+// 1. Conecta audífonos o un parlante al jack, baja su volumen y carga el sketch.
+// 2. Al encender tienes que oír un BIP corto: el audio funciona.
+// 3. Si después suena un bip GRAVE intermitente, el IMU no responde (revisa el cableado: pines 21 y 38).
+// 4. Si queda un tono continuo, inclina el equipo: el tono tiene que subir y bajar.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

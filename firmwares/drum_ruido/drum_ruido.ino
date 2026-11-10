@@ -33,6 +33,10 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Caja de ritmos que suena sola desde que la enciendes: sortea patrones de 2 compases
+// con timbres ruidosos (chapas, fierros, vapor) y tú los cambias, eliges el kit, marcas
+// el tempo, la frenas a medio tiempo y le haces fills y repeticiones.
+//
 // Drum machine 100 % sintetizada (sin samples). Los TIMBRES son ruidosos y sucios a
 // propósito — ruido, chapas metálicas, clanks de fierro, ráfagas de vapor — pero la
 // CADENA FINAL ES LIMPIA: nada de bit-crush, nada de diezmado de sample rate. La
@@ -65,11 +69,12 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO (botones — uno = una función, sin combos, todo en el flanco de presión)
 // ==============================================================================================================================================
-// - BTN1 (44) → PATRÓN: sortea un patrón nuevo (el timbre y el tempo no se tocan).
+// - BTN1 (44) → PATRÓN: sortea un patrón nuevo. El timbre y el tempo no se tocan.
 // - BTN2 (42) → TIMBRE: cicla los 5 kits. Cambia la síntesis al instante; el patrón se mantiene.
 // - BTN3 (0)  → TAP TEMPO: marca el pulso (negras). Con 2 toques fija el BPM (60–200).
-// - BTN4 (45) → MEDIO TIEMPO (mantener): cada paso del patrón dura el doble, así que el
-//               ritmo cae a la mitad de velocidad. El reloj maestro sigue corriendo por
+//               El primer toque después de 2 s sin tocar reubica el "1" del patrón.
+// - BTN4 (45) → MEDIO TIEMPO (mantener): el ritmo cae a la mitad de velocidad. Cada paso
+//               del patrón dura el doble mientras lo mantienes. El reloj maestro sigue corriendo por
 //               debajo → al soltar retoma exactamente donde tocaba, sin desfase.
 // - BTN5 (47) → FILL (mantener): redoble que acelera; bombo y bajo siguen debajo.
 //
@@ -78,12 +83,13 @@
 // FUNCIONAMIENTO (potenciómetros — significado fijo, siempre el mismo)
 // ==============================================================================================================================================
 // - POT1 (ADC1)  → VOLUMEN master
-// - POT2 (ADC2)  → FILTRO: corte del LPF resonante global (200 Hz – abierto del todo).
+// - POT2 (ADC2)  → FILTRO: oscurece el sonido (200 Hz – abierto del todo). Es el corte del
+//                  LPF resonante global.
 //                  Curva pensada para que el medio del recorrido deje pasar los hats.
 //                  Al cerrarlo sube la resonancia (hasta 3.2) y cada golpe ABRE el corte
 //                  → el filtro respira con el ritmo en vez de quedarse quieto.
-// - POT3 (ADC8)  → SUCIEDAD: saturación en DOS BANDAS (graves/medios hasta ×7.5, agudos
-//                  apenas) + más capa de ruido en cada golpe. Ensucia de verdad sin
+// - POT3 (ADC8)  → SUCIEDAD: más saturación y más ruido en cada golpe. Saturación en DOS
+//                  BANDAS (graves/medios hasta ×4.35, agudos apenas). Ensucia de verdad sin
 //                  bit-crush ni diezmado, que es lo que produce aliasing.
 // - POT4 (ADC10) → BEAT REPEAT: OFF · ×2 (8 pasos) · ×4 (4) · ×8 (2) · ×16 (1 paso).
 //                  Loopea sobre un reloj maestro que nunca se detiene → al volver a
@@ -95,6 +101,13 @@
 // - LED0 bombo · LED1 caja · LED2 hats · LED3 perc/zap · LED4 ruido/bajo · LED5 pulso.
 // - BEAT REPEAT activo → N LEDs rojos (1 = ×2 … 4 = ×16) · FILL → estrobo blanco.
 // - MEDIO TIEMPO → LED 5 amarillo fijo y el resto a media luz.
+//
+// MODO DE USO:
+// 1. Sube el POT1 (volumen): la máquina ya está tocando un patrón a 140 BPM.
+// 2. Aprieta BTN1 hasta que salga un patrón que te guste, y BTN2 para probar los 5 kits.
+// 3. Marca el tempo con BTN3 (dos o más toques al pulso que quieras).
+// 4. Juega en vivo: POT2 cierra el filtro, POT3 ensucia y POT4 repite el último tramo;
+//    mantén BTN4 para medio tiempo y BTN5 para un fill.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

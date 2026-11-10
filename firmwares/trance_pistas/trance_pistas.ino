@@ -32,6 +32,11 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Un tema de trance que la placa toca sola, sin tarjeta: batería, bajo, riff y acordes en 4 pistas
+// que suenan juntas. Tú las mezclas en vivo como un DJ: cada pista tiene su panel con filtro,
+// resonancia y un efecto rítmico (gate o repeat). Hay 6 temas, y todo se ve en las visuales de
+// Resonancia.
+//
 // El hermano sintetizado de mezclador_pistas: la misma idea (4 pistas que suenan juntas, cada una con
 // volumen, filtro, resonancia y efecto rítmico, y cada una moviendo su capa en Resonancia), pero acá
 // la música la hace la placa, sin tarjeta. Trance con peso, en la línea de Chemical Brothers:
@@ -50,22 +55,35 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO  (los mismos controles que mezclador_pistas)
 // ==============================================================================================================================================
-// Todo funciona por BANCOS: un botón elige el banco y las 4 perillas pasan a controlar ese banco.
-// Al cambiar de banco, una perilla NO salta al valor nuevo: toma el control recién cuando la mueves.
+// Todo funciona por PANELES (en el código y en Resonancia se llaman «bancos»): un botón elige el
+// panel y las 4 perillas pasan a controlar ese panel. Al cambiar de panel, una perilla NO salta al
+// valor nuevo: toma el control recién cuando la mueves. Al encender está el panel general.
 //
-// - BTN1  toque     -> BANCO GENERAL: POT1 volumen BAJO · POT2 RIFF · POT3 BATERÍA · POT4 ACORDES
-//         mantener  -> PLAY / STOP (medio segundo). Mantenido 2,5 s -> SIGUIENTE TEMA, desde el inicio y en stop
-// - BTN2 -> banco BAJO · BTN3 -> banco RIFF · BTN4 -> banco BATERÍA · BTN5 -> banco ACORDES. En cada uno:
-//         POT1  FILTRO: al centro abierto · a la izquierda pasa-bajos (hasta 110 Hz) · a la derecha pasa-altos (hasta 5 kHz)
-//         POT2  RESONANCIA del filtro (atada al corte: nunca un pico resonante arriba)
-//         POT3  EFECTO RÍTMICO al pulso: apagado · gate 1/8 · gate 1/16 · repeat 1/2 · repeat 1/4 · repeat 1/8 · repeat 1/16
-//         POT4  INTENSIDAD del efecto
-// - IMU   -> no toca el sonido: inclinar la placa gira y tiñe las visuales
-// - PIEZOS -> no suenan: cada golpe va a las visuales
+// - BTN1 → PANEL GENERAL : POT1 volumen del bajo · POT2 volumen del riff · POT3 volumen de la batería
+//                          POT4 volumen de los acordes
+// - BTN1 mantenido medio segundo → Play / Stop. Mantenido 2,5 s → siguiente tema (son 6), desde el
+//                          inicio y en stop: mantenlo otro medio segundo para que suene.
+// - BTN2 → PANEL BAJO : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                       POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN3 → PANEL RIFF : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                       POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN4 → PANEL BATERÍA : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                          POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN5 → PANEL ACORDES : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                          POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - IMU   → no toca el sonido: inclinar la placa gira y tiñe las visuales
+// - PIEZOS → no suenan: cada golpe va a las visuales
 //
-// - LEDs:  0  verde = sonando · ámbar = stop · parpadea en blanco con el banco GENERAL elegido
+// En los 4 paneles de pista las perillas hacen lo mismo, cada una sobre su pista:
+//   · filtro: al centro abierto · a la izquierda pasa-bajos (hasta 110 Hz) · a la derecha pasa-altos (hasta 5 kHz)
+//   · resonancia del filtro: atada al corte, nunca un pico resonante arriba
+//   · efecto rítmico al pulso, por zonas: apagado · gate 1/8 · gate 1/16 · repeat 1/2 · repeat 1/4 ·
+//     repeat 1/8 · repeat 1/16 (el gate corta el sonido; el repeat repite el comienzo de cada trozo)
+//   · intensidad: cuánto actúa el efecto
+//
+// - LEDs:  0  verde = sonando · ámbar = stop · parpadea en blanco con el panel general elegido
 //          1–4  bajo, riff, batería, acordes (el orden de BTN2..BTN5): su color con el brillo de su nivel;
-//               parpadea en blanco la del banco elegido
+//               parpadea en blanco la del panel elegido
 //          5  pulso: chartreuse en el «uno» de cada compás, blanco en los otros tiempos.
 //             MAGENTA parpadeando = la CPU no alcanza (un bloque de audio pasó el 80 % de su tiempo)
 //
@@ -74,6 +92,15 @@
 //   I,titulo,artista,bpm,duracion_ms,tema,total,batería|bajo|riff|acordes
 // Los golpes no se detectan: salen del secuenciador (exactos). bajo = cada grupo de notas,
 // riff = cada corchea, acordes = cada cambio de acorde y cada stab.
+//
+// MODO DE USO:
+// 1. Al encender ya suena. Las 4 perillas son el volumen de bajo, riff, batería y
+//    acordes: bájalas y súbelas para armar la mezcla.
+// 2. Aprieta BTN2 (bajo) y gira el POT1: a la izquierda le quitas agudos, a la derecha graves.
+// 3. En ese mismo panel sube el POT3 para un efecto rítmico y el POT4 para que se note más.
+// 4. BTN3, BTN4 y BTN5 hacen lo mismo con el riff, la batería y los acordes. BTN1 vuelve a los
+//    volúmenes.
+// 5. Mantén BTN1 medio segundo para Stop / Play, o 2,5 s para pasar al tema siguiente.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

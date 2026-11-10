@@ -54,28 +54,39 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// Todo funciona por BANCOS: un botón elige el banco y las 4 perillas pasan a controlar ese banco.
-// Al cambiar de banco, una perilla NO salta al valor nuevo: toma el control recién cuando la mueves
-// (así no hay saltos de volumen ni de filtro). En Resonancia aparece qué hace cada perilla.
+// Todo funciona por PANELES (en el código y en Resonancia se llaman «bancos»): un botón elige el
+// panel y las 4 perillas pasan a controlar ese panel. Al cambiar de panel, una perilla NO salta al
+// valor nuevo: toma el control recién cuando la mueves (así no hay saltos de volumen ni de filtro).
+// Al encender está el panel general. En Resonancia aparece qué hace cada perilla.
 //
-// - BTN1  toque     -> BANCO GENERAL: POT1 volumen BAJO · POT2 VOZ · POT3 BATERÍA · POT4 OTROS
-//         mantener  -> PLAY / STOP (medio segundo). Mantenido 2,5 s -> SIGUIENTE CANCIÓN desde el inicio, en stop
-//                      (con una sola canción en la tarjeta, vuelve al inicio)
-// - BTN2 -> banco BAJO · BTN3 -> banco VOZ · BTN4 -> banco BATERÍA · BTN5 -> banco OTROS. En cada uno:
-//         POT1  FILTRO: al centro abierto · a la izquierda pasa-bajos (hasta 110 Hz) · a la derecha pasa-altos (hasta 5 kHz)
-//         POT2  RESONANCIA del filtro (atada al corte: nunca un pico resonante arriba)
-//         POT3  EFECTO RÍTMICO, amarrado al pulso de la canción (zonas): apagado · gate 1/8 · gate 1/16 ·
-//               repeat 1/2 · repeat 1/4 · repeat 1/8 · repeat 1/16
-//                 gate   = corta el sonido en corcheas o semicorcheas
-//                 repeat = repite el comienzo de cada pulso (un tartamudeo rítmico)
-//         POT4  INTENSIDAD del efecto (cuánto corta el gate / cuánto repeat se mezcla)
-// - IMU   -> no toca el sonido: inclinar la placa gira y tiñe las visuales
-// - PIEZOS -> no suenan: cada golpe va a las visuales (destellos y ondas encima de la canción)
+// - BTN1 → PANEL GENERAL : POT1 volumen del bajo · POT2 volumen de la voz · POT3 volumen de la batería
+//                          POT4 volumen de otros
+// - BTN1 mantenido medio segundo → Play / Stop. Mantenido 2,5 s → siguiente canción desde el inicio,
+//                          en stop (con una sola canción en la tarjeta, vuelve al inicio).
+// - BTN2 → PANEL BAJO : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                       POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN3 → PANEL VOZ : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                      POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN4 → PANEL BATERÍA : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                          POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - BTN5 → PANEL OTROS : POT1 filtro (izquierda pasa-bajos, derecha pasa-altos) · POT2 resonancia
+//                        POT3 efecto rítmico (gate o repeat) · POT4 intensidad del efecto
+// - IMU   → no toca el sonido: inclinar la placa gira y tiñe las visuales
+// - PIEZOS → no suenan: cada golpe va a las visuales (destellos y ondas encima de la canción)
+//
+// En los 4 paneles de pista las perillas hacen lo mismo, cada una sobre su pista:
+//   · filtro: al centro abierto · a la izquierda pasa-bajos (hasta 110 Hz) · a la derecha pasa-altos (hasta 5 kHz)
+//   · resonancia del filtro: atada al corte, nunca un pico resonante arriba
+//   · efecto rítmico, amarrado al pulso de la canción (zonas): apagado · gate 1/8 · gate 1/16 ·
+//     repeat 1/2 · repeat 1/4 · repeat 1/8 · repeat 1/16
+//       gate   = corta el sonido en corcheas o semicorcheas
+//       repeat = repite el comienzo de cada pulso (un tartamudeo rítmico)
+//   · intensidad del efecto: cuánto corta el gate / cuánto repeat se mezcla
 //
 // - LEDs:  0  verde = sonando · ámbar = stop · naranjo = la tarjeta no alcanzó · MAGENTA parpadeando = sin tarjeta
-//             parpadea en blanco cuando el banco GENERAL está elegido
+//             parpadea en blanco cuando el panel general está elegido
 //          1–4  bajo, voz, batería, otros (el orden de BTN2..BTN5): su color, con el brillo de su nivel.
-//               Parpadea en blanco la del banco elegido
+//               Parpadea en blanco la del panel elegido
 //          5  pulso: chartreuse en el «uno» de cada compás, blanco en los otros tiempos
 //
 // SALIDA SERIAL (USB CDC, 60 líneas por segundo, una por cuadro de video):
@@ -91,6 +102,16 @@
 //     tomado   perillas que ya tomaron el control en este banco (bits 0..3)
 //   Los contadores sólo suben: la app compara con el anterior y así no se pierde un golpe aunque se
 //   salte una línea. Al conectar, al cambiar de canción y cada 5 s:  I,titulo,artista,bpm,duracion_ms,cancion,total
+//
+// MODO DE USO:
+// 1. Pon la microSD con /cancion.wav y /cancion.txt (los prepara preparar_cancion.py) y enciende: la canción parte sola.
+//    Si el LED 0 parpadea en magenta, no encontró la tarjeta.
+// 2. Las 4 perillas son el volumen de bajo, voz, batería y otros: baja la voz y queda la pista
+//    instrumental, o deja sólo la batería.
+// 3. Aprieta BTN3 (voz) y gira el POT1: a la izquierda le quitas agudos, a la derecha graves.
+//    Sube el POT3 para un efecto rítmico y el POT4 para que se note más.
+// 4. BTN2, BTN4 y BTN5 hacen lo mismo con el bajo, la batería y otros. BTN1 vuelve a los volúmenes.
+// 5. Mantén BTN1 medio segundo para Stop / Play, o 2,5 s para pasar a la canción siguiente.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

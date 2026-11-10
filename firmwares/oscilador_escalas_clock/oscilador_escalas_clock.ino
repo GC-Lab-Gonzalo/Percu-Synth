@@ -39,6 +39,11 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Un dron de cuatro osciladores: cada perilla es un oscilador y elige su nota dentro
+// de la escala activa, así que todo suena en tono. Además manda RELOJ MIDI por el
+// DIN-5 al tempo que marques: un sinte o caja de ritmos externa toca sincronizada y
+// arranca o para junto con la intermitencia. Inclinar el equipo (IMU) abre el filtro.
+//
 // Port del "Oscilador 4 escalas" del PROTO-SYNTH V2 (que usaba Mozzi sobre el DAC de
 // 8 bits del ESP32) al hardware del PERCU-SYNTH, SIN Mozzi: síntesis propia a
 // 44.1 kHz · 16 bits ESTÉREO por I2S hacia el PCM5102.
@@ -88,23 +93,30 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - POT1..POT4 → nota del oscilador 1..4, cuantizada a la escala activa (4 octavas,
-//                28 notas). Al mínimo (< 2 % del recorrido) ese oscilador queda EN
-//                SILENCIO, igual que en el original.
+// Cada perilla es un oscilador: su nota va cuantizada a la escala activa (4 octavas,
+// 28 notas) y al mínimo (< 2 % del recorrido) ese oscilador queda EN SILENCIO, igual
+// que en el original.
+// - POT1 → Nota del oscilador 1 (al mínimo, en silencio).
+// - POT2 → Nota del oscilador 2 (al mínimo, en silencio).
+// - POT3 → Nota del oscilador 3 (al mínimo, en silencio).
+// - POT4 → Nota del oscilador 4 (al mínimo, en silencio).
 //
-// - BTN1 → ESCALA siguiente (10 escalas, ciclo):
+// - BTN1 → Escala siguiente (ciclo de 10). Arranca en Lidio, en este orden:
 //            Jónico · Dórico · Frigio · Lidio · Mixolidio · Eólico · Locrio ·
 //            Frigio dominante (flamenca) · Doble armónica (gitana) · Menor armónica
-// - BTN2 → OCTAVA global (ciclo de 4: −1 · 0 · +1 · +2)
-// - BTN3 → INTERMITENCIA ON/OFF (el sonido se corta y enciende al tempo).
-//          ON = MIDI Start por el DIN-5 · OFF = MIDI Stop
-// - BTN4 → TAP TEMPO de la intermitencia y del MIDI Clock (marca 2 o más golpes; también
-//          reengancha la fase, así que el corte cae donde tú marcas y el sinte externo
-//          recibe Stop+Start para caer en el mismo "1"). Sin tocarlo: 120 BPM
-// - BTN5 → FORMA DE ONDA siguiente (toque) · TÓNICA +1 semitono (mantener > 0.8 s)
+// - BTN2 → Octava global: −1 · 0 · +1 · +2 (ciclo de 4). Arranca en 0.
+// - BTN3 → Intermitencia on/off, y con ella MIDI Start / Stop. El sonido se corta
+//          al tempo. ON = MIDI Start por el DIN-5 · OFF = MIDI Stop.
+// - BTN4 → Tap tempo de la intermitencia, del eco y del reloj MIDI. Marca 2 o más
+//          golpes; también reengancha la fase, así que el corte cae donde tú marcas y el
+//          sinte externo recibe Stop+Start para caer en el mismo "1" (sólo si la
+//          intermitencia está encendida; apagada, el tap sólo cambia el tempo del
+//          reloj). Sin tocarlo: 120 BPM.
+// - BTN5 → Toque: forma de onda · mantener 0,8 s: tónica +1 semitono. Ondas: sierra
+//          (la de partida) · cuadrada · pulso 25 % · triangular · seno. Tónica de partida: La.
 //
-// - IMU (MPU6050): el EJE X (fijo) abre y cierra el filtro pasa-bajos resonante.
-//   Inclina el equipo y el dron respira.
+// - IMU → Inclina el equipo y el filtro se abre; plano, se cierra. Usa el EJE X
+//   del MPU6050 (para cualquier lado), con un pasa-bajos resonante: el dron respira.
 //
 // LEDs de la placa: 0..3 = los 4 osciladores (color = nota, brillo = nivel) ·
 //                   4 = escala activa (brillo = octava) · 5 = filtro (IMU) + latido del tempo.
@@ -113,6 +125,14 @@
 //                   oscilador en cada pulso del tempo. Apagado si no suena nada.
 // MIDI DIN-5:       Clock 24 PPQN siempre · Start al activar la intermitencia · Stop al
 //                   apagarla · Stop+Start en cada tap mientras corre.
+//
+// MODO DE USO:
+// 1. Sube el POT1 un poco desde el mínimo: suena el oscilador 1, ya en la escala.
+// 2. Sube POT2, POT3 y POT4 para sumar notas; inclina el equipo para abrir el filtro.
+// 3. Conecta el DIN-5 a tu sinte o caja de ritmos y ponla en reloj MIDI externo.
+// 4. Marca el tempo con BTN4 (2 o más toques) y enciende la intermitencia con BTN3:
+//    el equipo externo arranca en el mismo "1" que el corte.
+// 5. Apaga la intermitencia con BTN3 y el equipo externo se detiene.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

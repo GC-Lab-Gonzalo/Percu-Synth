@@ -45,20 +45,47 @@
 // ==============================================================================================================================================
 // DESCRIPCION
 // ==============================================================================================================================================
+// El PercuSynth como asistente de voz: mantienes BTN1, le haces una pregunta y te responde
+// hablando por el parlante. Usa la API de OpenAI por WiFi y responde según lo que escribas
+// en su contexto personalizado (una plantilla que llenas con tu info o la de tu proyecto).
+//
 // Asistente de voz con CONTEXTO PERSONALIZADO (editable, ver CONTEXT_PERSONALIZADO):
 //   1) Graba tu voz por el INMP441 (I2S, 16 kHz mono) mientras mantienes BTN1.
 //   2) La transcribe con Whisper (whisper-1, idioma es).
 //   3) Consulta a GPT-4o-mini con tu contexto personalizado embebido en FLASH.
 //   4) Sintetiza la respuesta con TTS (tts-1, formato pcm 24 kHz) y la reproduce
 //      por el DAC PCM5102 (I2S). Sin resamplear: el DAC se configura a 24 kHz.
+//
+// Necesita el micrófono INMP441 conectado (ver HARDWARE) y WiFi con internet.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
+// - BTN1 → mantener y hablar: graba tu pregunta (máx. 5 s). Al soltarlo (o a los 5 s) la manda
+//          a Whisper → GPT → TTS y reproduce la respuesta. Una grabación de menos de ~60 ms se descarta.
+// - BTN2 → sin uso
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → sin uso
+// - POT2 → sin uso
+// - POT3 → sin uso
+// - POT4 → sin uso
+// - MIC → micrófono INMP441 por I2S: escucha tu voz mientras mantienes BTN1.
+//
+// Los 6 LEDs de la placa muestran el estado con su color:
 //   LED VERDE  = LISTO       -> manten BTN1 y habla (max 5 s)
 //   LED ROJO   = GRABANDO
 //   LED AMBAR  = PROCESANDO   (Whisper / GPT)
 //   LED CIAN   = HABLANDO     (reproduciendo respuesta)
 //   LED MAGENTA (parpadeo) = ERROR (sin WiFi / sin RAM)
+//
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h (en esta carpeta) y escribe tu WiFi y tu OPENAI_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V), compila y sube el código.
+// 3. Espera a que los LEDs queden en VERDE: ya se conectó al WiFi y está listo.
+// 4. Mantén BTN1 apretado, haz tu pregunta (máx. 5 s) y suéltalo: ámbar = pensando, cian = te responde.
+// 5. Para que sea TU asistente, llena la plantilla CONTEXT_PERSONALIZADO (y la presentación en
+//    askGPT) con tu info y vuelve a subir el código.
 // ==============================================================================================================================================
 
 #include <WiFi.h>

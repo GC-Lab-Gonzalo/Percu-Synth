@@ -32,6 +32,10 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Reproductor de "La partida" de Víctor Jara: aprietas Play y la placa toca el arreglo
+// completo (melodía, bajo y arpegio) sintetizado en vivo. Cada pista tiene su propio
+// panel de perillas, así que puedes mezclarla y cambiarle el sonido mientras suena.
+//
 // Toca "La partida" de Víctor Jara desde las 3 pistas MIDI del arreglo (en cancion.h), cada
 // una con su propio motor de síntesis:
 //
@@ -68,13 +72,14 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - BTN1 → PLAY / STOP (Play parte siempre desde el comienzo) y PANEL GENERAL
-//          POT1 volumen general · POT2 velocidad de la canción (×0.5 … ×2; al centro
-//          hay una zona muerta que deja EXACTAMENTE los 80 BPM originales)
+// - BTN1 → Play / stop (desde el comienzo) y panel general
+// - PANEL GENERAL : POT1 volumen general · POT2 velocidad de la canción, ×0.5 a ×2. Al
+//          centro hay una zona muerta que deja EXACTAMENTE los 80 BPM originales ·
+//          POT3 sin uso · POT4 sin uso
 // - BTN2 → PANEL MELODÍA : POT1 volumen · POT2 vibrato · POT3 filtro LPF · POT4 resonancia
-// - BTN3 → PANEL BAJO    : POT1 volumen · POT2 filtro LPF · POT3 resonancia
-// - BTN4 → PANEL ARPEGIO : POT1 volumen · POT2 ataque (3–300 ms) · POT3 decay (0.08–1.2 s)
-// - BTN5 → sin función
+// - BTN3 → PANEL BAJO    : POT1 volumen · POT2 filtro LPF · POT3 resonancia · POT4 sin uso
+// - BTN4 → PANEL ARPEGIO : POT1 volumen · POT2 ataque (3–300 ms) · POT3 decay (0.08–1.2 s) · POT4 sin uso
+// - BTN5 → sin uso
 //
 // Pots por panel: al entrar a un panel ningún pot cambia nada hasta que lo MUEVES (~5 %).
 // Desde ese momento la posición física del pot es el valor. Así cambiar de panel nunca
@@ -89,6 +94,14 @@
 //   4 = panel activo (general blanco · melodía cian · bajo violeta · arpegio naranjo)
 //   5 = verde tocando · rojo tenue detenido · MAGENTA = sobrecarga de CPU (un buffer tardó
 //       más del 80 % de su tiempo: si aparece junto con ruido, el problema es de tiempo)
+//
+// MODO DE USO:
+// 1. Aprieta BTN1: la canción parte desde el comienzo (LED 5 en verde).
+// 2. En el panel general, POT1 es el volumen y POT2 la velocidad (al centro, la original).
+// 3. Aprieta BTN2, BTN3 o BTN4 para tomar la melodía, el bajo o el arpegio, y mueve
+//    sus perillas: cada una toma el control recién cuando la mueves un poco.
+// 4. Prueba bajar el volumen (POT1) de una pista para escuchar las otras solas.
+// 5. BTN1 otra vez para detenerla; al terminar, la canción se detiene sola.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

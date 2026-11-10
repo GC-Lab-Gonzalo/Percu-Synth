@@ -51,11 +51,13 @@ BTN2 + BTN4 entra al menú: el LED 5 parpadea ámbar. Adentro:
 | BTN5 | El siguiente patrón del keys (5) | |
 
 Dentro del menú, POT1 es el **ataque del bajo** (1 ms – 150 ms), POT2 su **caída** (40 ms – 1.2 s)
-POT3 la **variación del patrón de acordes** y POT4 el **oscilador continuo**: dos sierras con un
-detune leve (±6 cents) y reverb, para tocar melodías encima. La posición del pot es la altura, sin
-escalones (primero fue cuantizado a la escala y Gonzalo lo prefirió continuo): barre dos octavas
-cuyas dos puntas son la tónica del banco (en la octava 3 y dos más arriba), así la nota más grave y
-la más aguda caen en la escala. Cada punta tiene un 2 % de tope donde la nota es la tónica exacta.
+POT3 la **variación del patrón de acordes** y POT4 el **oscilador**: dos sierras con un
+detune leve (±6 cents), para tocar melodías encima. El pot elige una nota de la **escala del banco
+que está sonando** (15 notas: dos octavas cuyas puntas son la tónica, en la octava 3 y dos más
+arriba, con histéresis para que el ruido del ADC no haga saltar la nota) y la altura **se desliza**
+hasta ella con un glide de 50 ms (`OSC_GLIDE`), así los cambios de nota no se oyen como cortes.
+Historia: fue cuantizado sin glide, después continuo, y quedó cuantizado con glide. Al cambiar de
+banco la misma nota se reinterpreta en la escala nueva. Cada punta tiene un 2 % de tope.
 El timbre se mueve con un **pasa-bajos resonante modulado** por un LFO libre de velocidad
 aleatoria: cada 1,5 a 6 s sortea una velocidad nueva entre 0,08 Hz (un barrido de 12 s) y 9 Hz (un
 trino rápido) y se desliza hacia ella en ~1 s, así pasa de muy lento a muy rápido sin saltos. Primero
@@ -65,8 +67,7 @@ baja abierto) para que no quede un pico chillón arriba; ajustes en `OSC_CORTE_M
 estéreo), pasa por un **chorus estéreo** propio (12 ± 4 ms, LFO de 0,35 Hz, una lectura por lado) y
 tiene un envío fuerte al **delay ping-pong** del keys, a corchea con puntillo (~0,5 dB bajo el seco).
 Antes tenía reverb; Gonzalo la cambió por delay + chorus, y `OSC_REVERB` quedó en 0 por si se quiere
-volver a probar. El primer 5 % del recorrido es silencio. La lectura del pot va suavizada y con una zona muerta de
-~6 cents, para que el ruido del ADC no haga vibrar la nota. Fuera
+volver a probar. El primer 5 % del recorrido es silencio. La lectura del pot va suavizada. Fuera
 del menú sigue sonando la última nota que dejaste, como el resto del panel: para callarlo, entra y
 baja el POT4 del todo. Los ajustes están en las constantes `OSC_*` y `NIVEL_OSC`.
 
@@ -77,7 +78,7 @@ vecino consonante.
 
 | POT3 | Patrón | Ciclo | En Em–C |
 |---|---|---|---|
-| 1 | P·6 S·2 (la de siempre) | 8 | Em … C |
+| 1 | P·4 S·2 (la de siempre; era P·6 y el principal se repetía demasiado) | 6 | Em … C |
 | 2 | P·4 S·4 | 8 | Em … C … |
 | 3 | P·3 S·1 | 4 | Em Em Em C |
 | 4 | P·6 iv·1 S·1 | 8 | Em … Am C |
@@ -188,3 +189,24 @@ Lo que más ayudó:
   después del stop, tempo dentro del 0.07 %, las 4 escenas aparecen, ningún frame de la matriz
   pasa de 450 mA y el mapeo de la matriz cubre los 256 LEDs una vez cada uno.
 - **Falta probarlo en la placa con la matriz.**
+
+## Pantalla OLED
+
+Una SSD1306 de 128×64 por I2C (SDA 21 · SCL 38 · 0x3C) en el conector del IMU, que este firmware
+no usa. Muestra el panel en que estás: **PRINCIPAL** (banco y modo, el plan de acordes con el tramo
+que suena resaltado, largo de la fábrica / línea de bajo / arpegio, y volumen, mezcla, corte y
+densidad con su valor) o **MENÚ** (los 4 bancos con el elegido resaltado, patrón del keys,
+variación y su plan de acordes, ataque y caída del bajo y la nota del oscilador). Con BTN4 apretado
+muestra el tempo en grande; durante la subida su avance, y esperando el drop "BTN5". Un pot que aún
+no tomó control (recién entrado o salido del menú) tiene una marca bajo su barra donde está
+físicamente. Corre en su propia tarea de prioridad mínima en el core 0 y sólo manda las páginas que
+cambiaron. Dada vuelta: `OLED_GIRO_180`; basura en la imagen: bajar `OLED_I2C_HZ`.
+
+## Bola de fuego del oscilador
+
+Mientras suena el oscilador del menú (POT4), la matriz dibuja encima de la escena una **bola de
+fuego con estela**: su nota decide hacia dónde va en horizontal (grave a la izquierda, agudo a la
+derecha) y viaja hasta ella dejando la estela, como el glide del audio; ondula arriba y abajo más
+rápido cuanto más aguda es la nota, crece y se pone más blanca cuando el LFO abre el filtro, y
+suelta un estallido de chispas en cada nota nueva. La escena de fondo se oscurece un 60 %
+(`BOLA_FONDO`) para que la bola se lea. Cuando el oscilador calla, la bola se apaga con él.

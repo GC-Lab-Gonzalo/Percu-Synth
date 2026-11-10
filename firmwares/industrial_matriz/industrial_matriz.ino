@@ -19,6 +19,8 @@
 //   (índices 6..261 · fuente de 5 V propia recomendada, GND común con la placa)
 // - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
 // - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// - Pantalla OLED SSD1306 128×64 por I2C |SDA -> 21, SCL -> 38, dirección 0x3C| (en el conector del
+//   IMU, que este firmware no usa: se saca el IMU y va la pantalla)
 // ==============================================================================================================================================
 // ARDUINO IDE — settings críticos
 // ==============================================================================================================================================
@@ -29,11 +31,16 @@
 // ==============================================================================================================================================
 // LIBRERÍAS REQUERIDAS
 // ==============================================================================================================================================
-// - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h)
+// - ESP32 Arduino core ≥ 3.x (incluye driver/i2s_std.h y Wire)
 // - FastLED (gestor de librerías de Arduino)
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Una máquina de música industrial que toca sola: bombo y bajo potentes, encima una "fábrica" de
+// golpes metálicos (martillo, pistón, clap…) y acordes oscuros con keys y arpegio. Tú la mezclas
+// en vivo, cambias patrones, haces breaks y subidas con drop, y la matriz de LEDs de 32×8 se
+// mueve con la música.
+//
 // Dos máquinas corriendo al mismo reloj:
 //
 //   BASE      bombo a negras (el de tres bandas de trance_pistas/drum_poder: fundamental que
@@ -43,8 +50,8 @@
 //             para el bombo: ninguna cae en una negra, el bajo vive entre los golpes.
 //
 //   ARMONÍA  4 BANCOS de dos acordes que se eligen en el menú (Em–C · Cm–B♭ · Bm–G · E–F): el
-//             principal dura 6 de cada 8 compases y el segundo 2, para que no se vuelva monótono.
-//             El BAJO sigue la fundamental. Un KEYS (cuadrada filtrada, caída larga) toca uno de 8
+//             principal dura 4 de cada 6 compases y el segundo 2, para que no se vuelva monótono.
+//             El BAJO sigue la fundamental. Un KEYS (cuadrada filtrada, caída larga) toca uno de 5
 //             patrones escritos, hipnóticos y oscuros (ritmo y notas juntos, relativos al acorde;
 //             BTN5 del menú los recorre), y un ARPEGIO toca el acorde con el ritmo de los hats.
 //
@@ -64,23 +71,25 @@
 // nunca la misma dos veces seguidas, cada una con paleta, sentido y forma sorteados:
 //   TÚNEL · PLASMA · CALEIDOSCOPIO · ESPIRAL · FIGURAS · MOIRÉ · ONDAS · DAMERO
 // Todas se mueven en tiempo musical (amarradas a la negra) y reaccionan al bombo, a la
-// envolvente del bajo y a cada golpe industrial.
+// envolvente del bajo y a cada golpe industrial. Encima, mientras suena el OSCILADOR del menú, una
+// BOLA DE FUEGO con estela: va hacia la izquierda o la derecha según su nota, ondula más rápido
+// cuanto más aguda, crece con el LFO de su filtro y suelta chispas en cada nota nueva.
 // Al encender, 3 s de PRUEBA DE ORIENTACIÓN (ver README): rojo arriba-izquierda, verde
 // arriba-derecha, azul abajo-izquierda y una columna blanca que barre de izquierda a derecha.
 //
-// ARQUITECTURA: audio en su propia tarea en el CORE 1; botones y pots en una tarea a 1 kHz y
-// la matriz en otra de menor prioridad, las dos en el CORE 0. Los controles sólo dejan
+// ARQUITECTURA: audio en su propia tarea en el CORE 1; botones y pots en una tarea a 1 kHz, la
+// matriz en otra de menor prioridad y la pantalla OLED en una tercera más baja, las tres en el CORE 0. Los controles sólo dejan
 // PEDIDOS que el audio aplica en el borde de un buffer. Sin Serial.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO (un botón = una función, todo en el flanco de presión)
 // ==============================================================================================================================================
 // - BTN1 (44) → PLAY / STOP. Play arranca en el "1" en la primera muestra.
-// - BTN2 (42) → NUEVO PATRÓN INDUSTRIAL (golpes, largo del ciclo y afinación de los metales).
-// - BTN3 (0)  → línea de bajo y figura del arpegio nuevas (los acordes y el keys van en el menú).
-// - BTN4 (45) → TEMPO (mantener): con BTN4 apretado, el POT1 sube o baja el tempo (70–170 BPM)
+// - BTN2 (42) → NUEVO PATRÓN INDUSTRIAL. Cambian los golpes, el largo del ciclo y la afinación de los metales.
+// - BTN3 (0)  → línea de bajo y figura del arpegio nuevas. Los acordes y el keys van en el menú.
+// - BTN4 (45) → TEMPO: mantenlo apretado y gira el POT1 (70–170 BPM). El tempo sube o baja
 //               desde donde estaba — no salta. Al soltar, el volumen queda donde estaba hasta que
 //               el POT1 vuelva a pasar por esa posición: soltar el botón nunca cambia el volumen.
-// - BTN5 (47) → BREAK: mientras lo mantienes, bombo y bajo se callan y lo demás sigue; al soltar
+// - BTN5 (47) → BREAK mientras lo mantienes: bombo y bajo se callan. Lo demás sigue y al soltar
 //               vuelven en tiempo (el reloj nunca se detuvo). Si lo mantienes MÁS DE 2 s empieza la
 //               SUBIDA: 16 compases sin bombo ni bajo en los que crecen un ruido blanco y un
 //               oscilador agresivo que parte grave y sube 4 octavas; desde el compás 9 un trémolo
@@ -89,13 +98,16 @@
 //               sobre el silencio; todo lo demás se corta de golpe y espera el próximo toque de BTN5:
 //               el DROP, desde el "1" con bombo y bajo (también si lo tocas antes de que termine).
 //               LEDs 0 y 1: rojo parpadeando en la subida, rojo fijo esperando el drop.
-// - BTN2 + BTN4 a la vez → entra y sale del MENÚ. Adentro: BTN1 Em–C · BTN2 Cm–B♭ · BTN3 Bm–G ·
-//               BTN4 E–F · BTN5 el siguiente patrón del keys. Y los POTS cambian de función:
-//               POT1 ataque del bajo (1–150 ms) · POT2 caída del bajo (40 ms–1.2 s) · POT3 la
-//               variación del patrón de acordes (8: cuánto dura cada acorde y acordes nuevos de la
-//               escala) · POT4 OSCILADOR CONTINUO: dos sierras con detune leve + reverb; el pot
-//               barre la altura sin escalones a lo largo de dos octavas que empiezan y terminan en la
-//               tónica del banco (abajo del todo calla) — para tocar melodías encima. Lo que dejes ahí se queda al salir. Al entrar o salir, cada pot
+// - BTN2 + BTN4 a la vez → entra y sale del MENÚ. Adentro: BTN1 acordes Em–C · BTN2 acordes Cm–B♭ ·
+//               BTN3 acordes Bm–G · BTN4 acordes E–F · BTN5 siguiente patrón del keys (5). Y los
+//               POTS cambian de función:
+//               POT1 ataque del bajo (1–150 ms) · POT2 caída del bajo (40 ms–1.2 s) · POT3
+//               variación del plan de acordes (8). Cambia cuánto dura cada acorde y suma acordes
+//               nuevos de la escala · POT4 OSCILADOR para tocar melodías encima (abajo del todo calla).
+//               Dos sierras con detune leve; el pot elige una nota de la
+//               ESCALA que está sonando a lo largo de dos octavas que empiezan y terminan en la
+//               tónica del banco, y la altura se DESLIZA hasta ella (glide: no se notan los saltos).
+//               Lo que dejes ahí se queda al salir. Al entrar o salir, cada pot
 //               no cambia nada hasta que lo muevas un poco (sin saltos). Como todo botón actúa al
 //               apretarlo, el combo DESHACE lo que hizo el primero de los dos (el patrón nuevo de
 //               BTN2, o lo que se eligió al salir).
@@ -105,9 +117,25 @@
 // - POT3 (ADC8)  → CORTE DEL BAJO (55 Hz – 1.6 kHz; la resonancia va atada al corte)
 // - POT4 (ADC10) → DENSIDAD industrial (abajo del todo la fábrica calla)
 //
+// PANTALLA OLED: muestra en qué panel estás y qué hace cada pot ahora. PRINCIPAL: banco y modo,
+// el plan de acordes con el que suena resaltado, patrón industrial / línea de bajo / arpegio, y los
+// cuatro pots con su valor. MENÚ: los 4 bancos (el elegido resaltado), patrón del keys, la variación
+// con su plan de acordes, ataque y caída del bajo y la nota del oscilador. Con BTN4 apretado el tempo
+// en grande; en la subida, su avance; esperando el drop, "BTN5". Un pot que todavía no tomó control
+// (recién entrado o salido del menú) muestra bajo su barra una marca donde está físicamente.
+//
 // LEDs de la placa: 0 bombo · 1 bajo · 2 hats · 3 martillo/pistón/clap/tom · 4 keys/arpegio ·
 // 5 verde = tocando, con el pulso de cada negra. Con BREAK, 0 y 1 en rojo fijo. El LED 5 se
 // pone MAGENTA si un bloque de audio usa más del 80 % de su tiempo.
+//
+// MODO DE USO:
+// 1. Aprieta BTN1: bombo, bajo y la fábrica arrancan desde el "1". Sube el POT1 (volumen).
+// 2. Gira el POT4 para sumar o quitar golpes industriales y el POT3 para abrir el bajo. BTN2 y
+//    BTN3 sortean un patrón industrial y una línea de bajo nuevos.
+// 3. Mantén BTN5 para un break corto. Si lo mantienes más de 2 s viene la subida: vuelve a
+//    tocarlo para el drop.
+// 4. BTN2 + BTN4 a la vez abre el menú: BTN1 a BTN4 eligen los acordes y el POT4 es un
+//    oscilador para tocar melodías encima. BTN2 + BTN4 otra vez para salir.
 // ==============================================================================================================================================
 
 // El core de Arduino compila con -Os (tamaño). Este sketch es casi todo bucles de audio: con O2 (velocidad)
@@ -116,6 +144,9 @@
 #include <Arduino.h>
 #include <driver/i2s_std.h>
 #include <FastLED.h>
+#ifndef SIMULADOR
+#include <Wire.h>
+#endif
 #include <math.h>
 #include <string.h>
 
@@ -261,7 +292,7 @@ const Banco BANCOS[NUM_BANCOS] = {
 struct SegAc { int8_t grado; uint8_t compases; };
 #define NUM_VAR_AC 8
 const SegAc VAR_ACORDES[NUM_VAR_AC][5] = {
-  { { 0, 6 }, { S_BANCO, 2 } },                                   // 1  P·6 S·2            (la de siempre)
+  { { 0, 4 }, { S_BANCO, 2 } },                                   // 1  P·4 S·2            (la de siempre; era P·6 y el principal se repetía demasiado)
   { { 0, 4 }, { S_BANCO, 4 } },                                   // 2  P·4 S·4
   { { 0, 3 }, { S_BANCO, 1 } },                                   // 3  P·3 S·1            (ciclo de 4)
   { { 0, 6 }, { 3, 1 }, { S_BANCO, 1 } },                         // 4  P·6 iv·1 S·1
@@ -287,18 +318,19 @@ const float NIVEL_CAJA_SUBIDA = 0.50f;   // la caja que crece desde la mitad (ne
 const float NIVEL_GOLPE       = 0.85f;   // el golpe final (boom grave + crash de ruido)…
 const float GOLPE_REVERB      = 0.55f;   // …y cuánto de él va a la reverb
 const float REVERB_FB         = 0.84f;   // realimentación de los peines: cola de ~1 s
-// OSCILADOR CONTINUO (POT4 del menú): dos sierras PolyBLEP con un detune leve → pasa-bajos fijo
-// que sigue a la nota → reverb (la misma del golpe final). La posición del pot ES la altura, SIN
-// cuantizar (lo pidió Gonzalo: primero fue cuantizado a la escala): barre dos octavas en semitonos
-// continuos, y los dos extremos son la tónica del banco — la nota más grave y la más aguda caen en
-// la escala. Abajo del todo calla.
+// OSCILADOR (POT4 del menú): dos sierras PolyBLEP con un detune leve → pasa-bajos que sigue a la
+// nota. El pot elige un GRADO de la escala del banco que suena (15 notas: dos octavas, tónica a
+// tónica, con histéresis para que el ruido del ADC no haga saltar la nota) y la altura se desliza
+// hasta él con un glide de OSC_GLIDE: así los cambios de nota no se oyen como cortes. Historia:
+// fue cuantizado sin glide, después continuo sin cuantizar, y Gonzalo lo quiso cuantizado CON glide.
+// Al cambiar de banco la nota se reinterpreta en la escala nueva (mismo grado). Abajo del todo calla.
 // Fuera del menú sigue sonando la última nota que dejaste (como el resto del panel del menú).
 const int   TONICA_OSC    = 57;          // La3 + transp del banco: la nota más grave del pot
-const float OSC_RANGO     = 24.0f;       // semitonos del recorrido: dos octavas, tónica a tónica
+const int   OSC_GRADOS    = 14;          // grados del recorrido: dos octavas, tónica a tónica (15 notas)
 const float OSC_APAGADO   = 0.05f;       // el primer 5 % del recorrido: silencio
 const float NIVEL_OSC     = 0.18f;       // 0.28 era demasiado fuerte y 0.10 quedaba escondido (probado en la placa)
 const float OSC_DETUNE    = 1.0035f;     // ±6 cents entre las dos sierras: leve, sólo ancho
-const float OSC_GLIDE     = 0.015f;      // suaviza el ruido del ADC y los saltos del pot (s)
+const float OSC_GLIDE     = 0.050f;      // glide entre notas de la escala (tau, s): más alto = se arrastra más
 const float OSC_ATAQUE    = 0.010f, OSC_SUELTA = 0.30f;   // al salir y entrar a la zona de silencio
 // FILTRO MODULADO (lo pidió Gonzalo): pasa-bajos resonante cuyo corte sube y baja con un LFO
 // LIBRE de velocidad ALEATORIA: cada pocos segundos sortea una velocidad nueva entre muy lenta y
@@ -433,6 +465,10 @@ volatile int      pasoBasePub = 0, pasoIndPub = 0, largoIndPub = 16, lineaPub = 
 volatile uint32_t contadorPasos = 0;
 volatile float    envBajoPub = 0.0f, densPub = 0.6f, bpmPub = BPM_INICIAL;
 volatile int      notaBajoPub = 0, notaKeysPub = 45;
+volatile int      oscNotaPub = -1, subPasosPub = 0, arpPub = 0;   // para la pantalla
+volatile uint32_t compasPub = 0;
+volatile float    oscAmpPub = 0.0f, oscLfoPub = 0.0f;   // el oscilador para la bola de fuego de la matriz
+volatile float    potCrudo[4];                  // posición física de cada pot (la pantalla marca dónde está el que no tomó control)
 volatile bool     tocandoPub = false, breakPub = false, menuPub = false, breakFijoPub = false;
 volatile int      estadoSubPub = 0;
 volatile int      bancoPub = 0, patKeysPub = 0, varAcPub = 0;
@@ -551,7 +587,7 @@ float lfoFase = 0.0f, lfoVel = 2.0f, lfoVelObj = 2.0f, lfoFalta = 0.0f; uint32_t
 float oscChorusBuf[OSC_CHORUS_N]; int oscChorusIdx = 0; float oscChorusLfo = 0.0f;
 const float octLfo = log2f(OSC_LFO_MAX_HZ / OSC_LFO_MIN_HZ);                      // rango de velocidades, en octavas
 const float kDeslizLfo = 1.0f - expf(-16.0f / (OSC_LFO_DESLIZ * SR));   // un filtro por sierra (una por lado)
-float oscPosVista = -2.0f; int oscTranspVisto = 99;
+float oscPosVista = -2.0f; int oscBancoVisto = 99, oscGrado = -1;
 float dOscGlide, kOscAtk, kOscSuelta;
 float oscL[BUFFER_SAMPLES], oscR[BUFFER_SAMPLES], oscEnvio[BUFFER_SAMPLES], oscEco[BUFFER_SAMPLES];
 VozInd ind[NUM_IND][2]; int sigInd[NUM_IND];       // un "parche" por pista con fast-kill al retriggear
@@ -919,6 +955,7 @@ void avanzarPaso() {
   }
 
   pasoBasePub = pasoBase; pasoIndPub = pasoInd; contadorPasos = contadorPasos + 1;
+  compasPub = compasTotal; subPasosPub = subPasos;
 }
 
 // ==============================================================================================================================================
@@ -1175,13 +1212,14 @@ IRAM_ATTR void renderSubida(float *oL, float *oR, int m) {
   subF1 = f1; subF2 = f2; subLp = lp; subTrem = tg; semRuidoL = a; semRuidoR = b;
 }
 
-// OSCILADOR CONTINUO: dos sierras desafinadas ±6 cents, cada una con su SVF pasa-bajos RESONANTE
+// OSCILADOR: dos sierras desafinadas ±6 cents, cada una con su SVF pasa-bajos RESONANTE
 // que sigue a la nota y que barre un LFO libre de velocidad aleatoria, cargada a un lado → VCA. Seco a oscL/oscR (pasa por el corte del final de la subida
-// como todo), un envío a la reverb y otro al eco ping-pong del keys. La altura cambia con un
-// portamento corto; los coeficientes se recalculan cada 16 muestras.
+// como todo), un envío a la reverb y otro al eco ping-pong del keys. La altura llega a cada nota de la
+// escala con un glide; los coeficientes se recalculan cada 16 muestras.
 IRAM_ATTR void renderOsc(float *oL, float *oR, float *envio, float *eco, const float *scb, int m) {
   if (!osc.vivo) {                                       // callado: el retardo del chorus sigue corriendo vacío (sin restos viejos al volver)
     for (int i = 0; i < m; i++) { oL[i] = 0.0f; oR[i] = 0.0f; envio[i] = 0.0f; eco[i] = 0.0f; oscChorusBuf[oscChorusIdx] = 0.0f; oscChorusIdx = (oscChorusIdx + 1) & (OSC_CHORUS_N - 1); }
+    oscAmpPub = 0.0f;
     return;
   }
   float f1 = osc.f1, f2 = osc.f2, inc = osc.inc, amp = osc.amp; Filtro s = osc.s, s2 = osc.s2;
@@ -1240,6 +1278,7 @@ IRAM_ATTR void renderOsc(float *oL, float *oR, float *envio, float *eco, const f
   }
   oscChorusIdx = ci; oscChorusLfo = lfoC;
   osc.f1 = f1; osc.f2 = f2; osc.inc = inc; osc.amp = amp; osc.s = s; osc.s2 = s2; osc.comp = comp;
+  oscAmpPub = amp; oscLfoPub = 0.5f + 0.5f * seno(lfoFase);
   if (obj == 0.0f && amp < 1e-5f) osc.vivo = false;     // ya a −100 dB: se libera sin escalón
   if (OSC_REVERB > 0.0f) reverbViva = (int)(3.0f * SR);  // mientras suena, la reverb trabaja (si tiene envío)
 }
@@ -1343,19 +1382,24 @@ IRAM_ATTR void calcularBloque() {
     vistoLinea = reqLinea; rngComp ^= reqSemilla | 1u;
     linea = (linea + 1 + (int)(frnd() * (NUM_LINEAS - 1))) % NUM_LINEAS;
     arp   = (arp   + 1 + (int)(frnd() * (NUM_ARPS   - 1))) % NUM_ARPS;
-    lineaPub = linea;
+    lineaPub = linea; arpPub = arp;
   }
   float b = reqBPM; if (b != bpm) setBPM(b);
-  {                                                // oscilador: posición → altura continua sobre la tónica del banco
+  {                                                // oscilador: posición → grado de la escala del banco → altura, con glide
     float pos = reqOscPos;
     if (estadoSub == E_ESPERA) pos = -1.0f;        // esperando el drop: todo calla, también él (su reverb se apaga sola)
-    if (pos != oscPosVista || transp != oscTranspVisto) {
-      oscPosVista = pos; oscTranspVisto = transp;
+    if (pos != oscPosVista || banco != oscBancoVisto) {
+      oscPosVista = pos; oscBancoVisto = banco;
       if (pos >= 0.0f) {
-        float inc = hz((float)(TONICA_OSC + transp) + pos * OSC_RANGO) / SR;
-        if (!osc.vivo || osc.amp < 1e-3f) { osc.inc = inc; osc.vivo = true; }   // desde el silencio: sin portamento
-        osc.incObj = inc; osc.obj = 1.0f;
-      } else osc.obj = 0.0f;
+        float f = pos * OSC_GRADOS + 0.5f;         // el grado más cercano, con histéresis (como la variación de acordes)
+        if (oscGrado < 0 || f < oscGrado - 0.15f || f > oscGrado + 1.15f) {
+          oscGrado = (int)f; if (oscGrado > OSC_GRADOS) oscGrado = OSC_GRADOS; if (oscGrado < 0) oscGrado = 0;
+        }
+        int nota = notaGrado(TONICA_OSC + transp, oscGrado);
+        float inc = hz((float)nota) / SR;
+        if (!osc.vivo || osc.amp < 1e-3f) { osc.inc = inc; osc.vivo = true; }   // desde el silencio: sin glide
+        osc.incObj = inc; osc.obj = 1.0f; oscNotaPub = nota;
+      } else { osc.obj = 0.0f; oscGrado = -1; oscNotaPub = -1; }
     }
   }
 
@@ -1644,6 +1688,79 @@ void escenaDamero() {
   }
 }
 
+// ── BOLA DE FUEGO: el oscilador del menú (POT4) se ve encima de cualquier escena ──
+// La NOTA decide hacia dónde va en horizontal (grave a la izquierda, agudo a la derecha) y viaja
+// hasta ella dejando una estela, como el glide del audio; mientras suena ondula arriba y abajo, más
+// rápido cuanto más aguda la nota. El LFO del filtro la agranda (abierto = más grande y más blanca),
+// cada nota nueva suelta un estallido de chispas y la escena de fondo se oscurece para que se lea.
+#define ESTELA   18
+#define CHISPAS  16
+float bolaX = 15.5f, bolaY = 3.5f, bolaFase = 0.0f, bolaNivel = 0.0f;
+float estelaX[ESTELA], estelaY[ESTELA]; int estelaIdx = 0, estelaN = 0;
+struct Chispa { float x, y, vx, vy, vida; };
+Chispa chispas[CHISPAS];
+int notaBolaVista = -1;
+const float BOLA_FONDO = 0.60f;          // cuánto oscurece la escena mientras suena (0 = nada)
+
+void soltarChispa(float vx, float vy) {
+  int k = 0; float menor = 9.0f;
+  for (int i = 0; i < CHISPAS; i++) if (chispas[i].vida < menor) { menor = chispas[i].vida; k = i; }
+  chispas[k] = { bolaX, bolaY, vx, vy, 0.7f + 0.3f * lrnd() };
+}
+
+void bolaDeFuego(float dt) {
+  const int nota = oscNotaPub;
+  bolaNivel += ((nota >= 0 ? fminf(1.0f, oscAmpPub * 1.2f) : 0.0f) - bolaNivel) * 0.15f;
+  if (bolaNivel < 0.01f) { estelaN = 0; notaBolaVista = -1; for (int i = 0; i < CHISPAS; i++) chispas[i].vida = 0.0f; return; }
+  const int base = TONICA_OSC + transp;
+  float fx = nota >= 0 ? (float)(nota - base) / 24.0f : (bolaX - 1.5f) / 28.0f;
+  if (fx < 0.0f) fx = 0.0f; if (fx > 1.0f) fx = 1.0f;
+  const float lfo = oscLfoPub;
+
+  // movimiento: viaja hacia su nota y ondula
+  const float xAntes = bolaX;
+  bolaX += (1.5f + fx * 28.0f - bolaX) * 0.16f;
+  bolaFase += dt * (0.5f + 2.5f * fx) * 6.2831853f;
+  float x = bolaX + 0.8f * fs(bolaFase * 0.7f);
+  bolaY = 3.5f + 2.4f * fs(bolaFase) + 0.6f * fs(bolaFase * 2.3f + 1.0f);
+  if (nota >= 0 && nota != notaBolaVista) {                    // nota nueva: estallido de chispas
+    if (notaBolaVista >= 0) for (int i = 0; i < 6; i++) soltarChispa((lrnd() - 0.5f) * 1.6f, (lrnd() - 0.5f) * 1.2f);
+    notaBolaVista = nota;
+  }
+  if (lrnd() < 0.35f * bolaNivel) soltarChispa(-(bolaX - xAntes) * 0.6f + (lrnd() - 0.5f) * 0.5f, (lrnd() - 0.5f) * 0.6f - 0.15f);
+
+  // la escena de fondo se oscurece para que la bola se lea
+  uint8_t fondo = (uint8_t)(255.0f * (1.0f - BOLA_FONDO * bolaNivel));
+  for (int i = STATUS_LEDS; i < NUM_LEDS; i++) leds[i].nscale8(fondo);
+
+  // estela: las posiciones pasadas, cada vez más rojas y tenues
+  estelaX[estelaIdx] = x; estelaY[estelaIdx] = bolaY; estelaIdx = (estelaIdx + 1) % ESTELA; if (estelaN < ESTELA) estelaN++;
+  for (int k = 1; k < estelaN; k++) {
+    int j = (estelaIdx - 1 - k + 2 * ESTELA) % ESTELA;
+    float a = 1.0f - (float)k / ESTELA;
+    CRGB c = HeatColor((uint8_t)(200.0f * a * a));
+    c.nscale8((uint8_t)(255.0f * a * bolaNivel));
+    puntoSuave(estelaX[j], estelaY[j], c);
+  }
+  // chispas
+  for (int i = 0; i < CHISPAS; i++) {
+    Chispa &c = chispas[i]; if (c.vida <= 0.0f) continue;
+    CRGB col = HeatColor((uint8_t)(230.0f * c.vida)); col.nscale8((uint8_t)(255.0f * c.vida * bolaNivel));
+    puntoSuave(c.x, c.y, col);
+    c.x += c.vx; c.y += c.vy; c.vy += 0.03f; c.vida -= 0.06f;
+  }
+  // la cabeza: núcleo blanco-amarillo con halo naranja; el filtro abierto la agranda
+  const float radio = 1.3f + 1.2f * lfo, parpadeo = 0.85f + 0.15f * lrnd();
+  for (int px = (int)(x - radio) - 1; px <= (int)(x + radio) + 1; px++)
+    for (int py = (int)(bolaY - radio) - 1; py <= (int)(bolaY + radio) + 1; py++) {
+      float dx = px - x, dy = py - bolaY, v = 1.0f - sqrtf(dx * dx + dy * dy) / radio;
+      if (v <= 0.0f) continue;
+      CRGB c = HeatColor((uint8_t)(150.0f + 105.0f * v));
+      c.nscale8((uint8_t)(255.0f * fminf(1.0f, v * 1.6f) * bolaNivel * parpadeo));
+      pix(px, py, c);
+    }
+}
+
 // ── Prueba de orientación del arranque ──
 void pruebaOrientacion(unsigned long t) {
   borrarMatriz();
@@ -1729,6 +1846,7 @@ void renderLEDs() {
     case E_ONDAS:   escenaOndas();   break;
     default:        escenaDamero();  break;
   }
+  if (t >= PRUEBA_MS) bolaDeFuego(dt);
   ledsEstado(corre);
   limitarCorrienteMatriz();
   FastLED.show();
@@ -1830,6 +1948,7 @@ void pasoControl() {
   static uint8_t scan = 0;
   int i = scan; scan = (scan + 1) & 3;
   float v = readPot(POT_PIN[i]);
+  potCrudo[i] = v;
   bool manda = potTomado[i];
   if (!manda && fabsf(v - potEntrada[i]) > UMBRAL_TOMA) { potTomado[i] = true; manda = true; }
   if (enMenu) {                                              // ── panel del menú
@@ -1842,17 +1961,17 @@ void pasoControl() {
         if (f < z - 0.15f || f > z + 1.15f) { z = (int)f; if (z > NUM_VAR_AC - 1) z = NUM_VAR_AC - 1; if (z < 0) z = 0; reqVarAc = z; }
         break;
       }
-      case 3: {                                              // OSCILADOR: la posición es la altura, continua
+      case 3: {                                              // OSCILADOR: la posición elige la nota (el audio la cuantiza a la escala)
         static float vOsc = 0.0f;
         float pos = reqOscPos;
         if (pos < 0.0f) vOsc = v;                           // saliendo del silencio parte donde está el pot, sin barrido
         else vOsc += (v - vOsc) * 0.10f;                    // suavizado: el ruido del ADC no hace vibrar la nota
         if (vOsc < OSC_APAGADO) { if (pos >= 0.0f && vOsc < OSC_APAGADO - 0.012f) pos = -1.0f; }
         else {
-          // un 2 % de tope en cada punta: ahí la nota es la tónica EXACTA, fácil de encontrar con el dedo
+          // un 2 % de tope en cada punta: ahí la nota es la tónica, fácil de encontrar con el dedo
           float p = (vOsc - OSC_APAGADO - 0.02f) / (1.0f - OSC_APAGADO - 0.04f);
           if (p < 0.0f) p = 0.0f; if (p > 1.0f) p = 1.0f;
-          if (pos < 0.0f || fabsf(p - pos) > 0.0025f || ((p == 0.0f || p == 1.0f) && p != pos)) pos = p;   // zona muerta ~6 cents
+          if (pos < 0.0f || fabsf(p - pos) > 0.0025f || ((p == 0.0f || p == 1.0f) && p != pos)) pos = p;   // zona muerta: el ruido del ADC no despierta al audio
         }
         reqOscPos = pos;
         break;
@@ -1879,6 +1998,221 @@ void pasoControl() {
     case 3: pDens  += (v - pDens)  * 0.3f; break;
   }
 }
+
+#ifndef SIMULADOR
+// ==============================================================================================================================================
+// PANTALLA OLED 128×64 (SSD1306 por I2C, en el conector del IMU) — tarea de prioridad baja en el core 0
+// ==============================================================================================================================================
+// Sin librería: un framebuffer de 1024 bytes ya en el orden de la memoria de la SSD1306 (8 páginas
+// de 8 filas × 128 columnas) y se manda por Wire sólo la página que cambió. Nada de esto toca el
+// audio: lee los ...Pub que publica la tarea de audio y los pots que lee la de control.
+// Pantalla al revés: OLED_GIRO_180 = true. Basura en la imagen: baja OLED_I2C_HZ a 100000.
+#define OLED_SDA 21
+#define OLED_SCL 38
+#define OLED_DIR 0x3C
+const uint32_t OLED_I2C_HZ     = 400000;
+const bool     OLED_GIRO_180   = false;
+const unsigned long OLED_REFRESH_MS = 50;
+
+// Fuente 5×7 (ASCII 32..126), una columna por byte, bit 0 arriba
+const uint8_t FUENTE[95][5] = {
+  {0x00,0x00,0x00,0x00,0x00},{0x00,0x00,0x5F,0x00,0x00},{0x00,0x07,0x00,0x07,0x00},{0x14,0x7F,0x14,0x7F,0x14},
+  {0x24,0x2A,0x7F,0x2A,0x12},{0x23,0x13,0x08,0x64,0x62},{0x36,0x49,0x56,0x20,0x50},{0x00,0x08,0x07,0x03,0x00},
+  {0x00,0x1C,0x22,0x41,0x00},{0x00,0x41,0x22,0x1C,0x00},{0x2A,0x1C,0x7F,0x1C,0x2A},{0x08,0x08,0x3E,0x08,0x08},
+  {0x00,0x80,0x70,0x30,0x00},{0x08,0x08,0x08,0x08,0x08},{0x00,0x00,0x60,0x60,0x00},{0x20,0x10,0x08,0x04,0x02},
+  {0x3E,0x51,0x49,0x45,0x3E},{0x00,0x42,0x7F,0x40,0x00},{0x72,0x49,0x49,0x49,0x46},{0x21,0x41,0x49,0x4D,0x33},
+  {0x18,0x14,0x12,0x7F,0x10},{0x27,0x45,0x45,0x45,0x39},{0x3C,0x4A,0x49,0x49,0x31},{0x41,0x21,0x11,0x09,0x07},
+  {0x36,0x49,0x49,0x49,0x36},{0x46,0x49,0x49,0x29,0x1E},{0x00,0x00,0x14,0x00,0x00},{0x00,0x40,0x34,0x00,0x00},
+  {0x00,0x08,0x14,0x22,0x41},{0x14,0x14,0x14,0x14,0x14},{0x00,0x41,0x22,0x14,0x08},{0x02,0x01,0x59,0x09,0x06},
+  {0x3E,0x41,0x5D,0x59,0x4E},{0x7C,0x12,0x11,0x12,0x7C},{0x7F,0x49,0x49,0x49,0x36},{0x3E,0x41,0x41,0x41,0x22},
+  {0x7F,0x41,0x41,0x41,0x3E},{0x7F,0x49,0x49,0x49,0x41},{0x7F,0x09,0x09,0x09,0x01},{0x3E,0x41,0x41,0x51,0x73},
+  {0x7F,0x08,0x08,0x08,0x7F},{0x00,0x41,0x7F,0x41,0x00},{0x20,0x40,0x41,0x3F,0x01},{0x7F,0x08,0x14,0x22,0x41},
+  {0x7F,0x40,0x40,0x40,0x40},{0x7F,0x02,0x1C,0x02,0x7F},{0x7F,0x04,0x08,0x10,0x7F},{0x3E,0x41,0x41,0x41,0x3E},
+  {0x7F,0x09,0x09,0x09,0x06},{0x3E,0x41,0x51,0x21,0x5E},{0x7F,0x09,0x19,0x29,0x46},{0x26,0x49,0x49,0x49,0x32},
+  {0x03,0x01,0x7F,0x01,0x03},{0x3F,0x40,0x40,0x40,0x3F},{0x1F,0x20,0x40,0x20,0x1F},{0x3F,0x40,0x38,0x40,0x3F},
+  {0x63,0x14,0x08,0x14,0x63},{0x03,0x04,0x78,0x04,0x03},{0x61,0x59,0x49,0x4D,0x43},{0x00,0x7F,0x41,0x41,0x41},
+  {0x02,0x04,0x08,0x10,0x20},{0x00,0x41,0x41,0x41,0x7F},{0x04,0x02,0x01,0x02,0x04},{0x40,0x40,0x40,0x40,0x40},
+  {0x00,0x03,0x07,0x08,0x00},{0x20,0x54,0x54,0x78,0x40},{0x7F,0x28,0x44,0x44,0x38},{0x38,0x44,0x44,0x44,0x28},
+  {0x38,0x44,0x44,0x28,0x7F},{0x38,0x54,0x54,0x54,0x18},{0x00,0x08,0x7E,0x09,0x02},{0x18,0xA4,0xA4,0x9C,0x78},
+  {0x7F,0x08,0x04,0x04,0x78},{0x00,0x44,0x7D,0x40,0x00},{0x20,0x40,0x40,0x3D,0x00},{0x7F,0x10,0x28,0x44,0x00},
+  {0x00,0x41,0x7F,0x40,0x00},{0x7C,0x04,0x78,0x04,0x78},{0x7C,0x08,0x04,0x04,0x78},{0x38,0x44,0x44,0x44,0x38},
+  {0xFC,0x18,0x24,0x24,0x18},{0x18,0x24,0x24,0x18,0xFC},{0x7C,0x08,0x04,0x04,0x08},{0x48,0x54,0x54,0x54,0x24},
+  {0x04,0x04,0x3F,0x44,0x24},{0x3C,0x40,0x40,0x20,0x7C},{0x1C,0x20,0x40,0x20,0x1C},{0x3C,0x40,0x30,0x40,0x3C},
+  {0x44,0x28,0x10,0x28,0x44},{0x4C,0x90,0x90,0x90,0x7C},{0x44,0x64,0x54,0x4C,0x44},{0x00,0x08,0x36,0x41,0x00},
+  {0x00,0x00,0x77,0x00,0x00},{0x00,0x41,0x36,0x08,0x00},{0x02,0x01,0x02,0x04,0x02},
+};
+const char *NOMBRE_MODO[NUM_MODOS] = { "EOLICO", "DORICO", "FRIGIO", "MENOR ARM.", "FRIGIO DOM." };
+const char *NOMBRE_NOTA[12] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+
+uint8_t fb[1024], fbEnviado[1024];
+inline void punto(int x, int y, bool on = true) {
+  if ((unsigned)x >= 128u || (unsigned)y >= 64u) return;
+  uint8_t &b = fb[(y >> 3) * 128 + x]; uint8_t m = (uint8_t)(1u << (y & 7));
+  if (on) b |= m; else b &= (uint8_t)~m;
+}
+void caja(int x, int y, int w, int h, bool on = true) { for (int i = x; i < x + w; i++) for (int j = y; j < y + h; j++) punto(i, j, on); }
+void marco(int x, int y, int w, int h) { for (int i = x; i < x + w; i++) { punto(i, y); punto(i, y + h - 1); } for (int j = y; j < y + h; j++) { punto(x, j); punto(x + w - 1, j); } }
+int anchoTexto(const char *s, int esc = 1) { return (int)strlen(s) * 6 * esc; }
+int texto(int x, int y, const char *s, bool on = true, int esc = 1) {
+  for (; *s; s++) {
+    uint8_t c = (uint8_t)*s; if (c < 32 || c > 126) c = '?';
+    const uint8_t *g = FUENTE[c - 32];
+    for (int col = 0; col < 5; col++) for (int fila = 0; fila < 8; fila++)
+      if ((g[col] >> fila) & 1) { if (esc == 1) punto(x + col, y + fila, on); else caja(x + col * esc, y + fila * esc, esc, esc, on); }
+    x += 6 * esc;
+  }
+  return x;
+}
+void textoDerecha(int y, const char *s, bool on = true) { texto(128 - anchoTexto(s) + 1, y, s, on); }
+void textoCentro(int y, const char *s, int esc = 1) { texto((128 - anchoTexto(s, esc)) / 2, y, s, true, esc); }
+void encabezado(const char *izq, const char *der) {   // franja invertida arriba
+  caja(0, 0, 128, 8);
+  texto(1, 0, izq, false);
+  if (der) textoDerecha(0, der, false);
+}
+
+// Nombre del acorde sobre el grado `raiz` (ya pasado por acordeDelModo) en el banco que suena: "Em", "Bb"
+void nombreAcorde(int raiz, char *out) {
+  const int t = TONICA_BAJO + transp;
+  int f = notaAcorde(t, raiz, 0, false), ter = notaAcorde(t, raiz, 2, false) - f;
+  snprintf(out, 8, "%s%s", NOMBRE_NOTA[((f % 12) + 12) % 12], ter == 3 ? "m" : "");
+}
+// El plan de acordes de una variación ("Em:4 C:2") centrado en la fila y; resalta el tramo que suena
+void planAcordes(int y, int v, bool resaltar) {
+  int n = 0, total = 0, largo[5]; char nom[5][12];
+  for (int k = 0; k < 5 && VAR_ACORDES[v][k].compases; k++) {
+    char a[8]; nombreAcorde(acordeDelModo(gradoVariacion(v, (uint32_t)total)), a);
+    largo[k] = VAR_ACORDES[v][k].compases;
+    snprintf(nom[k], sizeof(nom[k]), "%s:%d", a, largo[k]);
+    total += largo[k]; n++;
+  }
+  int actual = -1;
+  if (resaltar && total > 0) {
+    int pos = (int)(compasPub % (uint32_t)total);
+    for (int k = 0; k < n; k++) { if (pos < largo[k]) { actual = k; break; } pos -= largo[k]; }
+  }
+  int ancho = 0; for (int k = 0; k < n; k++) ancho += anchoTexto(nom[k]) + 4;
+  int x = (128 - ancho + 4) / 2; if (x < 0) x = 0;
+  for (int k = 0; k < n; k++) {
+    int w = anchoTexto(nom[k]);
+    if (k == actual) { caja(x - 2, y, w + 3, 8); texto(x, y, nom[k], false); }
+    else texto(x, y, nom[k]);
+    x += w + 4;
+  }
+}
+// Una fila de pot: nombre · barra con el valor · el valor en texto. Si el pot todavía no tomó
+// control, una marca bajo la barra muestra dónde está físicamente (hay que pasar por el valor).
+void filaPot(int y, const char *nombre, float valor, const char *txt, int pot) {
+  texto(0, y, nombre);
+  if (valor < 0.0f) valor = 0.0f; if (valor > 1.0f) valor = 1.0f;
+  marco(50, y + 1, 38, 5);
+  caja(50, y + 1, (int)(valor * 38.0f + 0.5f), 5);
+  if (pot >= 0 && !potTomado[pot]) { int x = 50 + (int)(potCrudo[pot] * 37.0f); punto(x, y + 6); punto(x, y + 7); punto(x - 1, y + 7); punto(x + 1, y + 7); }
+  textoDerecha(y, txt);
+}
+void textoTiempo(float seg, char *out) {
+  if (seg < 1.0f) snprintf(out, 10, "%d ms", (int)(seg * 1000.0f + 0.5f)); else snprintf(out, 10, "%.2f s", seg);
+}
+
+void dibujarPantalla() {
+  memset(fb, 0, sizeof(fb));
+  char a[24], b[24];
+  const int bpmEnt = (int)(bpmPub + 0.5f);
+  if (millis() < PRUEBA_MS) {                                  // arranque
+    textoCentro(14, "INDUSTRIAL", 2); textoCentro(32, "MATRIZ", 2); textoCentro(54, "GC LAB CHILE");
+    return;
+  }
+  if (estadoSubPub == E_ESPERA) {                              // fin de la subida: espera el drop
+    encabezado("DROP", NULL);
+    textoCentro(18, "BTN5", 3); textoCentro(52, "VUELVE DESDE EL 1");
+    return;
+  }
+  if (estadoSubPub == E_SUBIDA) {
+    encabezado("SUBIDA", NULL);
+    int c = subPasosPub / 16 + 1; if (c > SUBIDA_PASOS / 16) c = SUBIDA_PASOS / 16;
+    snprintf(a, sizeof(a), "%d/%d", c, SUBIDA_PASOS / 16); textoCentro(16, a, 3);
+    marco(4, 44, 120, 7); caja(4, 44, (int)(120.0f * fminf(1.0f, (float)subPasosPub / SUBIDA_PASOS)), 7);
+    textoCentro(55, "BTN5 = DROP");
+    return;
+  }
+  if (tempoHold && !enMenu) {                                  // BTN4 apretado: el tempo en grande
+    encabezado("TEMPO", "BTN4 + POT1");
+    snprintf(a, sizeof(a), "%d", bpmEnt); textoCentro(16, a, 3);
+    textoCentro(46, "BPM");
+    marco(4, 56, 120, 6); caja(4, 56, (int)(120.0f * (bpmPub - BPM_MIN) / (BPM_MAX - BPM_MIN)), 6);
+    return;
+  }
+  const int bco = bancoPub;
+  if (enMenu) {                                                // ── MENÚ ──
+    encabezado("MENU", NOMBRE_MODO[BANCOS[bco].escala]);
+    for (int i = 0; i < NUM_BANCOS; i++) {                     // los 4 bancos (BTN1..BTN4), el elegido resaltado
+      char nb[8]; int k = 0; for (const char *p = BANCOS[i].nombre; *p && k < 7; p++) if (*p != ' ') nb[k++] = *p; nb[k] = 0;
+      int x = i * 32 + (32 - anchoTexto(nb)) / 2;
+      if (i == bco) { caja(i * 32, 8, 32, 8); texto(x, 8, nb, false); } else texto(x, 8, nb);
+    }
+    snprintf(a, sizeof(a), "KEYS %d/%d", patKeysPub + 1, NUM_PAT_KEYS); texto(0, 16, a);   // BTN5
+    snprintf(a, sizeof(a), "VAR %d/%d", varAcPub + 1, NUM_VAR_AC); textoDerecha(16, a);    // POT3
+    planAcordes(24, varAcPub, tocandoPub);
+    textoTiempo(BAJO_ATK_MIN * powf(BAJO_ATK_RANGO, pAtkBajo), a); filaPot(32, "ATAQUE", pAtkBajo, a, 0);
+    textoTiempo(BAJO_DEC_MIN * powf(BAJO_DEC_RANGO, pDecBajo), a); filaPot(40, "CAIDA", pDecBajo, a, 1);
+    int n = oscNotaPub;
+    if (n >= 0) snprintf(a, sizeof(a), "%s%d", NOMBRE_NOTA[n % 12], n / 12 - 1); else snprintf(a, sizeof(a), "--");
+    filaPot(48, "OSC", reqOscPos, a, 3);
+    textoCentro(56, "BTN2+BTN4: SALIR");
+    return;
+  }
+  // ── PRINCIPAL ──
+  snprintf(b, sizeof(b), "%d BPM", bpmEnt);
+  encabezado(breakPub ? "BREAK" : "PRINCIPAL", b);
+  if (tocandoPub) { for (int i = 0; i < 4; i++) for (int j = i; j < 7 - i; j++) punto(1 + i, 8 + j); }   // ▶
+  else caja(0, 9, 5, 5);                                                                                 // ■
+  snprintf(a, sizeof(a), "%s  %s", BANCOS[bco].nombre, NOMBRE_MODO[BANCOS[bco].escala]); texto(9, 8, a);
+  planAcordes(16, varAcPub, tocandoPub);
+  snprintf(a, sizeof(a), "FAB %d  BAJO %d  ARP %d", largoIndPub, lineaPub + 1, arpPub + 1); textoCentro(24, a);   // BTN2 · BTN3
+  snprintf(a, sizeof(a), "%d %%", (int)(pVol * 100.0f + 0.5f));                  filaPot(32, "VOLUMEN", pVol, a, 0);
+  float m = pMez; snprintf(a, sizeof(a), "%s", m < 0.47f ? "+BASE" : (m > 0.53f ? "+IND" : "AMBAS"));
+  filaPot(40, "MEZCLA", m, a, 1); punto(69, 46); punto(69, 47);                                  // marca del centro
+  snprintf(a, sizeof(a), "%d Hz", (int)(55.0f * powf(30.0f, pCorte)));          filaPot(48, "CORTE", pCorte, a, 2);
+  snprintf(a, sizeof(a), "%d %%", (int)(pDens * 100.0f + 0.5f));                 filaPot(56, "DENSIDAD", pDens, a, 3);
+}
+
+void oledComandos(const uint8_t *c, int n) {
+  Wire.beginTransmission(OLED_DIR);
+  Wire.write((uint8_t)0x00);                                   // Co = 0, D/C = 0: comandos
+  Wire.write(c, n);
+  Wire.endTransmission();
+}
+void oledIniciar() {
+  Wire.begin(OLED_SDA, OLED_SCL, OLED_I2C_HZ);
+  const uint8_t init[] = {
+    0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00,
+    (uint8_t)(OLED_GIRO_180 ? 0xA0 : 0xA1), (uint8_t)(OLED_GIRO_180 ? 0xC0 : 0xC8),
+    0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0x2E, 0xAF
+  };
+  oledComandos(init, sizeof(init));
+  memset(fbEnviado, 0xA5, sizeof(fbEnviado));                  // fuerza a mandar todo la primera vez
+}
+void oledEnviar() {                                            // sólo las páginas que cambiaron
+  for (int p = 0; p < 8; p++) {
+    const uint8_t *d = fb + p * 128;
+    if (memcmp(d, fbEnviado + p * 128, 128) == 0) continue;
+    const uint8_t ventana[] = { 0x21, 0, 127, 0x22, (uint8_t)p, (uint8_t)p };
+    oledComandos(ventana, sizeof(ventana));
+    for (int i = 0; i < 128; i += 64) {                        // el buffer de Wire es de 128: trozos de 64
+      Wire.beginTransmission(OLED_DIR);
+      Wire.write((uint8_t)0x40);
+      Wire.write(d + i, 64);
+      Wire.endTransmission();
+    }
+    memcpy(fbEnviado + p * 128, d, 128);
+  }
+}
+
+void tareaPantalla(void *) {
+  oledIniciar();                                               // Wire se inicia acá: sus interrupciones quedan en el core 0
+  for (;;) { dibujarPantalla(); oledEnviar(); vTaskDelay(OLED_REFRESH_MS / portTICK_PERIOD_MS); }
+}
+#endif
 
 // ==============================================================================================================================================
 // SETUP
@@ -1909,6 +2243,7 @@ void i2s_init() {
 void audioTask(void *);
 void controlTask(void *);
 void ledTask(void *);
+void tareaPantalla(void *);
 #endif
 
 void iniciarLEDs() {
@@ -1950,6 +2285,7 @@ void setup() {
   xTaskCreatePinnedToCore(audioTask,   "audio",   8192, NULL, 10, NULL, 1);
   xTaskCreatePinnedToCore(controlTask, "control", 4096, NULL,  3, NULL, 0);
   xTaskCreatePinnedToCore(ledTask,     "leds",    4096, NULL,  2, NULL, 0);
+  xTaskCreatePinnedToCore(tareaPantalla, "oled",  6144, NULL,  1, NULL, 0);   // la pantalla, la de menor prioridad
 #endif
 }
 

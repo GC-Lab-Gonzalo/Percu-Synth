@@ -14,7 +14,8 @@
 // ==============================================================================================================================================
 // - Microcontrolador ESP32-S3
 // - Tira de LEDs WS2812 |DATA -> 46| (los primeros 6 LEDs son SMD internos del PCB → siempre apagados)
-// - 5 Botones con pull-up |BTN1 -> 42, BTN2 -> 44, BTN3 -> 45, BTN4 -> 47, BTN5 -> 0|
+// - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
+//   (ojo: este sketch los lee en el orden 42, 44, 45, 47, 0 — abajo cada botón dice lo que hace en la placa)
 // - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
 // ==============================================================================================================================================
 // ARDUINO IDE — settings críticos
@@ -41,11 +42,11 @@
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
 // CONTROLES:
-// - BTN1 (42) → Modo siguiente
-// - BTN2 (44) → Modo anterior
-// - BTN3 (45) → Invertir dirección de la animación
-// - BTN4 (47) → Flash blanco (80 ms)
-// - BTN5 (0)  → Toggle apagar / reanudar
+// - BTN1 (44) → Modo anterior
+// - BTN2 (42) → Modo siguiente
+// - BTN3 (0)  → Apagar / reanudar la tira
+// - BTN4 (45) → Invertir dirección de la animación
+// - BTN5 (47) → Flash blanco (80 ms)
 //
 // - POT1 (ADC1)  → Brillo global (5 – 60 / 255)
 // - POT2 (ADC2)  → Color base (hue 0 – 255)
@@ -59,9 +60,9 @@
 //
 // MODO DE USO:
 // 1. Al encender arranca en SÓLIDO con color rojo.
-// 2. BTN1/BTN2 navegan entre los 6 modos. El nombre del modo se imprime en Serial.
+// 2. BTN2 avanza y BTN1 retrocede entre los 6 modos. El nombre del modo se imprime en Serial.
 // 3. POT1 sirve para ajustar el brillo a tu gusto antes de tocar otros pots.
-// 4. BTN5 funciona como "pánico" — apaga toda la tira sin reiniciar.
+// 4. BTN3 funciona como "pánico" — apaga toda la tira sin reiniciar.
 // ==============================================================================================================================================
 
 #include <FastLED.h>

@@ -1,0 +1,58 @@
+SAMPLES DEL FIRMWARE «matriz_oscura» (PercuSynth · GC Lab Chile)
+Todos son CC0 (Creative Commons 0, dominio público) en Freesound: se pueden usar, modificar y vender sin pedir
+permiso ni dar crédito. La licencia se verificó el 2026-11-01 en la búsqueda de Freesound (filtro CC0 + la marca
+de licencia de cada resultado). Vienen de la vista previa MP3 de Freesound (banco/<categoría>/N.mp3) y van dentro
+del firmware (samples.h): recortados, mono 44.1 kHz, sin continua, nivelados por RMS (−16 dBFS, pico tope −1 dBFS),
+cortados a 3 s (impactos) o 2.5 s (el resto) con un fundido, en IMA ADPCM de 4 bit.
+Página de cada uno: https://freesound.org/s/<número>/
+
+IMPACTOS
+  1.mp3  408141  Jofae · Cinematic Low Pitch Impact
+  2.mp3  754424  zazz.sound.design · DSGNImpt_Deep Cinematic Impact 5_ZAZZ
+  3.mp3  816376  harrisonlace · DSGNStngr_basic trailer boom impact
+  4.mp3  697057  InMotionAudio · DSGNBram_BramDistorted01
+  5.mp3  856173  brktkrgll · Apocalyptic Cinematic Brass Braam Impact
+  6.mp3  523783  BennettFilmTeacher · Boom Explosion
+  7.mp3  751356  AudioPapkin · Sound Design Elements Impact SFX PS 011
+  8.mp3  558238  Rizzard · Distorted Impact Short
+
+METALES
+  1.mp3  406562  Anthousai · hit - metallic 01
+  2.mp3  334419  Markozz · MetalHit2_boom
+  3.mp3  244983  ani_music · ANI Big Pipe Hit
+  4.mp3  371353  Mrthenoronha · Iron Hits
+  5.mp3  668993  vestibule-door · single big impact, industrial press
+  6.mp3  456330  henrikcederblad · SFX-metal-007
+  7.mp3  697758  SoundDesignForYou · Metal Resonant Scrape Impact
+  8.mp3  335976  newagesoup · metal-gate-slam
+
+GRITOS
+  1.mp3  398802  DangAdv64 · Monster Scream Death
+  2.mp3  347410  zerokingfull · Monster Roar 02
+  3.mp3  444445  Voices_Of_Marz · Demon Growl
+  4.mp3  221547  joseppujol · Horror scream (high-pitched voice)
+  5.mp3  178313  Thanra · Male Death Scream
+  6.mp3  222523  uagadugu · Deep Monster Growl
+  7.mp3  265554  AugustSandberg · Studio roar
+  8.mp3  518773  Creat142100 · Glitchy Robot Scream - 6
+
+VOCES
+  1.mp3  823850  JW_Audio · Dark, Demonic, Low, Voice, Horror, Recording 4
+  2.mp3  686852  dragonboi50120 · Dark Creepy Voice
+  3.mp3  559107  AgentA1cr · Possessed Laugh
+  4.mp3  350679  DRFX · Deep Evil Laugh
+  5.mp3  554623  AsaMakes · Male Vocal Glitch Godlike Voice
+  6.mp3  261336  Stereo Surgeon · Slowmo Voice Growl
+  7.mp3  824559  emma.emma.emma · Arderás en el infierno (demon voice)
+  8.mp3  362570  phatkatz4 · Access Denied
+
+FX
+  1.mp3  511597  robpnicholson · Dirty Siren
+  2.mp3   18143  nickm · ET-1SirenGlitch
+  3.mp3  341289  LookIMadeAThing · Glitch Noise 5
+  4.mp3  371603  JacksonMiller0 · Odd glitch
+  5.mp3  834162  JW_Audio · Glitch, One-shot, Stutter, Pitched, Hard, Digital 13
+  6.mp3  375926  Glitchedtones · Laser Zaps
+  7.mp3  500546  waxsocks · Heavy Laser Cannon
+
+Sacado después de probarlo en la placa: 361491 · FartBiscuit1700 · Electronic Siren (sonaba a teléfono).

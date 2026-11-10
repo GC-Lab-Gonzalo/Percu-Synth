@@ -188,6 +188,9 @@ cuelgue, al reiniciar, verás algo como:
 | Melodía se corta en seco | `melRel` en `startSong()` (release; ↑ = se apaga más de a poco) |
 | Chasquidos con filtro muy dinámico | ya resuelto: los coeficientes del biquad se **interpolan muestra a muestra** (`filterStep`/`filterDelta`). Si aún se oyen, bajar `filtLfoDepth`/`filtLfoRate` o `qBase` por arquetipo |
 | Chasquidos en cambios de acorde | ya resuelto: `capPad()` **funde** las voces sobrantes (~6 ms) en vez de cortarlas en seco |
+| Chasquidos que van y vienen (más en partes densas) | ya resuelto: el audio corre en **su propia tarea en el core 1** y botón/pots/LEDs en otra en el core 0 (antes todo iba en `loop()` y la lectura de pots + `FastLED.show()` podían dejar sin datos al DMA, que entonces suelta ceros). Si el **LED 5 destella magenta**, un buffer tardó más del 80 % de su tiempo: ahí el problema es CPU, no el sonido |
+| Chasquidos al mover una perilla o sueltos sin tocar nada | ya resuelto: los volúmenes (POT1–3) y el gate rítmico del pad se suavizan **muestra a muestra** (antes cambiaban de golpe una vez por buffer; un pico del ADC era un escalón) |
+| Chasquido al final de una cola | ya resuelto: ninguna voz se corta en seco; al cruzar −62 dB pasa a una cola de ~1.5 ms y se libera a −82 dB. Si hay que robar una voz que suena, su última muestra se apaga en ~1.5 ms (declick) |
 | Estabilidad del filtro | guardas de `applyFilter()` (anti-blowup: reset si NaN/Inf + límite de magnitud) |
 | Más/menos variedad tímbrica | rango `lpMin`/`lpMax` por arquetipo · largo de frase (`phraseLeft` en `newPhrase()`) |
 | Más/menos vibrato | `melVibDepth` y rango `melVibR0`/`melVibR1` en `melodyStep()` |

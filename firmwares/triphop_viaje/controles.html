@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PercuSynth · Trip Hop Viaje — Controles</title>
+<style>
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-SemiBold.ttf"); font-weight: 600; }
+  @page { size: A4 landscape; margin: 11mm 13mm; }
+  :root { --tinta: #111; --gris: #555; --linea: #d8d4cc; --ambar: #F5B041; --suave: #f6f3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 8.5pt; line-height: 1.23; color: var(--tinta); background: #fff; }
+  h1, h2, th { font-family: "Archivo Ancha", "Segoe UI", sans-serif; text-transform: uppercase; }
+  h1 { font-weight: 800; font-size: 17pt; margin: 0; letter-spacing: 0; }
+  h1 + .sub { color: var(--gris); margin: 2px 0 8px; font-size: 8.6pt; }
+  h2 { font-weight: 800; font-size: 10pt; margin: 7px 0 3px; padding-left: 8px; border-left: 4px solid var(--ambar); }
+  ul { margin: 0; padding-left: 16px; }
+  li { margin: 1px 0; }
+  .fijos { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-weight: 600; font-size: 7.4pt; text-align: left; background: var(--tinta); color: #fff; padding: 3px 5px; }
+  td { padding: 3px 5px; border-bottom: 1px solid var(--linea); vertical-align: top; font-size: 8pt; }
+  td:first-child { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 8pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--suave); }
+  .nota { color: var(--gris); font-size: 7.9pt; margin-top: 3px; }
+  .aviso { margin: 7px 0 0; padding: 4px 9px; background: var(--suave); border-left: 4px solid var(--ambar); font-size: 8.1pt; }
+  .dos { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; margin-top: 7px; }
+  .dos h2 { margin-top: 0; }
+  .timbres { margin: 0; font-size: 8pt; line-height: 1.42; }
+  .timbres b { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 7.6pt; }
+  .led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 1px; vertical-align: 0; border: 1px solid #0003; }
+  b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>PercuSynth · Trip Hop Viaje</h1>
+<div class="sub">Qué hace cada control · GC Lab Chile</div>
+
+<h2>En todos los paneles</h2>
+<div class="fijos">
+  <ul>
+    <li><b>BTN4</b> → siguiente panel: General → Batería → Bajo → Armonía → Pad → General. Sin combos.</li>
+    <li><b>BTN5</b> → entra o sale del <b>break</b>: calla bombo y bajo.</li>
+    <li>Al cambiar de panel, cada pot queda suelto hasta que lo muevas un 4&nbsp;%: nada salta.</li>
+  </ul>
+  <ul>
+    <li>Las secuencias corren siempre: el <b>BTN1</b> de cada instrumento es un play/stop "falso" — sólo lo calla o lo deja sonar, así al volver entra en tiempo.</li>
+    <li><b>LED 5</b> = el panel: <span class="led" style="background:#2ecc40"></span>General <span class="led" style="background:#F5B041"></span>Batería <span class="led" style="background:#e53935"></span>Bajo <span class="led" style="background:#22c7d6"></span>Armonía <span class="led" style="background:#2f6fe0"></span>Pad.</li>
+  </ul>
+</div>
+
+<h2>Panel por panel</h2>
+<table>
+  <tr><th style="width:6.5%">Panel</th><th style="width:9.5%">BTN1</th><th style="width:8.5%">BTN2</th><th style="width:19%">BTN3</th><th style="width:5.5%">POT1</th><th style="width:17%">POT2</th><th style="width:13%">POT3</th><th style="width:21%">POT4</th></tr>
+  <tr><td>General</td><td>Play / stop (arranca en el "1"; Stop y Play vuelven a lo mismo)</td><td>Dialecto (6) + progresión nueva sorteada</td><td>Fill al final del compás</td><td>Volumen</td><td>Tempo 58–110&nbsp;BPM, arranca en 86</td><td>Swing (recto → 72&nbsp;%)</td><td>Pasa-bajos general</td></tr>
+  <tr><td>Batería</td><td>Suena / calla</td><td>Patrón (12)</td><td>Kit (8)</td><td>Volumen</td><td>Filtro</td><td>Largo de los golpes</td><td>Densidad: abajo del todo sólo el bombo, arriba entran hasta los fantasmas</td></tr>
+  <tr><td>Bajo</td><td>Suena / calla</td><td>Patrón (12)</td><td>Timbre (6)</td><td>Volumen</td><td>Filtro</td><td>Ataque</td><td>Caída</td></tr>
+  <tr><td>Armonía</td><td>Suena / calla</td><td>Patrón (12)</td><td>Instrumento (6)</td><td>Volumen</td><td>Filtro</td><td>Ataque</td><td>Caída</td></tr>
+  <tr><td>Pad</td><td>Suena / calla</td><td>Timbre (4)</td><td>Registro: normal · +1 · −1</td><td>Volumen</td><td>Filtro</td><td>Ataque y suelta: corto ↔ muy largo</td><td>Envío al eco</td></tr>
+  </table>
+<div class="nota">El pad toca el <b>acorde</b> completo (fundamental · 3.ª · 5.ª · 7.ª) siguiendo la progresión; las melodías son monofónicas. El <b>wow y flutter</b> y el <b>desgaste de cinta</b> no tienen control: son parte del timbre de la máquina (bloque <b>CINTA FIJA</b> del sketch).</div>
+
+
+<div class="dos">
+  <div>
+    <h2>Dialectos (BTN2 del General)</h2>
+    <table>
+      <tr><th style="width:10.5%">Dialecto</th><th style="width:13.5%">Escala</th><th style="width:15%">Progresión</th><th>De qué va</th></tr>
+      <tr><td>Bristol</td><td>Eólico</td><td>i·2 VI·2 iv·2 v·2</td><td>Bombo pesado y quebrado, bajo sub larguísimo, Rhodes con tres notas por compás</td></tr>
+      <tr><td>Portis</td><td>Menor armónica</td><td>i·2 VI·2 iv·2 i·2</td><td>La séptima mayor del cine negro. Cinta gastada, contrabajo, clavecín</td></tr>
+      <tr><td>Jazz Hop</td><td>Dórico</td><td>i·2 IV·2 i·2 ii·2</td><td>El IV mayor del dórico. Escobillas con swing, contrabajo caminando, vibráfono</td></tr>
+      <tr><td>Dub</td><td>Eólico</td><td>i·4 VII·2 VI·2</td><td>808 larguísimo, guitarra apagada al contratiempo, mucho eco, mucho silencio</td></tr>
+      <tr><td>Nocturno</td><td>Frigio</td><td>i·4 II·2 i·2</td><td>La segunda menor como única sombra. Medio tiempo, bombo enorme, piano sin brillo</td></tr>
+      <tr><td>Celeste</td><td>Lidio</td><td>I·4 vi·2 II·2</td><td>La cuarta aumentada: lo que flota. Es el que va con lo que se ve en la pantalla</td></tr>
+    </table>
+    <div class="nota">Cada dialecto trae su escala, progresión, patrones y timbres; después los cambias en cada panel. Todo está escrito en grados de la escala: ningún botón puede sacar una nota de tono ni un golpe de tiempo.</div>
+  </div>
+  <div>
+    <h2>Timbres</h2>
+    <div class="timbres">
+      <b>Kits</b> (BTN3 Batería): Polvo · Boom Bap · 808 Dub · Escobillas · Cinta · Pesado · Seco · Quebrado<br>
+      <b>Bajos</b> (BTN3 Bajo): Sub · Dub · Contrabajo · Púa · Reese · Ácido<br>
+      <b>Armonía</b> (BTN3): Rhodes · Vibráfono · Piano Polvo · Clave · Guitarra · Cuerdas<br>
+      <b>Pad</b> (BTN2): Cuerdas · Melotrón · Coro · Vidrio<br>
+    </div>
+    <h2>LEDs y pantallas</h2>
+    <ul>
+      <li><b>0</b> bombo · <b>1</b> bajo · <b>2</b> hats · <b>3</b> caja, perc, clap y tom · <b>4</b> armonía y pad. Un instrumento callado se ve rojo tenue; en el break, 0 y 1 quedan rojos.</li>
+      <li><b>5</b> pulsa con cada negra en el color del panel; se pone <b>magenta</b> si el audio usa más del 80&nbsp;% de su tiempo.</li>
+      <li><b>Grabación</b>: cada Play del General graba la sesión en la microSD (TRIPHOP_0001.WAV + un .TXT con dialecto, escala, progresión y tempo) hasta el Stop. Mientras graba, un punto late en la cabecera de la OLED.</li>
+      <li><b>OLED</b>: monitor de controles — el panel y su estado, los 4 pots con su valor real (punteados y con la posición de la perilla mientras están sueltos), lo que hacen BTN2 y BTN3, los 16 pasos, y el valor nuevo de cada botón en grande por un segundo.</li>
+      <li><b>Matriz 32×8</b>: efectos matemáticos en bandas nítidas (interferencia, anillos, espiral, rayos, rayas, rombos, cuadros, damero) que mutan cada 2 compases en el «1»; saltan con la rejilla, el bombo engorda las bandas y la caja gira la paleta. Al encender, 3&nbsp;s de prueba de orientación.</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

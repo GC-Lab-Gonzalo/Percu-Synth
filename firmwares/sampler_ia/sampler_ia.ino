@@ -81,17 +81,64 @@
 // - USB.h / USBMIDI.h                            (core ESP32 Arduino >= 3.x, reloj MIDI USB)
 // - FastLED
 // ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Le pides un sonido hablando ("un golpe metálico oxidado con cola larga") y el PercuSynth lo
+// genera con IA, lo guarda en uno de sus 3 slots y lo tocas con BTN2, BTN3 y BTN4. Encima puedes
+// grabar los golpes en una secuencia de 16 pasos, cambiarles el tono, tartamudearlos (stutter) y
+// filtrarlos inclinando la placa.
+//
+// Cadena: mic INMP441 -> Whisper transcribe -> GPT lo traduce a un prompt de efecto de sonido
+// en inglés -> ElevenLabs (Text-to-Sound Effects) devuelve el audio, que se recorta, se
+// normaliza y queda en PSRAM. Manda además reloj MIDI por USB para grabar en Ableton.
+// ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-//   1) MANTEN BTN1 y di lo que quieres: "un golpe metalico oxidado con cola larga".
-//   2) Al soltar: Whisper transcribe -> GPT lo traduce a un prompt de efecto de sonido en
-//      ingles (mas duracion y si conviene que loopee) -> ElevenLabs devuelve el audio crudo.
-//   3) El sample se recorta (quita el silencio inicial), se normaliza y queda en el SLOT
-//      apuntado por el LED que parpadea. El destino avanza solo: 1 -> 2 -> 3 -> 1.
-//   4) BTN2/3/4 lo disparan al instante. Manteniendo > 0.6 s el slot queda en LOOP (textura);
-//      un toque nuevo sobre ese mismo boton lo apaga.
-//   5) BTN5 arranca la secuencia de 16 pasos. CON LA SECUENCIA SONANDO, cada vez que tocas
-//      BTN2/3/4 grabas ese golpe en el paso mas cercano (cuantizado). Mantener BTN5 = borrar.
+// - BTN1 → mantener y hablar: pides un sonido nuevo (máx. 5 s). Al soltarlo se genera y queda
+//          en el slot que parpadea (el destino avanza solo: 1 -> 2 -> 3 -> 1). Es EXCLUSIVO de
+//          grabación; mientras se genera, el audio y la secuencia se detienen unos segundos.
+// - BTN2 → dispara el SLOT 1 (a la izquierda). Mantener > 0.6 s = LOOP sostenido (textura);
+//          un toque nuevo sobre el mismo botón lo apaga. Con la secuencia sonando, cada toque
+//          se graba en el paso más cercano (cuantizado).
+// - BTN3 → dispara el SLOT 2 (al centro). Igual que BTN2: mantener = loop, con la secuencia
+//          sonando graba el golpe.
+// - BTN4 → dispara el SLOT 3 (a la derecha). Igual que BTN2: mantener = loop, con la secuencia
+//          sonando graba el golpe.
+//
+//   Si un slot está vacío, toca PRESTADO el último sample cargado, transpuesto (x1.000000 en
+//   BTN2, x1.189207 = +3 semitonos en BTN3 y x1.498307 = +7 semitonos en BTN4): con un solo
+//   sample los tres botones dan una tríada menor (Do -> Do, Re#, Sol).
+//
+// - BTN5 → secuencia de 16 pasos: play / stop (al soltar). Mantener > 1 s = borrar el patrón.
+//          Manda Start / Stop MIDI al DAW.
+// - BTN2 + BTN4 a la vez → entra y sale del panel MIXER (los pots 2/3/4 pasan a ser volúmenes).
+// - POT1 → velocidad de la secuencia (60 - 200 BPM). No cambia en el MIXER.
+// - IMU → eje X = cutoff del filtro · eje Y = resonancia (Q). Inclina la placa para moverlos.
+// - MIC → micrófono INMP441 por I2S: escucha tu pedido mientras mantienes BTN1.
+//
+// ── PANEL NORMAL ───────────────────────────────────────────────────────────────
+// - POT2 → volumen master
+// - POT3 → pitch / tono de todo lo que suena (±12 semitonos). Centro = tono original.
+// - POT4 → STUTTER GRANULAR: congela un trocito de la mezcla y lo repite. Al mínimo no hace
+//          nada; hacia el medio tartamudea en trozos rítmicos; al máximo es un zumbido afinado.
+//
+// ── PANEL MIXER (BTN2 + BTN4) ──────────────────────────────────────────────────
+// - POT2 → volumen del canal 1 (BTN2). LEDs 0-2 = faders visibles.
+// - POT3 → volumen del canal 2 (BTN3)
+// - POT4 → volumen del canal 3 (BTN4)
+//
+//   Pickup: al cambiar de panel cada pot queda mudo hasta que lo mueves, así nada pega saltos.
+//
+// Recorrido completo de un pedido:
+//   Paso 1: MANTEN BTN1 y di lo que quieres: "un golpe metalico oxidado con cola larga".
+//   Paso 2: Al soltar: Whisper transcribe -> GPT lo traduce a un prompt de efecto de sonido en
+//            ingles (mas duracion y si conviene que loopee) -> ElevenLabs devuelve el audio crudo.
+//   Paso 3: El sample se recorta (quita el silencio inicial), se normaliza y queda en el SLOT
+//            apuntado por el LED que parpadea. El destino avanza solo: 1 -> 2 -> 3 -> 1.
+//   Paso 4: BTN2/3/4 lo disparan al instante. Manteniendo > 0.6 s el slot queda en LOOP (textura);
+//            un toque nuevo sobre ese mismo boton lo apaga.
+//   Paso 5: BTN5 arranca la secuencia de 16 pasos. CON LA SECUENCIA SONANDO, cada vez que
+//            tocas BTN2/3/4 grabas ese golpe en el paso mas cercano (cuantizado). Mantener BTN5 = borrar.
 //
 //   FORMATO DE AUDIO Y PLANES DE ELEVENLABS
 //   El firmware pide primero 'pcm_22050' (limpio). Ese formato exige plan Pro o superior;
@@ -128,6 +175,13 @@
 //   LED 3      = secuencia (pulso en cada negra)
 //   LED 4      = filtro IMU (color por cutoff, brillo por resonancia)
 //   LED 5      = estado: VERDE listo · ROJO grabando · AMBAR procesando · MAGENTA error
+//
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h y escribe tu WiFi, OPENAI_API_KEY y ELEVEN_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V); compila con el perfil de sketch.yaml.
+// 3. Con el LED 5 en VERDE, mantén BTN1, pide un sonido y suéltalo: ámbar = generando.
+// 4. Toca BTN2, BTN3 y BTN4 para dispararlo (mantén uno para dejarlo en loop) y mueve POT3 y POT4.
+// 5. Aprieta BTN5 y toca BTN2/3/4 encima: los golpes quedan grabados en la secuencia.
 // ==============================================================================================================================================
 
 #include <WiFi.h>

@@ -151,6 +151,11 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - Cada botón enciende una capa (toque = principal, mantener >0.6 s = alterna). Todo **seco y natural**, sin delay ni reverb
 - Dos anillos WS2812 de 30 LEDs (afuera = eventos, adentro = ambiente). Arranca en silencio. Requiere **FastLED**
 
+#### `sinfonia_natural` — Bosque + música en una escala celestial
+- Agua, **aves**, **campanitas** y una música que acompaña, todo en **E · F# · G# · A · B · D#** (Mi mayor sin el 6º grado). Hasta las aves cantan en la escala
+- **POT3 = densidad** como en `industrial_matriz`: abajo sólo el bosque, al subir entran los instrumentos en orden y sus notas por prioridad. POT2 = música ↔ naturaleza, POT4 = una vertiente grabada que suena continua
+- BTN2 = escena nueva con **otros instrumentos** (5 paletas: bosque, cristal, nocturno, amanecer, agua) · BTN3 un ave · BTN4 cascada de campanitas · BTN5 uno de 9 **animales grabados** (CC0, dentro del firmware, sin microSD). Partición Huge APP. Requiere **FastLED**
+
 #### `cyber_kit` — Secuenciador de texturas, FX y leads
 - **No es una drum machine:** 4 bancos × 5 sonidos (LEADS / TEXTURAS / FX / BAJOS) — leads neón, campanas FM, hoovers, risers, nubes granulares, drones oscuros, zaps, glitches, reeses, subs
 - Los sonidos afinados viven **dentro de una escala seleccionable** (10 escalas, tónica variable)
@@ -191,6 +196,28 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - **Percusión industrial en paralelo**: 6 pistas (hat · martillo · pistón · clap · hat abierto · tom), sin metales afinados. Cada ciclo dura de 10 a 32 pasos y forma un **polirritmo** contra los 16 de la base, que se realinea cada 4 compases
 - BTN1 play/stop · BTN2 patrón industrial · BTN3 tema nuevo (acordes + bajo + melodía) · BTN4 mantenido + POT1 = tempo · BTN2+BTN4 = menú de 5 modos · BTN5 break mientras se mantiene · POT1 volumen · POT2 mezcla base↔fábrica · POT3 corte del bajo · POT4 densidad industrial
 - **Matriz WS2812 de 32×8** encadenada a la placa: 8 escenas psicodélicas (túnel · plasma · caleidoscopio · espiral · figuras · moiré · ondas · damero) amarradas al tempo, que se sortean cada 4 compases, prueba de orientación al encender y limitador de corriente propio. Requiere **FastLED**
+
+#### `matriz_oscura` — 8 estilos oscuros y agresivos + un noticiero del futuro glitcheado + matriz 32×8
+- La banda de `industrial_matriz_v2` (batería · bajo · melodías · oscilador, un panel cada uno, las secuencias corren siempre) con **8 estilos**: INDUSTRIAL (el del v2 con sonidos y patrones nuevos) · PSYTRANCE · PSYCORE · ELECTRO DARK · INDUSTRIAL DURO · CYBERPUNK · TRAP · ROCK INDUSTRIAL, en eólico, frigio, dórico y dos escalas árabes oscuras (frigio dominante y doble armónica)
+- 6 bajos (RODANTE · SUCIO · LIMPIO · 808 · ÁCIDO · PULSO), 6 timbres de melodía (ÁCIDO · FM · STAB · SYNC · PLUCK · QUINTAS), 4 osciladores (GRUÑIDO · SIERRAS · FM · CUADRADAS), 5 kits (INDUSTRIAL · PSY · DURO · ROCK · TRAP) y 4 patrones por instrumento en cada estilo; los hats tienen **redobles** (`r`, `t`) que caen en su muestra exacta
+- **Panel 6, SAMPLES**: un **noticiero del futuro que se glitchea mientras informa**, 24 frases con voces de ElevenLabs (`generar_noticias.py`) **dentro del mismo `.ino`** (`preparar_samples.py` los escribe ahí; partición Huge APP): titulares, presentador y señal caída en BTN1–3, con pitch, reverb y eco
+- Matriz 32×8: las 8 escenas del v1 + INTERFERENCIA · CUADRADOS · RAYOS, que se mueven a saltos en el pulso. Los estilos se eligieron escuchando los clips de `matriz_oscura/ejemplos/`. Requiere **FastLED**; partición **Huge APP**
+
+#### `matriz_gotica` — un solo estilo, 6 escenarios en la misma tonalidad, producción gótica + matriz 32×8
+- `matriz_oscura` con **un solo estilo** (el cruce de su INDUSTRIAL DURO con su PSYTRANCE) en **una sola tónica** (Mi frigio; los dos escenarios de baile, en Mi dórico). El BTN2 del General no cambia de estilo: cambia de **ESCENARIO** — CRIPTA · TÚNEL · BAILE · PROCESIÓN · FORJA · SALÓN — otros patrones, timbres, progresión y espacio, mismo sentimiento, escala y tónica
+- **Producción gótica**: guitarra limpia con chorus, bajo melódico con chorus, kit de caja de ritmos con caja grande y toms tribales, **coro oscuro**, **cuerdas frías**, **clavecín** y una **catedral** (reverb larga y oscura; bombo, bajo y hats van secos)
+- Los mismos 6 paneles y el mismo noticiero glitcheado dentro del `.ino`. Requiere **FastLED**; partición **Huge APP**
+
+#### `triphop_viaje` — Máquina de trip hop + monitor de controles en la OLED y efectos matemáticos en la matriz
+- **Sólo trip hop**: 6 dialectos (BRISTOL · PORTIS · JAZZ HOP · DUB · NOCTURNO · CELESTE) con 12 patrones de batería, 12 de bajo y 12 de armonía cada uno. Sólo **menor armónica y frigio dominante**: **cada cambio de dialecto sortea una de 20 progresiones** (10 por escala, nunca la que ya sonaba; Stop y Play vuelven a lo mismo), con séptimas, y los disminuidos y aumentados (Bø7, G#°7, Cmaj7#5) a propósito. Tempo 58–110 BPM, swing hasta 72 %
+- **El arrastre**: cada kit trae los milisegundos que entra tarde cada pista (la caja 8–30 ms). El bombo marca el tiempo exacto y el resto llega tarde, con precisión de muestra — eso no cabe en la rejilla de semicorcheas y va en un planificador de golpes aparte. Es lo que hace que suene tocado y no programado
+- **Cinta**: **wow y flutter** y **desgaste** (saturación + banda recortada) como constantes fijas, sin panel. Hubo una capa de ruido de vinilo (crepitar, siseo, aguja) y se quitó: se oía como chasquidos aleatorios y sobrevivía a silenciar los instrumentos, porque su panel no era un instrumento
+- Hubo también un **panel de VOZ en vivo por el INMP441** (7 efectos y un CONGELAR) y **se quitó entero** a pedido de Gonzalo: con el micrófono sonaba mal y con retraso. Con él se fueron la reverb de catedral, el vocoder y la PSRAM (la RAM bajó de 244 a 188 KB)
+- **El PAD toca el acorde** (fundamental · 3.ª · 5.ª · 7.ª) siguiendo la progresión, con 4 timbres; 8 kits de batería, 6 timbres de bajo y 6 instrumentos de armonía
+- 5 paneles, BTN4 pasa al siguiente, un botón una función, sin combos
+- **Graba cada sesión**: cada Play del General abre `TRIPHOP_nnnn.WAV` en la microSD (SPI 14/15/16/17, opcional) y su Stop la cierra, con un `.TXT` al lado que dice dialecto, escala, progresión y tempo. El audio nunca espera a la tarjeta (colchón de 8 s en PSRAM)
+- **OLED**: un **monitor de controles** — el panel y su estado, los 4 pots con su valor en la unidad real (punteados y con la posición de la perilla mientras están sueltos), lo que hacen BTN2 y BTN3, los 16 pasos, y el valor nuevo de cada botón en grande durante un segundo
+- **Matriz 32×8**: ocho **efectos matemáticos** (interferencia, anillos, espiral, rayos, rayas, rombos, cuadros, damero) en bandas de color plano con negro entre medio; mutan cada 2 compases en el «1» con otra paleta y otra simetría, avanzan a saltos con la rejilla, el bombo engorda las bandas y la caja gira la paleta. Requiere **FastLED**
 
 #### `secuenciador_melodico` — 16 pasos en modos griegos *(por Nicolás Martínez)*
 - Secuenciador **monofónico** de 16 pasos: cada paso es un **grado de la escala** o un silencio, en uno de los **7 modos griegos** (BTN2 los recorre)
@@ -252,6 +279,14 @@ Cada firmware es un sketch Arduino independiente (`.ino`). Se compila y se carga
 - Un **video vertical** (un short) corre en la **pantalla OLED SSD1306 puesta de lado** (64×128), **amarrado al tempo**: al subir el BPM el video se acelera, con Stop se congela, cada Play lo reinicia con el "1" y en cada bombo la pantalla late (contraste)
 - Debajo, un **secuenciador techno**: bombo de tres bandas en negras, línea ácida de 16 pasos (acentos y ligados a la 303) y hats. POT1–4 = corte / resonancia / envolvente / decay del filtro; BTN1 play/stop, BTN2 patrón nuevo, BTN3 tap tempo, BTN4 bombo sí/no, **BTN5 graba a la microSD lo que sale por los audífonos** (WAV estéreo 16 bit, sin micrófono; mismo cableado SPI que `grabador_campo`)
 - El video se convierte con `convertir_video.py` (ffmpeg → cuadros de 1 bit ya en el orden de memoria de la SSD1306 → `video.h`). Requiere **FastLED** (LED de estado de la grabación)
+
+#### [`terror_sin_sd`](firmwares/terror_sin_sd/) — Música de tráiler de terror en 4 paneles
+- Cada **Play** es una canción nueva que arranca con una **intro lenta**: latidos que se aceleran y un viento que crece 16 s hasta que entra la percusión con un golpe. El **POT3 es la tensión**: va sumando el bajo, un tic, un **arpegio que sube** y los tambores del tráiler, y arriba del todo braams y **glitches**. Todo en escalas de terror (frigio, menor armónica, húngara menor), cada acorde con la suya
+- **BTN4 cambia de panel**: General · **Bajo** (patrón, filtro, caída, resonancia) · **Capas** que crecen de a poco (cuerdas que suben, coro oscuro, tono de tensión infinito, caja de música que se desafina) · **Voces** (risas, lamentos, susurros, niños, bebés) con pitch, reverb, eco y reversa
+- Las 10 voces (2 por categoría, CC0) van **dentro del firmware**, sin microSD. Luces todas rojas y una hoja de controles en PDF. Requiere **FastLED** y la partición **Huge APP**
+
+#### [`percu_hero`](firmwares/percu_hero/) — El juego de ritmo, entero en la placa
+El Percu Hero del navegador sin computador: la canción «Turno de noche» se sintetiza y sale por el DAC, las notas vienen hacia ti en perspectiva por la **OLED** (con hiperespacio, planetas y túnel de fondo) y los **5 botones son los 5 carriles**. La melodía sólo suena si aciertas; hay energía, multiplicador y tres dificultades. Requiere FastLED y la OLED SSD1306.
 
 #### `seismic_drone` — Drones épicos por vibración de la tierra
 - Hermano grave de `impact_chimes`: el MPU6050 en **±2g** detecta la vibración del suelo → genera un **dron épico** (sierra estéreo desafinada + sub-oscilador, filtro resonante que "respira")
@@ -361,6 +396,9 @@ Páginas HTML standalone (sin build, sin npm) que cumplen distintos roles según
 4. **Instrumento en el navegador** — lee un controlador MIDI USB (**Web MIDI**) y suena al instante con **Web Audio**, además de generar su `.ino`. (`midi_sampler`)
 5. **Síntesis audiovisual** — usa la PercuSynth (vía **Web Serial**) como controlador de visuales/sonido en el navegador. (`video_synth`)
 6. **Instrumentos y secuenciadores en el navegador** — el PercuSynth como controlador de un motor que suena en la página. (`arp_matrix`, `scale_osc`, `generador_estilos`)
+7. **Simulador** — la placa entera dibujada en el navegador corriendo el mismo `.ino`, para talleres online. (`simulador`)
+8. **Armado** — la PCB pieza por pieza, para la clase de soldadura: qué es cada componente y adónde llega. (`armado_placa`)
+9. **Ecosistema** — ¿qué quieres hacer? Cada camino (cargar un firmware, juegos, MIDI, tools, asistentes de IA, crear) como un tutorial de pasos de un vistazo. (`ecosistema`)
 
 La mayoría requiere **Chrome o Edge** (Firefox/Safari no soportan Web Serial ni Web MIDI). Cada herramienta tiene su propio `README.md` con detalles:
 
@@ -394,6 +432,15 @@ Cada potenciómetro es un **oscilador cuantizado a una escala**: la versión de 
 ### [`generador_estilos/`](tools/generador_estilos/) — Motor de estilos musicales *(en desarrollo)*
 Un estilo musical entendido como **datos, no como código**: blues, techno, synthwave y grunge descritos en JSON que el motor toca con Web Audio. El diseño completo está en [`PLAN.md`](tools/generador_estilos/PLAN.md) y el prompt para pedirle canciones a una IA en [`PROMPT_IA.md`](tools/generador_estilos/PROMPT_IA.md).
 
+### [`simulador/`](tools/simulador/) — Simulador del PercuSynth
+El PercuSynth V2.0 en el navegador corriendo **el mismo `.ino`** que se flashea en la placa: se elige un firmware del repo o se suelta un `.ino` nuevo, y en segundos suena, prende sus LEDs, imprime en el monitor serie y manda su MIDI. Botones, perillas, piezos de pinza en los 4 jacks, IMU (con «golpe al piso») o pantalla OLED en el header, microSD (se bajan las grabaciones), FSR, LDR + láser o DHT11 (temperatura y humedad, con sus 3 pines cableados a la vista) en EXT1/EXT2, micrófono del PC, tira o matriz LED y los dos cables USB (enchufables) se manejan con el mouse, y el MIDI puede salir a un sinte de verdad por Web MIDI. Pensado para **talleres online**: se comparte la pestaña de Chrome con su audio en Meet y no hace falta cámara. No es un emulador del chip: `servidor.py` compila el sketch a WebAssembly con **Emscripten** contra una placa virtual (Arduino, FreeRTOS, I2S, FastLED, Wire). Se abre con `python tools/simulador/servidor.py`.
+
+### [`armado_placa/`](tools/armado_placa/) — Armado de la placa
+La PCB V2.0 dibujada desde el diseño de EasyEDA, para la clase en que se suelda: cada componente se saca y se vuelve a poner (arrastrándolo entre la placa y la mesa), y al tocarlo dice qué es, qué hace en el PercuSynth, cómo se reconoce (bandas de color, polaridad) y cómo se suelda, mientras sus pistas se encienden hasta el GPIO del ESP32 donde llegan. Tiene además el **esquemático** real enlazado con la placa (una pieza elegida en uno se marca en el otro) y una vista de **cables de colores sin PCB**, ordenada alrededor del ESP32. Se puede dar vuelta la placa (estaño, pistas de abajo y los LEDs, que van por ese lado), ver el cobre, rotular los 44 pines del ESP32, y armarla **paso a paso** en el orden en que se suelda. Funciona abriendo `index.html` directo, sin servidor.
+
+### [`ecosistema/`](tools/ecosistema/) — Ecosistema del PercuSynth
+El punto de partida para quien recién llega: tutoriales de un vistazo. Una pregunta, **¿qué quieres hacer?**, y ocho respuestas: cargar un firmware, juegos, video synth, Resonancia, controlador MIDI, tools que meten tus sonidos en un firmware, asistentes de IA y crear un firmware. Cada una es una fila de pasos (dos filas si son muchos) con letra grande, una frase por paso y una imagen real: la foto de la placa con el cable en el conector que toca, o el menú Tools de Arduino IDE con el ajuste marcado (placa, puerto, Flash Mode DIO, y USB CDC On Boot o USB Mode según el firmware). Funciona abriendo `index.html` directo, sin servidor.
+
 ### [`loops/bpm_mono_44100/`](tools/loops/bpm_mono_44100/) — Editor BPM-aware de loops
 Variante avanzada de `loop_loader` con tap-tempo, transporte master con beat dots, snap a compás y mono-switcher (un solo loop activo a la vez) + sampler polifónico paralelo. Para sesiones donde los loops tienen que estar sincronizados en BPM.
 
@@ -401,13 +448,19 @@ Variante avanzada de `loop_loader` con tap-tempo, transporte master con beat dot
 
 ## Videojuegos (`videogame/`)
 
-Los tres se controlan con el PercuSynth vía **Web Serial** (mismo protocolo y mismo firmware de control) y los tres son **totalmente jugables con mouse y teclado** cuando no hay hardware conectado.
+Los cuatro se controlan con el PercuSynth vía **Web Serial** y los cuatro son **totalmente jugables con mouse y teclado** cuando no hay hardware conectado.
 
 ### [`cyber_flight/`](videogame/cyber_flight/) — NEON STRIKE
 **Shooter cyberpunk en primera persona** sobre una megaciudad distópica: pilotas un caza y derribas naves enemigas. Los **2 ejes del IMU** apuntan la mira, **BTN5/BTN1** disparan desde cada lado y **BTN2+BTN4** juntos sueltan una bomba. Canvas 2D synthwave con efectos de sonido en Web Audio y sistema de oleadas, puntaje y multiplicador.
 
 ### [`nebula_gp/`](videogame/nebula_gp/) — NEBULA GP
 **Simulador de carreras FPV de drones:** 3 vueltas contra 4 bots en un circuito neón cerrado con lomas y 16 puertas, bajo un cielo galáctico. Proyección 3D hecha a mano sobre Canvas 2D, sin WebGL. El **IMU** da giro y cabeceo, **BTN5** acelera, **BTN1** frena, **BTN2/BTN4** desplazan de lado y **BTN3** recentra el IMU.
+
+### [`arkanoid/`](videogame/arkanoid/) — Arkanoid
+El clásico de romper ladrillos, en papel Bauhaus: **BTN1** mueve la paleta a la izquierda, **BTN5** a la derecha y **BTN3** dispara. **Cada cristal que se rompe suena una nota de La menor pentatónica**, y la nota la decide la columna del cristal: las 10 columnas son exactamente dos octavas, grave a la izquierda, así que jugar es también tocar. Usa el mismo firmware de telemetría que Tilt Maze.
+
+### [`percu_hero/`](videogame/percu_hero/) — Percu Hero
+Juego de ritmo para los **5 botones**: las notas bajan por cinco carriles y hay que apretar cada una cuando cruza la barra. Tres canciones sintetizadas en el navegador (industrial, psytrance y electro dark): **la base suena sola y la melodía sólo suena si aciertas**. Tres dificultades, notas sostenidas, multiplicador, energía del jugador, calibración de latencia y un viaje por la galaxia de fondo que se llena en las zonas difíciles. Las canciones y sus charts están escritos como texto. Usa el mismo firmware de telemetría que Tilt Maze.
 
 ### [`tilt_maze/`](videogame/tilt_maze/) — Tilt Maze
 Laberinto de bola que se controla **inclinando el PercuSynth**, como los juguetes de madera pero con 10 niveles curados (todos resolubles), vidas, portales, hoyos y zonas mortales.
@@ -453,7 +506,7 @@ Luego abre <http://localhost:8000>, conecta el PercuSynth por USB y aprieta **�
 - ESP32 Arduino core ≥ 3.x (incluye `driver/i2s_std.h`)
 - `Wire.h` — I2C para el MPU6050 *(incluida en el core; la mayoría de los firmwares con IMU leen el sensor por registros crudos, sin librería extra)*
 - `USB.h` / `USBMIDI.h` — MIDI USB *(incluidas en el core; MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma)*
-- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `bajo_8_pasos`, `bajo_8_pasos_fsr_clock`, `industrial_matriz`, `la_partida`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
+- **FastLED** — la única librería que hay que instalar a mano. La usa todo firmware con LEDs: `test_leds`, `drum_ruido`, `drum_poder`, `drum_midi_leds`, `trance_imu_leds`, `pads_imu_leds`, `cancion_aleatoria_leds`, `paisajes_relax_leds`, `sinfonia_natural`, `cyber_kit`, `oscilador_escalas`, `oscilador_escalas_clock`, `bajo_8_pasos`, `bajo_8_pasos_fsr_clock`, `industrial_matriz`, `matriz_oscura`, `triphop_viaje`, `terror_sin_sd`, `la_partida`, `impact_chimes_leds`, `trance_midi_leds`, `matrix_midi_anyma` y los seis firmwares con IA
 - Biblioteca `MPU6050` *(solo MIDI_Drum)*
 - **ESP32Synth** *(sólo `secuenciador_melodico` y `secuenciador_melodico_cromatico`)*
 - **Arduino AppleMIDI Library** de lathoub *(sólo `laser_midi_wifi`, que corre en un ESP32-C3)*
@@ -478,12 +531,17 @@ percusynth/
 │   ├── pads_imu_leds/              #   pads_imu + 6 LEDs SMD como visualizador
 │   ├── cancion_aleatoria_leds/     #   Máquina de canciones aleatorias (Play = canción nueva)
 │   ├── paisajes_relax_leds/        #   10 capas de paisaje sonoro + 2 anillos de LEDs
+│   ├── sinfonia_natural/           #   Bosque + música en E F# G# A B D#: densidad que suma instrumentos, 5 paletas, animales grabados en la flash
 │   ├── cyber_kit/                  #   Secuenciador de texturas, FX y leads cyber
 │   ├── oscilador_escalas/          #   4 pots = 4 osciladores por escala (port sin Mozzi)
 │   ├── oscilador_escalas_clock/    #   oscilador_escalas + MIDI Clock por el DIN-5 + LEDs al ritmo de la intermitencia
 │   ├── bajo_8_pasos/               #   Secuenciador de bajo en sierra de 8 pasos (pentatónica menor, 3 paneles) — hecho en el taller abierto de Hive
 │   ├── bajo_8_pasos_fsr_clock/     #   bajo_8_pasos + FSR en EXT1 que abre el filtro + MIDI Clock por el DIN-5
 │   ├── industrial_matriz/          #   Bombo + bajo con secuenciador industrial en paralelo + oscilador continuo + visuales en matriz 32×8
+│   ├── matriz_oscura/              #   Sucesor oscuro de industrial_matriz_v2: 8 estilos agresivos (psytrance, psycore, electro dark, industrial, cyberpunk, trap, rock industrial), 6 paneles con un noticiero glitcheado dentro del firmware, matriz 32×8
+│   ├── matriz_gotica/              #   matriz_oscura con un solo estilo (industrial duro × psytrance, Mi frigio) y 6 ESCENARIOS en el BTN2; producción gótica: guitarra y bajo con chorus, coro, cuerdas, clavecín y catedral
+│   ├── triphop_viaje/              #   Máquina de TRIP HOP: 6 dialectos, arrastre por pista, OLED = monitor de controles, matriz = efectos matemáticos
+│   ├── terror_sin_sd/              #   Tráiler de terror en 4 paneles: 10 voces dentro del firmware (partición Huge APP)
 │   ├── secuenciador_melodico/      #   16 pasos monofónicos en modos griegos + webapp Web Serial (Nicolás Martínez)
 │   ├── secuenciador_melodico_cromatico/ # 16 pasos polifónicos sobre 12 notas + webapp Web Serial (Nicolás Martínez)
 │   ├── la_partida/                 #   "La partida" (Víctor Jara) desde sus 3 pistas MIDI: lead / bajo / pluck electrónico
@@ -496,6 +554,7 @@ percusynth/
 │   ├── mezclador_pistas/           #   4 pistas de una canción desde la microSD, volumen/filtro por pista + datos para Resonancia
 │   ├── trance_pistas/              #   Trance sintetizado en 4 pistas (sin microSD), mismos bancos y datos para Resonancia
 │   ├── oled_video_techno/          #   Video vertical en la OLED girada, amarrado al tempo + techno con bombo y filtro en los pots
+│   ├── percu_hero/                 #   El juego de ritmo entero en la placa: música por el DAC y notas en perspectiva en la OLED
 │   ├── seismic_drone/              #   Drones graves por vibración de la tierra
 │   ├── dub_siren/                  #   Dub siren (en desarrollo · PLAN.md)
 │   ├── asistente_ia/               #   Asistente de voz (Whisper → GPT → TTS)
@@ -525,11 +584,16 @@ percusynth/
 │   ├── scale_osc/                  #   Motor de tono cuantizado a escala en el navegador
 │   ├── generador_estilos/          #   Motor de estilos musicales por JSON (en desarrollo)
 │   ├── video_synth/                #   Sintetizador audiovisual de video (Web Serial)
+│   ├── simulador/                  #   La placa en el navegador corriendo el mismo .ino (talleres online)
+│   ├── armado_placa/               #   La PCB pieza por pieza para la clase de soldadura (sacar, poner, qué hace cada una)
+│   ├── ecosistema/                 #   ¿Qué quieres hacer? Cada camino como un tutorial de pasos de un vistazo
 │   └── loops/
 │       └── bpm_mono_44100/         #   Editor BPM-aware de loops sincronizados
 ├── videogame/
+│   ├── arkanoid/                   # Arkanoid — cada cristal roto es una nota de La menor pentatónica
 │   ├── cyber_flight/               # NEON STRIKE — shooter cyberpunk (Web Serial)
 │   ├── nebula_gp/                  # NEBULA GP — carreras FPV de drones contra 4 bots
+│   ├── percu_hero/                 # Percu Hero — juego de ritmo de 5 carriles; la melodía sólo suena si aciertas
 │   └── tilt_maze/                  # Tilt Maze — laberinto de bola por inclinación del IMU
 ├── samples/                        # Firmwares generados por las webapps (ejemplos vivos)
 ├── Hardware/                       # Esquemático, PCB y gerbers del circuito + base 3D + lista de compra

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PercuSynth · Industrial Matriz v2 Trip Hop — Controles</title>
+<style>
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-SemiBold.ttf"); font-weight: 600; }
+  @page { size: A4 landscape; margin: 13mm 14mm; }
+  :root { --tinta: #111; --gris: #555; --linea: #d8d4cc; --ambar: #F5B041; --suave: #f6f3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 10.2pt; line-height: 1.38; color: var(--tinta); background: #fff; }
+  h1, h2, th { font-family: "Archivo Ancha", "Segoe UI", sans-serif; text-transform: uppercase; }
+  h1 { font-weight: 800; font-size: 19pt; margin: 0; letter-spacing: 0; }
+  h1 + .sub { color: var(--gris); margin: 2px 0 12px; font-size: 9.5pt; }
+  h2 { font-weight: 800; font-size: 11.5pt; margin: 14px 0 6px; padding-left: 8px; border-left: 4px solid var(--ambar); }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .fijos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-weight: 600; font-size: 8.4pt; text-align: left; background: var(--tinta); color: #fff; padding: 6px 7px; }
+  td { padding: 6px 7px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  td:first-child { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 8.8pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--suave); }
+  .nota { color: var(--gris); font-size: 9pt; margin-top: 6px; }
+  .pagina2 { break-before: page; }
+  .dos { display: grid; grid-template-columns: 1.25fr 1fr; gap: 26px; }
+  .led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 1px; vertical-align: 0; border: 1px solid #0003; }
+  b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>PercuSynth · Industrial Matriz v2 Trip Hop</h1>
+<div class="sub">Qué hace cada control · GC Lab Chile</div>
+
+<h2>En todos los paneles</h2>
+<div class="fijos">
+  <ul>
+    <li><b>BTN4</b> → siguiente panel: General → Bajo → Batería → Melodías → Oscilador → General.</li>
+    <li><b>BTN5</b> (un toque) → entra o sale del <b>break</b>: calla bombo y bajo.</li>
+    <li><b>BTN5</b> (mantenido más de 2 s) → <b>subida</b> de 16 compases que termina en un golpe y espera en silencio. El siguiente toque es el <b>drop</b>.</li>
+  </ul>
+  <ul>
+    <li><b>LED 5</b> = el panel: <span class="led" style="background:#2ecc40"></span>General <span class="led" style="background:#e53935"></span>Bajo <span class="led" style="background:#F5B041"></span>Batería <span class="led" style="background:#22c7d6"></span>Melodías <span class="led" style="background:#2f6fe0"></span>Oscilador.</li>
+    <li>Al cambiar de panel, cada pot queda suelto hasta que lo muevas un 4&nbsp;%: nada salta.</li>
+    <li>Las secuencias corren siempre: el BTN1 de cada instrumento solo lo calla o lo deja sonar, así al volver entra en tiempo.</li>
+  </ul>
+</div>
+
+<h2>Panel por panel</h2>
+<table>
+  <tr><th style="width:9%">Panel</th><th style="width:11%">BTN1</th><th style="width:12%">BTN2</th><th style="width:15%">BTN3</th><th style="width:10%">POT1</th><th style="width:11%">POT2</th><th style="width:13%">POT3</th><th style="width:19%">POT4</th></tr>
+  <tr><td>General</td><td>Play / stop (arranca en el "1")</td><td>Estilo siguiente</td><td>Fill al final del compás</td><td>Volumen</td><td>Tempo 70–170&nbsp;BPM (trip hop 58–110)</td><td>Swing (recto → 70&nbsp;%; trip hop 54 → 72&nbsp;%)</td><td>Pasa-bajos general</td></tr>
+  <tr><td>Bajo</td><td>Suena / calla</td><td>Patrón (4 por estilo)</td><td>Tipo: Sierras · Sub · Ácido · Reese</td><td>Volumen</td><td>Filtro</td><td>Ataque 1–150 ms</td><td>Caída 40 ms – 1,2 s</td></tr>
+  <tr><td>Batería</td><td>Suena / calla</td><td>Patrón (4 por estilo)</td><td>Kit: Industrial · Nexo · 909 · 808 · Glitch · Polvo</td><td>Volumen</td><td>Filtro</td><td>Largo de los golpes</td><td>Densidad (abajo del todo calla la percusión; el bombo sigue)</td></tr>
+  <tr><td>Melodías</td><td>Suena / calla</td><td>Patrón (4 por estilo)</td><td>Instrumento: Keys · Pluck · Lead · Vidrio</td><td>Volumen</td><td>Filtro</td><td>Ataque 3–300 ms</td><td>Caída 60 ms – 1,5 s</td></tr>
+  <tr><td>Oscilador</td><td>Enciende / apaga</td><td>Timbre: Sierras · Cuadradas · Suave</td><td>Octava: normal · +1 · −1</td><td>Nota: 15 grados de la escala, tónica al centro</td><td>Filtro</td><td>Profundidad del LFO</td><td>Envío al delay</td></tr>
+</table>
+<div class="nota">El oscilador no tiene volumen: un compresor propio lo deja parejo en la mezcla. El tempo se redondea a BPM enteros.</div>
+
+<div class="pagina2">
+<div class="dos">
+  <div>
+    <h2>Estilos (BTN2 del General)</h2>
+    <p style="margin:0 0 6px">Cada estilo trae su tonalidad, acordes, patrones y timbres. Después puedes cambiar los timbres en cada panel.</p>
+    <table>
+      <tr><th style="width:24%">Estilo</th><th style="width:40%">Tonalidad y acordes</th><th>Trae</th></tr>
+      <tr><td>Industrial</td><td>Mi eólico: Em (6 compases) · C (2)</td><td>Kit Industrial, bajo Sierras, Keys</td></tr>
+      <tr><td>Trip hop</td><td>Fa# menor armónica: F#m · D · Bm · C#. La caja entra unos ms tarde (arrastre); el bombo nunca</td><td>Kit Polvo, bajo Sub, Vidrio</td></tr>
+      <tr><td>Techno</td><td>Sol frigio: Gm (6) · A♭ (2)</td><td>Kit 909, bajo Ácido, Keys</td></tr>
+      <tr><td>Synthwave</td><td>Re dórico: Dm · G · Dm · C</td><td>Kit 808, bajo Reese, Lead</td></tr>
+      <tr><td>Futurismo</td><td>Do lidio: C · D</td><td>Kit Glitch, bajo Sub, Vidrio</td></tr>
+    </table>
+  </div>
+  <div>
+    <h2>LEDs de la placa</h2>
+    <ul>
+      <li><b>0</b> bombo · <b>1</b> bajo · <b>2</b> hats · <b>3</b> caja, perc, clap y tom · <b>4</b> melodías.</li>
+      <li>Un instrumento callado se ve rojo tenue. En el break, 0 y 1 quedan rojos.</li>
+      <li><b>5</b> pulsa con cada negra en el color del panel; se pone <b>magenta</b> si el audio usa más del 80&nbsp;% de su tiempo.</li>
+    </ul>
+    <h2>Matriz 32×8</h2>
+    <ul>
+      <li>Ocho escenas que se sortean cada 4 compases, en cada Play y en cada cambio de estilo.</li>
+      <li>Al encender: 3 s de prueba de orientación.</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

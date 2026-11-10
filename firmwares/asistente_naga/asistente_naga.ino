@@ -59,6 +59,10 @@
 // ==============================================================================================================================================
 // DESCRIPCION
 // ==============================================================================================================================================
+// El PercuSynth como asistente de voz, igual que asistente_ia, pero usando NagaAI: mantienes
+// BTN1, le haces una pregunta y te responde hablando por el parlante. Viene configurado con
+// modelos gratuitos (:free), así que funciona sin gastar saldo; solo necesitas la clave de NagaAI.
+//
 // Asistente de voz con CONTEXTO PERSONALIZADO (editable, ver CONTEXT_PERSONALIZADO):
 //   1) Graba tu voz por el INMP441 (I2S, 16 kHz mono) mientras mantienes BTN1.
 //   2) La transcribe con Whisper en NagaAI (/v1/audio/transcriptions, idioma es).
@@ -74,6 +78,20 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
+// - BTN1 → mantener y hablar: graba tu pregunta (máx. 5 s). Al soltarlo (o a los 5 s) la manda
+//          a NagaAI (transcripción → chat → voz) y reproduce la respuesta. Una grabación de
+//          menos de ~60 ms se descarta (lo avisa por Serial).
+// - BTN2 → sin uso
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → sin uso
+// - POT2 → sin uso
+// - POT3 → sin uso
+// - POT4 → sin uso
+// - MIC → micrófono INMP441 por I2S: escucha tu voz mientras mantienes BTN1.
+//
+// Los 6 LEDs de la placa muestran el estado con su color:
 //   LED VERDE  = LISTO       -> manten BTN1 y habla (max 5 s)
 //   LED ROJO   = GRABANDO
 //   LED AMBAR  = PROCESANDO   (transcripcion / chat)
@@ -83,6 +101,14 @@
 //   Con MOSTRAR_ESTADO en 1 se imprime por Serial (115200) todo el recorrido: lo que
 //   entendio, lo que respondio, los codigos HTTP y el formato de audio recibido. Es la
 //   forma de descubrir rapido si un modelo no existe o si la clave esta mal.
+//
+// MODO DE USO:
+// 1. Crea tu clave en naga.ac, copia secretos.example.h a secretos.h y escribe tu WiFi y NAGA_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V), compila y sube el código.
+// 3. Abre el Monitor Serie a 115200 y espera a que los LEDs queden en VERDE: está listo.
+// 4. Mantén BTN1 apretado, haz tu pregunta (máx. 5 s) y suéltalo: ámbar = pensando, cian = te responde.
+// 5. Si no responde, mira el Serial (modelo o clave mal); para que sea TU asistente, llena la
+//    plantilla CONTEXT_PERSONALIZADO con tu info y vuelve a subir el código.
 // ==============================================================================================================================================
 
 #include <WiFi.h>

@@ -1,17 +1,32 @@
 // ==============================================================================================================================================
 // PERCU-SYNTH — Test IMU con LEDs (sin USB / sin Serial) — GC Lab Chile
 // ==============================================================================================================================================
-// Desarrollado por: Gonzalo - GC Lab Chile · MIT License
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
 // ==============================================================================================================================================
-// HARDWARE
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
 // ==============================================================================================================================================
-// - ESP32-S3 + IMU MPU6050 (I2C) |SDA -> 21, SCL -> 38|  (dir. 0x68)
-// - Tira WS2812 |DATA -> 46| (los primeros 6 LEDs son SMD internos → se dejan apagados)
+// HARDWARE (usado por este firmware)
 // ==============================================================================================================================================
-// ARDUINO IDE
+// - Microcontrolador ESP32-S3
+// - IMU MPU6050 (I2C) |SDA -> 21, SCL -> 38|  (dir. 0x68)
+// - Tira WS2812 externa |DATA -> 46| (hasta 150 LEDs; los primeros 6 son SMD internos → se dejan apagados)
+// - No usa botones, potenciómetros ni audio.
 // ==============================================================================================================================================
-// - Board: ESP32S3 Dev Module · Flash Mode: DIO · (USB CDC On Boot: indistinto, no usamos Serial)
-// - Librerías: FastLED + Wire.h
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - Flash Mode         : DIO
+// - USB CDC On Boot    : indistinto (no usamos Serial)
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - FastLED (gestor de librerías de Arduino)
+// - Wire.h (incluida en el core ESP32)
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
@@ -22,6 +37,36 @@
 //                         pocos LEDs; al mover / girar el equipo, la barra crece y
 //                         vira a amarillo/rojo. Si la barra reacciona al moverlo,
 //                         el IMU funciona. :)
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → sin uso
+// - BTN2 → sin uso
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → sin uso
+// - POT2 → sin uso
+// - POT3 → sin uso
+// - POT4 → sin uso
+// - IMU → Gira el equipo: más rápido, más larga la barra de LEDs.
+//
+// La barra mide la velocidad de giro (giroscopio, los 3 ejes juntos): ~400 °/s la llena
+// entera. Sube rápido y baja suave, como un vúmetro. En reposo siempre quedan 3 LEDs
+// verdes encendidos: es la señal de que el IMU está vivo. Inclinar despacio casi no la
+// mueve; lo que cuenta es girar.
+//
+// Los 6 LEDs SMD de la placa quedan apagados a propósito: el resultado SOLO se ve en la
+// tira externa. Si no tienes tira conectada, no vas a ver nada.
+//
+// Ojo: este sketch exige WHO_AM_I = 0x68. Un MPU6050 clon que contesta otro valor (0x70,
+// 0x72, 0x98…) también hace parpadear en rojo aunque funcione: compruébalo con test_imu.
+//
+// MODO DE USO:
+// 1. Conecta la tira WS2812 externa al GPIO 46 y carga el sketch.
+// 2. Mira la tira: si parpadea entera en ROJO, el IMU no responde (revisa el cableado: pines 21 y 38).
+// 3. Si ves 3 LEDs verdes quietos, el IMU está OK.
+// 4. Gira el equipo: la barra crece y pasa de verde a amarillo y rojo.
 // ==============================================================================================================================================
 
 #include <FastLED.h>

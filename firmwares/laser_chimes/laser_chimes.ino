@@ -44,6 +44,10 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Campanas con un láser: apuntas un láser a un LDR (sensor de luz) y cada vez que algo
+// corta el haz, una mano o una baqueta, suena una nota de la escala elegida. Las notas se
+// encadenan solas en una melodía suave y sus colas se solapan como campanas.
+//
 // Hermano de `impact_chimes` con el SENSOR DE ENTRADA CAMBIADO: donde aquel escuchaba
 // golpes en el piso con el acelerómetro, este vigila un HAZ DE LÁSER apuntado a un LDR.
 // Cada vez que algo cruza el haz (una mano, una baqueta, un bailarín) la luz que llega al
@@ -61,24 +65,23 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// CORTE DEL HAZ (LDR):
-// - Apunta el láser al LDR y cruza el haz → suena una nota. Corte más profundo (tapar el
-//   haz entero) = nota más fuerte; rozarlo apenas = nota más suave.
-// - La nota se dispara en el FLANCO de corte (al interrumpir), no al restablecer el haz.
+// - LDR (EXT1) → Cortar el haz del láser dispara una nota de la escala. Corte más
+//   profundo (tapar el haz entero) = nota más fuerte; rozarlo apenas = nota más suave.
+//   La nota se dispara en el FLANCO de corte (al interrumpir), no al restablecer el haz.
 //   Para volver a disparar el haz tiene que restablecerse (histéresis) y pasar TRIG_MIN_MS.
 //
-// ESCALA — un botón por escala (queda seleccionada hasta que cambies):
-// - BTN1 (44) → EÓLICA (menor natural)   [por defecto]
-// - BTN2 (42) → MAYOR (jónica)
-// - BTN3 (0)  → DÓRICA
-// - BTN4 (45) → PENTATÓNICA MENOR
-// - BTN5 (47) → PENTATÓNICA MAYOR
+// Escala: un botón por escala, queda elegida hasta que aprietes otro.
+// - BTN1 (44) → Escala eólica (menor natural). Es la de partida.
+// - BTN2 (42) → Escala mayor (jónica).
+// - BTN3 (0)  → Escala dórica.
+// - BTN4 (45) → Escala pentatónica menor.
+// - BTN5 (47) → Escala pentatónica mayor.
 //
-// SÍNTESIS — potenciómetros:
-// - POT1 (ADC1)  → Ataque   (0.5 ms percusivo → ~150 ms suave)
-// - POT2 (ADC2)  → Decay    (cola corta ~0.15 s → muy larga ~5 s, tipo pad/campana)
-// - POT3 (ADC8)  → Brillo   (cutoff del filtro paso-bajos)
-// - POT4 (ADC10) → Timbre   (morphing de onda: seno → triángulo → sierra)
+// Síntesis: las perillas dan forma al sonido de cada nota.
+// - POT1 (ADC1)  → Ataque: de golpe seco a entrada suave. De 0.5 ms (percusivo) a ~150 ms.
+// - POT2 (ADC2)  → Decay: largo de la cola. De ~0.15 s (corta) a ~5 s (tipo pad/campana).
+// - POT3 (ADC8)  → Brillo: abre el filtro paso-bajos. Es el corte (cutoff) del filtro.
+// - POT4 (ADC10) → Timbre: forma de onda, de seno a triángulo a sierra (morphing).
 //
 // PUESTA A PUNTO (lo único que hay que ajustar):
 // 1. Flashea con MOSTRAR_ESTADO en 1 y abre el Monitor Serie a 115200.
@@ -87,12 +90,20 @@
 //    (La línea del monitor también trae `min`/`max` vistos desde el arranque: cruza el haz
 //     unas cuantas veces y los dos extremos quedan a la vista sin tener que congelar nada.)
 // 4. Escribe los dos valores abajo, vuelve a flashear. Listo.
-//    Si dispara solo → separa más LDR_LASER de LDR_TAPADO o sube UMBRAL_CORTE.
-//    Si un corte suena dos veces → sube TRIG_MIN_MS o baja UMBRAL_REARME.
+//    Si dispara solo → separa más LDR_LASER de LDR_TAPADO o baja UMBRAL_CORTE.
+//    Si un corte suena dos veces → sube TRIG_MIN_MS o sube UMBRAL_REARME.
 //
 // DIAGNÓSTICO (sin USB):
 // - Al encender suena un ACORDE de arranque → confirma que el firmware y el audio
 //   funcionan en esa unidad. Si NO lo escuchas, el problema no es el sensor.
+//
+// MODO DE USO:
+// 1. Conecta el LDR en EXT1 y apunta el láser directo al LDR (en el simulador ya
+//    viene conectado en EXT1).
+// 2. Corta el haz con la mano: cada corte suena una nota (en el simulador, tecla L).
+// 3. Elige otra escala con cualquiera de los 5 botones (arranca en eólica).
+// 4. Sube POT2 para colas largas y baja POT1 para notas secas; POT4 cambia el timbre.
+// 5. Si dispara solo o no dispara, calibra el LDR (ver la puesta a punto, más arriba).
 // ==============================================================================================================================================
 
 #include <Arduino.h>

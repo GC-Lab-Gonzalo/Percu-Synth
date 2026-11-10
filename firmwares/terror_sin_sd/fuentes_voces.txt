@@ -1,0 +1,24 @@
+VOCES DEL FIRMWARE «terror» (PercuSynth · GC Lab Chile)
+Todas son CC0 (dominio público) o dominio público: se pueden usar, modificar y vender sin pedir permiso ni dar crédito.
+Cortadas, recortadas, en mono 16 bit 44.1 kHz y normalizadas a −1 dBFS. Las de Freesound vienen de su vista previa MP3.
+
+RISAS
+  OpenGameArt · Nocturnal_Vanguard (AuraVoice), CC0: maniacal_laughter_pack_1, evil_cackle_laugh_1, evil_cackle_laugh_2, ghostly_cackle_laugh_1, group_giggling
+  OpenGameArt · qubodup, CC0: qubodupevillaughter
+  Freesound, CC0: 365632 (OBXJohn, niño riendo) · 461790 (viktorullri, niña riendo) · 203230 (RaspberryTickle, risita)
+LAMENTOS
+  OpenGameArt · AntumDeluge, CC0: undead-moans (undead-1..3)
+  OpenGameArt · qubodup, CC0: qubodup-GhostMoans (01..05)
+  OpenGameArt · Nocturnal_Vanguard, CC0: female_hurt_grunts_groans_1, ghostly_humming
+  Freesound, CC0: 643669 (SnowFightStudios, sollozo)
+  Wikimedia Commons, dominio público (PDSounds) · ezwa: Four_sighs
+SUSURROS (Freesound, CC0)
+  234044 RaspberryTickle · 223412 pjhodson · 22329 y 22330 sleepCircle · 193812 geoneo0 · 341841 IanStarGem · 211872 Fyodore · 263554 carmsie
+NIÑOS
+  OpenGameArt, CC0: children (Yaroslav_Novikov) · horror-go (freestockimages)
+  Wikimedia Commons, dominio público (PDSounds): Douzen_kids_on_playground (stephan) · Kids_next_door (ezwa)
+  Freesound, CC0: 371355 (goldkelchen) · 408584 (miguelab1998) · 361400 (laserlife)
+BEBÉS
+  Wikimedia Commons: Crying_newborn_baby (the_yura, CC0) · Baby_long_wanting_cry, Babys_disappointed_crying, Baby_working_or_in_slight_tummy_pain (natalie, dominio público) · Gabbling_baby_2_months_old (stephan, dominio público)
+  Freesound, CC0: 582341 (Mellun, bebé llorando en un pasillo)
+  OpenGameArt, CC0: Baby 01 (TokyoGeisha)

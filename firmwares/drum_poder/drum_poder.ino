@@ -43,7 +43,8 @@
 // ==============================================================================================================================================
 // Drum machine 100 % sintetizada (sin samples). ES PERCUSIÓN Y NADA MÁS: no toca una sola nota,
 // ni por el parlante ni por el MIDI. Por el DIN-5 sale el RELOJ, y la melodía la pone el sinte
-// que lo recibe.
+// que lo recibe. Toca 12 grooves escritos a mano, varios en compases impares (7/8, 9/8,
+// 13/8…), con el peso abajo.
 //
 // DOS REGLAS QUE MANDAN SOBRE TODO EL RESTO DEL ARCHIVO:
 //
@@ -106,41 +107,51 @@
 //     que se mueve, y multiplicar es modular, o sea que genera bandas laterales.
 //   · El limitador mira 64 muestras hacia adelante. Sin lookahead siempre llega tarde al golpe y
 //     el que termina agarrando el pico es el clipper del final: distorsión en cada golpe fuerte.
-// FUNCIONAMIENTO (botones — un boton, una funcion, en el flanco de presion. Sin combos.)
 // ==============================================================================================================================================
-// - BTN1 (44) -> GROOVE: pasa al siguiente de los 12 ritmos. Cambia el compas y el tempo
+// FUNCIONAMIENTO (botones — un botón, una función, en el flanco de presión. Sin combos.)
+// ==============================================================================================================================================
+// - BTN1 (44) -> GROOVE: pasa al siguiente de los 12 ritmos. Cambia el compás y el tempo
 //               sugerido, reubica el "1" al instante y manda Stop+Start por MIDI para que el
 //               sinte externo arranque su secuencia en ese mismo "1".
-// - BTN2 (42) -> KIT: cicla los 5 timbres. Cambia la sintesis al instante; el groove sigue.
+// - BTN2 (42) -> KIT: cicla los 5 timbres. Cambia la síntesis al instante; el groove sigue.
 // - BTN3 (0)  -> TAP TEMPO: marca el pulso (negras). Con 2 toques fija el BPM (50-220). El
-//               primer toque despues de 2 s de silencio reubica el "1" (y realinea el sinte).
-// - BTN4 (45) -> MEDIO TIEMPO (mantener): cada paso del patron dura el doble. El reloj maestro
+//               primer toque después de 2 s de silencio reubica el "1" (y realinea el sinte).
+// - BTN4 (45) -> MEDIO TIEMPO (mantener): cada paso del patrón dura el doble. El reloj maestro
 //               sigue corriendo por debajo -> al soltar retoma sin desfase.
 // - BTN5 (47) -> REDOBLE (mantener): fill de toms y caja que acelera; al soltar, platillo. El
 //               bombo y el sub siguen debajo para no perder el piso.
 // ==============================================================================================================================================
-// FUNCIONAMIENTO (potenciometros — cuatro, sin paneles: la posicion de la perilla ES el valor)
+// FUNCIONAMIENTO (potenciómetros — cuatro, sin paneles: la posición de la perilla ES el valor)
 // ==============================================================================================================================================
-// - POT1 (ADC1)  -> VOLUMEN master. A cero es el mute: la maquina siempre corre.
-// - POT2 (ADC2)  -> FILTRO: corte del pasa-bajos global, 200 Hz -> abierto. Es el control con
-//                  el que se oscurece todo si algo suena al filo. La resonancia solo aparece
-//                  cuando el corte ya bajo de 2.5 kHz (arriba de eso el filtro es
-//                  transparente): un pico resonante en los agudos es exactamente lo que
-//                  molesta. Cada golpe abre un poco el corte, asi el filtro respira.
-// - POT3 (ADC8)  -> CUERPO: saturacion en dos bandas — los graves y medios engordan (hasta
-//                  x3.6) y los agudos casi no se tocan (x1.2). Suma peso, no suciedad.
-// - POT4 (ADC10) -> BEAT REPEAT: OFF · x2 (loop de 8 pasos) · x4 (4) · x8 (2) · x16 (1),
+// - POT1 (ADC1)  -> VOLUMEN master. A cero es el mute: la máquina siempre corre.
+// - POT2 (ADC2)  -> FILTRO: oscurece todo, de abierto a 200 Hz. Es el corte del pasa-bajos
+//                  global, el control a mano para cuando algo suena al filo. La
+//                  resonancia sólo aparece cuando el corte ya bajó de 2.5 kHz (arriba de eso
+//                  el filtro es transparente): un pico resonante en los agudos es exactamente
+//                  lo que molesta. Cada golpe abre un poco el corte, así el filtro respira.
+// - POT3 (ADC8)  -> CUERPO: más peso en graves y medios, sin ensuciar. Saturación en dos
+//                  bandas: los graves y medios engordan (hasta x3.6) y los agudos casi no se
+//                  tocan (x1.2).
+// - POT4 (ADC10) -> BEAT REPEAT: OFF · x2 · x4 · x8 · x16. Loops de 8, 4, 2 y 1 paso,
 //                  sobre un reloj maestro que nunca se detiene -> al volver a OFF retoma en
 //                  tiempo, nunca desfasado.
 // ==============================================================================================================================================
-// FUNCIONAMIENTO (LEDs — 6 SMD de la placa, solo indicadores)
+// FUNCIONAMIENTO (LEDs — 6 SMD de la placa, sólo indicadores)
 // ==============================================================================================================================================
-// - Color base = KIT activo (cian · violeta · ambar · verde · rojo).
+// - Color base = KIT activo (cian · violeta · ámbar · verde · rojo).
 // - LED0 bombo · LED1 caja/clap · LED2 hats/ride · LED3 toms · LED4 FX/sub · LED5 pulso.
-// - Al cambiar de groove o de kit, N LEDs marcan el numero elegido.
+// - Al cambiar de groove o de kit, N LEDs marcan el número elegido.
 // - BEAT REPEAT activo -> N LEDs rojos (1 = x2 ... 4 = x16).
 // - MEDIO TIEMPO -> LED5 amarillo fijo · REDOBLE -> estrobo blanco.
-// - No hay Serial: los LEDs son TODA la informacion de estado que da la maquina.
+// - No hay Serial: los LEDs son TODA la información de estado que da la máquina.
+//
+// MODO DE USO:
+// 1. Sube el POT1 (volumen): la máquina ya está tocando el primer groove.
+// 2. Aprieta BTN1 para recorrer los 12 grooves y BTN2 para probar los 5 kits.
+// 3. Marca tu tempo con BTN3 (dos o más toques al pulso que quieras).
+// 4. Juega en vivo: POT2 oscurece, POT3 engorda y POT4 repite el último tramo;
+//    mantén BTN4 para medio tiempo y BTN5 para un redoble.
+// 5. Si conectas un sinte al DIN-5, su secuenciador sigue el tempo y el "1" de la batería.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

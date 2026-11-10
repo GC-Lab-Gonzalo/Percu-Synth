@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PercuSynth · ecosistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet" crossorigin>
+<style>
+  /* La mesa de nogal de noche del simulador y del armado, medida en "unidades de escenario"
+     (1600 × 1000 u) que se ajustan a la ventana sin scroll. Letra grande y pocas palabras. */
+  :root { --crema:#FFF8EC; --gris:#cdbb9c; --ambar:#F5B041; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#000; color:var(--crema); font-family:Archivo, system-ui, sans-serif; overflow:hidden; }
+  .escenario { position:fixed; left:50%; top:50%; width:min(100vw, 160vh); width:min(100vw, 160dvh); aspect-ratio:1600 / 1000;
+    transform:translate(-50%, -50%); container-type:inline-size; overflow:hidden; --u:calc(100cqw / 1600);
+    background:#3d2717 center / cover; }
+  @media (orientation:portrait) and (pointer:coarse) {
+    .escenario { width:min(100vh, 160vw); width:min(100dvh, 160vw); transform:translate(-50%, -50%) rotate(90deg); }
+  }
+  .vista { position:absolute; inset:0; padding:calc(48 * var(--u)) calc(64 * var(--u)); display:flex; flex-direction:column; }
+  .vista[hidden] { display:none; }
+  button { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-align:left; }
+  button:focus-visible { outline:calc(3 * var(--u)) solid var(--ambar); outline-offset:calc(4 * var(--u)); }
+
+  h1 { margin:0; font-size:calc(60 * var(--u)); font-weight:750; font-stretch:115%; line-height:1; letter-spacing:-.01em; }
+  .marca { font-size:calc(22 * var(--u)); color:var(--ambar); font-weight:650; margin-bottom:calc(22 * var(--u)); }
+
+  /* inicio: seis cosas que se pueden hacer */
+  .opciones { flex:1; min-height:0; display:grid; grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(2, 1fr); gap:calc(24 * var(--u));
+    margin-top:calc(40 * var(--u)); }
+  .opcion { display:flex; flex-direction:column; min-height:0; background:rgba(20, 12, 6, .55); transition:background .15s; }
+  .opcion:hover { background:rgba(20, 12, 6, .8); }
+  .opcion svg { flex:1; width:100%; min-height:0; display:block; }
+  .opcion div { padding:calc(16 * var(--u)) calc(24 * var(--u)) calc(20 * var(--u)); }
+  .opcion b { display:block; font-size:calc(36 * var(--u)); font-weight:700; font-stretch:110%; line-height:1.05; }
+  .opcion span { display:block; margin-top:calc(6 * var(--u)); font-size:calc(21 * var(--u)); line-height:1.25; color:var(--gris); }
+  .opcion:hover b { color:var(--ambar); }
+
+  /* un flujo: los pasos en una o dos filas, de izquierda a derecha */
+  .cabeza { display:flex; align-items:baseline; gap:calc(28 * var(--u)); }
+  .volver { font-size:calc(22 * var(--u)); color:var(--gris); }
+  .volver:hover { color:var(--ambar); }
+  .cabeza p { margin:0; font-size:calc(22 * var(--u)); color:var(--gris); }
+  .pasos { display:grid; grid-template-columns:repeat(5, 1fr); gap:calc(26 * var(--u)) calc(26 * var(--u)); margin:auto 0; }
+  .paso { display:flex; flex-direction:column; position:relative; }
+  .paso svg { width:100%; aspect-ratio:4 / 3; display:block; background:rgba(20, 12, 6, .55); }
+  .paso h2 { margin:calc(12 * var(--u)) 0 0; font-size:calc(27 * var(--u)); font-weight:700; font-stretch:106%; line-height:1.1; }
+  .paso h2 .n { color:var(--ambar); margin-right:calc(8 * var(--u)); }
+  .paso p { margin:calc(6 * var(--u)) 0 0; font-size:calc(19 * var(--u)); line-height:1.3; color:var(--gris); overflow-wrap:anywhere; }
+  .paso.sigue::after { content:""; position:absolute; top:calc(var(--col) * 3 / 8 - 7 * var(--u)); right:calc(-19 * var(--u));
+    width:calc(12 * var(--u)); height:calc(12 * var(--u)); border-top:calc(4 * var(--u)) solid var(--ambar); border-right:calc(4 * var(--u)) solid var(--ambar);
+    transform:rotate(45deg); }
+</style>
+</head>
+<body>
+<div class="escenario" id="escenario">
+  <section class="vista" id="inicio">
+    <div class="marca">PercuSynth</div>
+    <h1>¿Qué quieres hacer?</h1>
+    <div class="opciones" id="opciones"></div>
+  </section>
+  <section class="vista" id="flujo" hidden></section>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Qué conector hace qué, mirando la placa de frente (como en la foto): por el izquierdo se CARGA
+// el código; por el derecho van el Serial y el USB-MIDI.
+const CONECTOR = { carga: 'izquierda', datos: 'derecha' };
+
+// ---------------------------------------------------------------- la mesa de nogal
+(function mesa() {
+  const Wt = 800, Ht = 500, c = document.createElement('canvas');
+  c.width = Wt; c.height = Ht;
+  const g = c.getContext('2d'), img = g.createImageData(Wt, Ht), d = img.data;
+  const N = 256, tabla = new Float32Array(N * N);
+  let s = 7;
+  for (let i = 0; i < N * N; i++) { s = (s * 16807) % 2147483647; tabla[i] = s / 2147483647; }
+  const ruido = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+    const i0 = (yi & 255) * N, i1 = ((yi + 1) & 255) * N, j0 = xi & 255, j1 = (xi + 1) & 255;
+    const a = tabla[i0 + j0], b = tabla[i0 + j1], c2 = tabla[i1 + j0], dd = tabla[i1 + j1];
+    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + dd) * u * v;
+  };
+  for (let y = 0; y < Ht; y++) {
+    const t = Math.floor(y / 125), yy = y % 125, off = t * 37.1;
+    for (let x = 0; x < Wt; x++) {
+      const w = ruido(x * 0.004 + off, y * 0.02) * 6 + ruido(x * 0.02 + off, y * 0.08) * 1.5;
+      const veta = Math.sin(y * 0.35 + w * 6) * 0.5 + 0.5;
+      let k = 0.62 + veta * 0.14 + (ruido(x * 0.35 + off, y * 1.3) - 0.5) * 0.1 + (ruido(x * 0.002 + off, t * 3.3) - 0.5) * 0.2;
+      if (yy < 1) k *= 0.3;
+      const o = (y * Wt + x) * 4;
+      d[o] = 96 * k; d[o + 1] = 63 * k; d[o + 2] = 38 * k; d[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  $('escenario').style.backgroundImage = `url(${c.toDataURL('image/jpeg', 0.88)})`;
+})();
+
+// ---------------------------------------------------------------- imágenes de cada paso (4:3)
+// La placa es la foto real (img/placa.jpg, 820 × 500); estas coordenadas están medidas sobre ella.
+const FOTO = { usbIzq: [401, 62], usbDer: [439, 62], jack: [498, 66], btn1: [102, 180], mic: [402, 295],
+  btn: [[102, 180], [210, 368], [388, 362], [568, 348], [638, 152]], pot: [[212, 172], [537, 160], [210, 282], [545, 268]],
+  piezo: [[110, 95], [185, 90], [255, 90], [330, 90]] };
+const AMBAR = '#F5B041', CREMA = '#FFF8EC', GRIS = '#cdbb9c', TINTA = '#1b120a';
+
+// un recorte de una imagen: x, y, l = el cuadrado de interés; se muestra su franja central de 4:3
+function recorte(href, ancho, alto, x, y, l, encima = '') {
+  return `<svg viewBox="${x} ${y + l / 8} ${l} ${l * 3 / 4}" preserveAspectRatio="xMidYMid slice">
+    <rect x="${x}" y="${y}" width="${l}" height="${l}" fill="#1e1e1e"/><image href="${href}" x="0" y="0" width="${ancho}" height="${alto}"/>${encima}</svg>`;
+}
+const foto = (x, y, l, encima) => recorte('img/placa.jpg', 820, 500, x, y, l, encima);
+// capturas reales del menú Tools de Arduino IDE, con las filas que importan marcadas
+const CAPTURAS = { tools: ['img/herramientas.png', 852, 938], cdc: ['img/usb_cdc.png', 778, 738], usb: ['img/usb_mode.png', 877, 777],
+  // y capturas reales de las páginas (1280 × 800)
+  vs: ['img/video_synth.jpg', 1280, 800], res: ['img/resonancia.jpg', 1280, 800], resi: ['img/resonancia_instalar.jpg', 1280, 800] };
+const captura = (x, y, l, filas, cual = 'tools') => recorte(...CAPTURAS[cual], x, y, l,
+  filas.map(([fx, fy, fw, fh]) => `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="none" stroke="${AMBAR}" stroke-width="5"/>`).join(''));
+
+function cable(lado) {                               // el cable entra desde arriba al conector y una flecha lo señala
+  const izq = lado === 'carga';
+  const [cx, cy] = izq ? FOTO.usbIzq : FOTO.usbDer, otro = izq ? FOTO.usbDer : FOTO.usbIzq, s = izq ? -1 : 1;
+  return foto((FOTO.usbIzq[0] + FOTO.usbDer[0]) / 2 - 130, -60, 260,
+    `<path d="M${cx},${cy - 18} V-80" stroke="#111" stroke-width="20" stroke-linecap="round"/>
+     <rect x="${cx - 13}" y="${cy - 44}" width="26" height="34" rx="4" fill="#2b2b2b" stroke="${AMBAR}" stroke-width="4"/>
+     <circle cx="${otro[0]}" cy="${otro[1]}" r="15" fill="none" stroke="${CREMA}" stroke-width="2.5" stroke-dasharray="5 5" opacity=".7"/>
+     <path d="M${cx + s * 80},${cy + 72} L${cx + s * 24},${cy + 14}" stroke="${AMBAR}" stroke-width="9" stroke-linecap="round"/>
+     <path d="M${cx + s * 22},${cy + 40} V${cy + 12} H${cx + s * 50}" stroke="${AMBAR}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`);
+}
+const aros = (puntos, r) => puntos.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${AMBAR}" stroke-width="7"/>`).join('');
+const placa = (marcas = '') => `<svg viewBox="40 0 740 500" preserveAspectRatio="xMidYMid slice"><image href="img/placa.jpg" width="820" height="500"/>${marcas}</svg>`;
+
+// dibujos planos para lo que pasa en el computador: no imitan pantallas, sólo muestran lo que importa
+const caja = c => `<svg viewBox="0 37 300 225">${c}</svg>`;
+const T = (x, y, s, t, extra = '') => `<text x="${x}" y="${y}" font-family="Archivo, sans-serif" font-size="${s}" fill="${CREMA}" ${extra}>${esc(t)}</text>`;
+const archivo = (nombre, color = CREMA) => `<path d="M100,52 h76 l38,38 v150 h-114 z" fill="none" stroke="${color}" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M176,52 v38 h38" fill="none" stroke="${color}" stroke-width="6" stroke-linejoin="round"/>
+  ${T(157, 176, nombre.length > 8 ? 19 : nombre.length > 5 ? 24 : 40, nombre, `text-anchor="middle" font-weight="750" fill="${color}"`)}`;
+const ventana = c => `<rect x="30" y="52" width="240" height="196" fill="none" stroke="${CREMA}" stroke-width="6"/><path d="M30,84 h240" stroke="${CREMA}" stroke-width="6"/>
+  <circle cx="48" cy="68" r="5" fill="${CREMA}"/><circle cx="64" cy="68" r="5" fill="${CREMA}"/>${c}`;
+const boton = (x, y, w, txt, lleno = true) => `<rect x="${x}" y="${y}" width="${w}" height="46" fill="${lleno ? AMBAR : 'none'}" stroke="${AMBAR}" stroke-width="4"/>
+  ${T(x + w / 2, y + 30, txt.length > 14 ? 17 : 21, txt, `text-anchor="middle" font-weight="700" fill="${lleno ? TINTA : AMBAR}"`)}`;
+const ajuste = (k, v) => caja(`${T(150, 116, 26, k, `text-anchor="middle" fill="${GRIS}"`)}
+  <rect x="20" y="138" width="260" height="72" fill="${AMBAR}"/>${T(150, 184, v.length > 14 ? 23 : v.length > 8 ? 30 : 40, v, `text-anchor="middle" font-weight="800" fill="${TINTA}"`)}`);
+const ladrillos = () => [0, 1, 2, 3].map(f => [0, 1, 2, 3, 4, 5].map(c =>
+  `<rect x="${60 + c * 31}" y="${100 + f * 18}" width="27" height="14" fill="${['#c8372d', '#2a5bb0', '#e8b41f', '#1d1d1b'][(f + c) % 4]}"/>`).join('')).join('');
+
+const DIBUJO = {
+  repo: () => caja(`<path d="M40,80 h80 l20,22 h120 v140 h-220 z" fill="none" stroke="${CREMA}" stroke-width="6" stroke-linejoin="round"/>
+    ${T(150, 182, 30, 'Percu-Synth', 'text-anchor="middle" font-weight="700"')}${T(150, 218, 22, '.zip', `text-anchor="middle" fill="${AMBAR}"`)}`),
+  instalar: () => caja([['esp32', 'Espressif'], ['FastLED', 'Daniel Garcia']].map(([n, a], i) => `
+    ${T(30, 100 + i * 82, 28, n, 'font-weight="750"')}${T(30, 126 + i * 82, 19, a, `fill="${GRIS}"`)}
+    <rect x="172" y="${76 + i * 82}" width="104" height="38" fill="${AMBAR}"/>${T(224, 101 + i * 82, 17, 'INSTALL', `text-anchor="middle" font-weight="700" fill="${TINTA}"`)}`).join('')),
+  ino: () => caja(archivo('.ino')),
+  guardar: () => caja(`<path d="M30,70 h80 l20,22 h140 v150 h-240 z" fill="none" stroke="${CREMA}" stroke-width="6" stroke-linejoin="round"/>
+    ${T(150, 160, 24, 'mi_firmware/', 'text-anchor="middle" font-weight="700"')}${T(150, 200, 21, 'mi_firmware.ino', `text-anchor="middle" fill="${AMBAR}"`)}`),
+  carpeta: () => caja(`<rect x="24" y="64" width="252" height="172" fill="none" stroke="${CREMA}" stroke-width="6"/>
+    ${T(44, 106, 20, 'El .ino tiene que estar')}${T(44, 132, 20, 'en una carpeta con')}${T(44, 158, 20, 'su mismo nombre.')}
+    ${boton(172, 176, 84, 'OK')}`),
+  subir: () => caja(`<circle cx="100" cy="120" r="34" fill="#0ca1a6"/><path d="M84,120 l12,12 l20,-24" stroke="#fff" stroke-width="7" fill="none"/>
+    <circle cx="190" cy="120" r="34" fill="#0ca1a6"/><path d="M172,120 h34 m-12,-12 l12,12 l-12,12" stroke="#fff" stroke-width="7" fill="none"/>
+    <circle cx="190" cy="120" r="44" fill="none" stroke="${AMBAR}" stroke-width="6"/>${T(150, 210, 24, 'Done uploading.', 'text-anchor="middle"')}`),
+  izq: () => cable('carga'),
+  der: () => cable('datos'),
+  placaPuerto: () => captura(4, 0, 290, [[16, 108, 640, 71]]),
+  menuFlash: () => captura(556, 440, 292, [[14, 480, 640, 36], [672, 584, 152, 35]]),
+  cdcFlash: () => captura(4, 105, 360, [[8, 164, 632, 35], [8, 374, 632, 35]], 'cdc'),
+  vsPagina: () => captura(213, -133, 1067, [], 'vs'),
+  vsFirmware: () => captura(960, -20, 320, [[979, 87, 105, 45]], 'vs'),
+  vsVideo: () => captura(440, 220, 400, [[581, 397, 118, 47]], 'vs'),
+  vsConectar: () => captura(960, -20, 320, [[1083, 42, 114, 45]], 'vs'),
+  vsMapa: () => captura(970, 150, 310, [[978, 238, 296, 156]], 'vs'),
+  resPagina: () => captura(106, -133, 1067, [], 'res'),
+  resLink: () => captura(340, 330, 600, [[377, 606, 526, 30]], 'res'),
+  resInstalar: () => captura(340, 404, 360, [[397, 552, 246, 64]], 'resi'),
+  resConectar: () => captura(660, 351, 380, [[739, 509, 222, 64]], 'res'),
+  tocarBtn1: () => placa(aros([FOTO.btn1], 50)),
+  usbMode: () => captura(610, 585, 267, [[672, 723, 200, 35]], 'usb'),
+  audifonos: () => foto(FOTO.jack[0] - 80, -30, 170, `${aros([FOTO.jack], 20)}
+    <path d="M${FOTO.jack[0]},${FOTO.jack[1] - 20} V-40" stroke="#111" stroke-width="9" stroke-linecap="round"/>`),
+  abrirJuego: () => caja(archivo('index.html')),
+  bajarJuego: () => caja(ventana(`${boton(62, 112, 176, 'Conectar', false)}${boton(62, 172, 176, 'Firmware .ino')}`)),
+  conectar: () => caja(ventana(boton(40, 140, 220, 'Conectar PercuSynth'))),
+  jugar: () => caja(`<rect x="40" y="70" width="220" height="180" fill="#efe6d2"/>${ladrillos()}
+    <circle cx="170" cy="200" r="7" fill="#1d1d1b"/><rect x="118" y="232" width="64" height="10" fill="#1d1d1b"/>`),
+  tocar: () => placa(aros(FOTO.btn, 44) + aros(FOTO.pot, 32)),
+  midiTocar: () => placa(aros(FOTO.btn, 44) + aros(FOTO.piezo, 34)),
+  tocarPads: () => placa(aros(FOTO.btn, 44)),
+  hablar: () => placa(aros([FOTO.btn1], 50) + aros([FOTO.mic], 36)),
+  daw: () => caja(`${T(34, 102, 22, 'Entrada MIDI', `fill="${GRIS}"`)}<rect x="24" y="118" width="252" height="66" fill="${AMBAR}"/>
+    ${T(150, 161, 30, 'TinyUSB MIDI', `text-anchor="middle" font-weight="800" fill="${TINTA}"`)}
+    ${[0, 1, 2, 3, 4].map(k => `<rect x="${36 + k * 48}" y="${206 + (k * 13) % 30}" width="${26 + (k % 2) * 12}" height="12" fill="${CREMA}"/>`).join('')}`),
+  abrirTool: () => caja(ventana(`${T(46, 112, 20, 'sample_loader', 'font-weight="700"')}
+    ${[0, 1, 2, 3, 4].map(k => `<rect x="${46 + k * 43}" y="128" width="36" height="52" fill="none" stroke="${GRIS}" stroke-width="3"/>`).join('')}
+    <rect x="46" y="196" width="160" height="30" fill="${AMBAR}"/>${T(126, 216, 14, 'GENERATE FIRMWARE', `text-anchor="middle" font-weight="700" fill="${TINTA}"`)}`)),
+  audios: () => caja([0, 1, 2].map(k => {
+    let d = '';
+    for (let i = 0; i < 46; i++) { const a = Math.exp(-i / (7 + k * 6)) * 26 * (0.4 + 0.6 * Math.abs(Math.sin(i * (1.9 + k)))); d += `M${40 + i * 5},${88 + k * 64 - a}V${88 + k * 64 + a}`; }
+    return `<path d="${d}" stroke="${k === 1 ? AMBAR : CREMA}" stroke-width="3"/>`;
+  }).join('')),
+  generar: () => caja(archivo('.ino') + `<path d="M157,192 v30 m-16,-16 l16,16 l16,-16" stroke="${AMBAR}" stroke-width="6" fill="none"/>`),
+  copiar: () => caja(`<path d="M24,80 h60 l26,26 v110 h-86 z" fill="none" stroke="${GRIS}" stroke-width="5" stroke-linejoin="round"/>${T(67, 240, 14, 'secretos.example.h', `text-anchor="middle" fill="${GRIS}"`)}
+    <path d="M124,148 h40 m-12,-12 l12,12 l-12,12" stroke="${AMBAR}" stroke-width="6" fill="none"/>
+    <path d="M186,80 h60 l26,26 v110 h-86 z" fill="none" stroke="${AMBAR}" stroke-width="5" stroke-linejoin="round"/>${T(229, 240, 17, 'secretos.h', `text-anchor="middle" font-weight="700" fill="${AMBAR}"`)}`),
+  secretos: () => caja(`<rect x="20" y="66" width="260" height="168" fill="#0f0f0f"/>
+    ${[['WIFI_SSID', '"tu_red"'], ['WIFI_PASS', '"tu_clave"'], ['OPENAI_API_KEY', '"sk-…"']].map(([k, v], i) =>
+      `${T(34, 112 + i * 44, 17, k, `font-family="Consolas, monospace" fill="${GRIS}"`)}${T(34, 132 + i * 44, 17, '= ' + v, `font-family="Consolas, monospace" fill="${AMBAR}"`)}`).join('')}`),
+  luzVerde: () => caja(`${[0, 1, 2, 3, 4, 5].map(k => `<rect x="${44 + k * 38}" y="118" width="24" height="24" fill="#4ad66d"/>`).join('')}
+    ${T(150, 196, 24, 'verde = listo', 'text-anchor="middle" font-weight="700"')}`),
+  prompt: () => caja(archivo('PROMPT', AMBAR) + T(157, 204, 16, 'PARA_LA_IA', `text-anchor="middle" fill="${AMBAR}"`)),
+  chat: () => caja(`<path d="M24,66 h252 v120 h-166 l-40,36 v-36 h-46 z" fill="none" stroke="${CREMA}" stroke-width="6" stroke-linejoin="round"/>
+    ${T(44, 112, 22, 'BTN1 cambia la escala,')}${T(44, 144, 22, 'cada perilla una nota…')}`),
+  pr: () => caja(`${boton(40, 120, 220, 'Pull Request')}${T(150, 214, 21, 'README + .ino', `text-anchor="middle" fill="${GRIS}"`)}`),
+};
+
+// ---------------------------------------------------------------- los flujos
+// cada paso: [imagen, qué hacer, un detalle]. Cargar un código es igual en todos.
+const CARGA = [
+  ['izq', `Cable a la ${CONECTOR.carga}`, 'aparece un puerto COM nuevo'],
+  ['placaPuerto', 'Placa y puerto', 'ESP32S3 Dev Module Octal (WROOM2) y ese COM'],
+  ['menuFlash', 'Flash Mode: DIO 80MHz', 'con OPI no sale audio'],
+];
+// los firmwares que hablan por Serial (juegos, video_synth) además necesitan USB CDC On Boot
+const CARGA_SERIAL = [CARGA[0], CARGA[1], ['cdcFlash', 'USB CDC On Boot: Enabled', 'y Flash Mode: DIO 80MHz']];
+const SUBIR = ['subir', 'Subir', 'la flecha →, hasta «Done uploading»'];
+
+const FLUJOS = [
+  { id: 'firmware', nombre: 'Cargar un firmware', sub: 'sintes, cajas de ritmo, ambientes', icono: 'tocar',
+    lema: 'Cualquier carpeta de firmwares/',
+    pasos: [
+      ['repo', 'Bajar el repositorio', 'GitHub → Code → Download ZIP'],
+      ['instalar', 'Preparar Arduino IDE', 'placa esp32 y FastLED, una sola vez'],
+      ['ino', 'Abrir el .ino', 'ej. drum_poder.ino, en firmwares/'],
+      ...CARGA, SUBIR,
+      ['audifonos', 'Audífonos y a tocar', 'la cabecera del .ino dice qué hace cada botón'],
+    ] },
+  { id: 'jugar', nombre: 'Juegos', sub: 'Arkanoid, Tilt Maze, Neon Strike, Nebula GP', icono: 'jugar',
+    lema: 'Los juegos de videogame/',
+    pasos: [
+      ['abrirJuego', 'Abrir el juego', 'videogame/arkanoid/index.html en Chrome o Edge'],
+      ['bajarJuego', 'Bajar su firmware', 'botón «Firmware .ino» del juego'],
+      ['carpeta', 'Abrir el .ino', 'Arduino IDE pide una carpeta: OK'],
+      ...CARGA_SERIAL, SUBIR,
+      ['der', `Cable a la ${CONECTOR.datos}`, 'por ahí la placa habla con el juego'],
+      ['conectar', 'Conectar PercuSynth', 'y elegir el puerto en Chrome'],
+      ['jugar', 'Jugar', 'sin placa: teclado y mouse'],
+    ] },
+  { id: 'videosynth', nombre: 'Video synth', sub: 'un video que se toca con la placa', icono: 'vsPagina',
+    lema: 'tools/video_synth: la placa cambia la imagen y el sonido de un video',
+    pasos: [
+      ['vsPagina', 'Abrir video_synth', 'tools/video_synth/index.html en Chrome o Edge'],
+      ['vsFirmware', 'Bajar su firmware', 'botón «⬇ Firmware»'],
+      ['carpeta', 'Abrir el .ino', 'Arduino IDE pide una carpeta: OK'],
+      ...CARGA_SERIAL, SUBIR,
+      ['der', `Cable a la ${CONECTOR.datos}`, 'por ahí la placa habla con la página'],
+      ['vsVideo', 'Abrir un video', 'o arrastrarlo a la página'],
+      ['vsConectar', 'Conectar', 'y elegir el puerto'],
+      ['vsMapa', 'Tocar', 'cada perilla mueve imagen y sonido'],
+    ] },
+  { id: 'resonancia', nombre: 'Resonancia', sub: 'visuales que siguen a cada instrumento', icono: 'resPagina',
+    lema: 'gclabchile.com/resonancia: el firmware se instala desde la misma página',
+    pasos: [
+      ['resPagina', 'Abrir Resonancia', 'gclabchile.com/resonancia en Chrome o Edge'],
+      ['der', `Cable a la ${CONECTOR.datos}`, 'el mismo para instalar y para conectar'],
+      ['resLink', 'Abrir el instalador', '«¿Tienes un PercuSynth? Instálale el firmware…»'],
+      ['resInstalar', 'Instalar en el PercuSynth', 'elegir el puerto; si no aparece, enchufar con BTN3 apretado'],
+      ['resConectar', 'Conectar PercuSynth', 'y elegir el puerto'],
+      ['tocarBtn1', 'Apretar BTN1', 'cada instrumento mueve su capa de imagen'],
+    ] },
+  { id: 'midi', nombre: 'Controlador MIDI', sub: 'para Ableton, GarageBand, Reaper…', icono: 'daw',
+    lema: 'MIDI_Drum, drum_midi_leds, trance_midi_leds, matrix_midi_anyma',
+    pasos: [
+      ['ino', 'Abrir el .ino MIDI', 'ej. MIDI_Drum.ino, en firmwares/'],
+      ...CARGA,
+      ['usbMode', 'USB Mode: USB-OTG (TinyUSB)', 'sin esto no aparece como MIDI'],
+      SUBIR,
+      ['der', `Cable a la ${CONECTOR.datos}`, 'el computador ve un instrumento MIDI'],
+      ['daw', 'Activar TinyUSB MIDI', 'como entrada MIDI en tu DAW'],
+      ['midiTocar', 'Tocar', 'botones, piezos e IMU mandan notas'],
+    ] },
+  { id: 'tools', nombre: 'Tools: tus sonidos', sub: 'sample_loader arma un firmware con tus audios', icono: 'abrirTool',
+    lema: 'tools/sample_loader (igual: loop_loader, dub_siren_generator, step_sequencer_loader)',
+    pasos: [
+      ['abrirTool', 'Abrir la tool', 'tools/sample_loader/index.html en Chrome'],
+      ['audios', 'Arrastrar tus audios', 'uno por botón, hasta 2 s cada uno'],
+      ['generar', 'Generar el firmware', 'botón GENERATE FIRMWARE (.ino)'],
+      ['carpeta', 'Abrir el .ino', 'Arduino IDE pide una carpeta: OK'],
+      ...CARGA, SUBIR,
+      ['tocarPads', 'Tocar', 'cada botón dispara uno de tus sonidos'],
+    ] },
+  { id: 'ia', nombre: 'Asistentes de IA', sub: 'le hablas y te contesta', icono: 'hablar',
+    lema: 'asistente_ia (igual: asistente_naga, asistente_musical, sampler_ia, oscilador_ia, compositor_ia)',
+    pasos: [
+      ['ino', 'Abrir asistente_ia.ino', 'firmwares/asistente_ia/'],
+      ['copiar', 'Crear secretos.h', 'copia de secretos.example.h, en la misma carpeta'],
+      ['secretos', 'Escribir WiFi y clave', 'red de 2,4 GHz y tu clave de OpenAI'],
+      ...CARGA, SUBIR,
+      ['luzVerde', 'Esperar la luz verde', 'ya se conectó al WiFi'],
+      ['hablar', 'Mantener BTN1 y hablar', 'suéltalo y contesta por los audífonos'],
+    ] },
+  { id: 'crear', nombre: 'Crear un firmware', sub: 'con ayuda de una IA', icono: 'prompt',
+    lema: 'De una idea a un .ino que suena',
+    pasos: [
+      ['prompt', 'Darle contexto a la IA', 'pegar PROMPT_PARA_LA_IA.md al chat'],
+      ['chat', 'Pedir qué hace cada botón', 'un botón, una función'],
+      ['guardar', 'Guardar el .ino', 'firmwares/mi_firmware/mi_firmware.ino'],
+      ...CARGA, SUBIR,
+      ['tocar', 'Probarlo en la placa', '¿hace lo que dice la cabecera?'],
+      ['pr', 'Compartirlo', 'su README y un Pull Request'],
+    ] },
+];
+
+// ---------------------------------------------------------------- vistas
+$('opciones').innerHTML = FLUJOS.map(f =>
+  `<button class="opcion" data-ir="${f.id}">${DIBUJO[f.icono]()}<div><b>${esc(f.nombre)}</b><span>${esc(f.sub)}</span></div></button>`).join('');
+
+function mostrar(id) {
+  const f = FLUJOS.find(x => x.id === id);
+  $('inicio').hidden = !!f;
+  $('flujo').hidden = !f;
+  if (!f) { if (location.hash) history.replaceState(null, '', location.pathname); return; }
+  if (location.hash !== '#' + f.id) history.replaceState(null, '', '#' + f.id);
+  const n = f.pasos.length, porFila = n <= 5 ? 5 : Math.ceil(n / 2);   // 6 a 12 pasos: dos filas
+  $('flujo').innerHTML = `
+    <div class="cabeza"><button class="volver" data-ir="">← inicio</button><p>${esc(f.lema)}</p></div>
+    <h1 style="margin-top:calc(12 * var(--u))">${esc(f.nombre)}</h1>
+    <div class="pasos" style="--col:calc((1472 * var(--u) - ${Math.max(porFila, 5) - 1} * 26 * var(--u)) / ${Math.max(porFila, 5)}); grid-template-columns:repeat(${porFila}, var(--col))">
+      ${f.pasos.map(([d, t, det], i) => `<div class="paso${(i + 1) % porFila && i < n - 1 ? ' sigue' : ''}">${DIBUJO[d]()}
+        <h2><span class="n">${i + 1}</span>${esc(t)}</h2>${det ? `<p>${esc(det)}</p>` : ''}</div>`).join('')}
+    </div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ir]');
+  if (b) mostrar(b.dataset.ir);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') mostrar(''); });
+window.addEventListener('hashchange', () => mostrar(location.hash.slice(1)));
+mostrar(location.hash.slice(1));
+</script>
+</body>
+</html>

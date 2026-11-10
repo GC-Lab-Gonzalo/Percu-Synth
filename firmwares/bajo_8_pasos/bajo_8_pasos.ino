@@ -76,6 +76,14 @@
 // 8 colores) corrido un poco por la nota; los pasos 1 y 5 salen más brillantes y largos.
 // Un paso en silencio no dispara. La velocidad sigue al tempo: siempre quedan 15 LEDs
 // entre bala y bala, o sea la secuencia entera de 8 pasos cabe volando en la tira.
+//
+// MODO DE USO:
+// 1. Aprieta BTN1: suena al tiro un patrón de arranque de 8 notas a ~120 BPM.
+// 2. Aprieta BTN2 y mueve POT1..POT4 para cambiar las notas de los pasos 1 a 4;
+//    BTN3 hace lo mismo con los pasos 5 a 8. Un pot al mínimo deja ese paso en silencio.
+// 3. Aprieta BTN4 y usa POT3 (decay) y POT4 (cutoff) para pasar de un bajo seco a uno
+//    largo y abierto; POT2 cambia el tempo y POT1 el volumen.
+// 4. BTN5 sube la octava (La1 → La2 → La3 y vuelve).
 // ==============================================================================================================================================
 
 #include <Arduino.h>

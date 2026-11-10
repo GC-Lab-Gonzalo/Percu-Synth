@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PercuSynth · armado de la placa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet" crossorigin>
+<style>
+  /* Misma escena que el simulador: una mesa de nogal de noche vista desde arriba, medida en
+     "unidades de escenario" (1600 × 1000 u) que se ajustan a la ventana sin scroll. */
+  :root {
+    --tinta:#f3e3c4; --gris:#b9aa8e; --suave:#857760; --ambar:#F5B041; --error:#ff8a73; --ok:#8fd99f;
+    --mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#000; color:var(--tinta); font-family:Archivo, system-ui, sans-serif; overflow:hidden; }
+  .escenario { position:fixed; left:50%; top:50%; width:min(100vw, 160vh); width:min(100vw, 160dvh); aspect-ratio:1600 / 1000;
+    transform:translate(-50%, -50%); container-type:inline-size; user-select:none; -webkit-user-select:none; overflow:hidden;
+    --u:calc(100cqw / 1600); background:#000; }
+  @media (orientation:portrait) and (pointer:coarse) {
+    .escenario { width:min(100vh, 160vw); width:min(100dvh, 160vw); transform:translate(-50%, -50%) rotate(90deg); }
+  }
+  .escenario > svg { position:absolute; left:0; top:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  .capa { position:absolute; font-size:calc(14 * var(--u)); line-height:1.42; color:var(--tinta);
+    text-shadow:0 0 calc(5 * var(--u)) #000, 0 0 calc(2 * var(--u)) #000; }
+  .ar { border-left:calc(2.5 * var(--u)) solid var(--ambar); padding-left:calc(16 * var(--u)); }
+  .enlace { background:none; border:0; padding:0; cursor:pointer; color:var(--tinta); font:inherit; text-shadow:inherit;
+    text-decoration:underline; text-decoration-color:#f5b04170; text-underline-offset:.2em; }
+  .enlace:hover { color:var(--ambar); }
+  .enlace.on { color:var(--ambar); text-decoration-color:var(--ambar); }
+  .enlace:disabled { color:var(--suave); cursor:default; text-decoration:none; }
+  .enlace:focus-visible { outline:calc(2 * var(--u)) solid var(--ambar); outline-offset:2px; }
+
+  .barra { left:calc(40 * var(--u)); right:calc(40 * var(--u)); top:calc(26 * var(--u)); display:flex; align-items:baseline;
+    gap:calc(22 * var(--u)); font-size:calc(14 * var(--u)); white-space:nowrap; }
+  .barra b { color:var(--ambar); font-weight:600; font-size:calc(16 * var(--u)); margin-right:calc(8 * var(--u)); }
+  .barra .vistas { display:flex; gap:calc(12 * var(--u)); margin-right:calc(14 * var(--u)); padding-right:calc(22 * var(--u)); border-right:1px solid #f5b04155; }
+  .barra .soloPlaca { display:flex; gap:calc(22 * var(--u)); }
+  .barra .cuenta { margin-left:auto; color:var(--gris); font-family:var(--mono); font-size:calc(13 * var(--u)); }
+
+  .panel { left:calc(1032 * var(--u)); top:calc(88 * var(--u)); width:calc(530 * var(--u)); height:calc(590 * var(--u));
+    display:flex; flex-direction:column; gap:calc(16 * var(--u)); overflow-y:auto; scrollbar-width:none; }
+  .panel::-webkit-scrollbar { display:none; }
+  .panel .mini { display:block; width:100%; height:calc(170 * var(--u)); flex:none; }
+  .panel .mini + .tenue { margin-top:calc(-10 * var(--u)); font-size:calc(12.5 * var(--u)); }
+  .panel h2 { margin:0; font-size:calc(21 * var(--u)); font-weight:650; font-stretch:112%; color:var(--ambar); line-height:1.15; }
+  .panel h2 small { display:block; font-size:calc(13 * var(--u)); font-weight:400; font-stretch:100%; color:var(--gris); margin-top:calc(4 * var(--u)); }
+  .panel p { margin:0; }
+  .panel p b { color:#fff4dc; font-weight:600; }
+  .panel .pines { font-family:var(--mono); font-size:calc(13 * var(--u)); color:var(--gris); line-height:1.5;
+    display:grid; grid-template-columns:auto 1fr; column-gap:calc(12 * var(--u)); }
+  .panel .pines span:nth-child(odd) { color:var(--suave); }
+  .panel .pines.puentes { grid-template-columns:auto 1fr auto; }
+  .panel .pines.puentes span { color:var(--gris); }
+  .panel .pines.puentes span:nth-child(3n+1) { color:var(--suave); }
+  .panel .pines.puentes span:nth-child(3n) { color:var(--ambar); }
+  .panel .acciones { display:flex; gap:calc(22 * var(--u)); }
+  .panel .paso { padding-bottom:calc(14 * var(--u)); border-bottom:1px solid #f5b04133; display:flex; flex-direction:column; gap:calc(10 * var(--u)); }
+  .panel .paso h2 { font-size:calc(19 * var(--u)); }
+  .panel .tenue { color:var(--gris); }
+  .bandas { display:inline-flex; gap:calc(3 * var(--u)); vertical-align:middle; margin-right:calc(6 * var(--u)); }
+  .bandas i { display:inline-block; width:calc(9 * var(--u)); height:calc(16 * var(--u)); }
+
+  .leyenda { left:calc(1032 * var(--u)); top:calc(716 * var(--u)); width:calc(530 * var(--u)); display:grid; grid-template-columns:1fr 1fr;
+    gap:calc(5 * var(--u)) calc(18 * var(--u)); font-size:calc(13 * var(--u)); }
+  .leyenda i { display:inline-block; width:calc(22 * var(--u)); height:calc(5 * var(--u)); margin-right:calc(9 * var(--u)); vertical-align:middle; border-radius:2px; }
+  .leyenda p { grid-column:1 / -1; margin:calc(8 * var(--u)) 0 0; color:var(--gris); font-size:calc(12.5 * var(--u)); }
+  .aviso { left:calc(40 * var(--u)); width:calc(950 * var(--u)); top:calc(682 * var(--u)); text-align:center; color:var(--ambar);
+    font-size:calc(15 * var(--u)); font-weight:600; opacity:0; transition:opacity .3s; pointer-events:none; }
+  .aviso.ver { opacity:1; }
+</style>
+</head>
+<body>
+<div class="escenario" id="escenario">
+  <svg id="svg" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg"></svg>
+
+  <div class="capa barra">
+    <b>PercuSynth V2.0</b>
+    <span class="vistas"><button class="enlace on" data-vista="placa">placa</button><button class="enlace" data-vista="esquema">esquema</button><button class="enlace" data-vista="cables">cables</button></span>
+    <span class="soloPlaca">
+    <button class="enlace" id="bArmar">armar todo</button>
+    <button class="enlace" id="bDesarmar">desarmar todo</button>
+    <button class="enlace" id="bPasos">paso a paso</button>
+    <button class="enlace" id="bVuelta">dar vuelta la placa</button>
+    <button class="enlace" id="bPistas">ver pistas</button>
+    <button class="enlace" id="bCablear" style="display:none">cablear todo</button>
+    <button class="enlace" id="bDescablear" style="display:none">quitar cables</button>
+    </span>
+    <span class="cuenta" id="cuenta"></span>
+  </div>
+
+  <div class="capa ar panel" id="panel"></div>
+  <div class="capa aviso" id="aviso"></div>
+</div>
+
+<script src="pcb_v2.js"></script>
+<script src="esquema_v2.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+function E(tag, attrs, parent) {
+  const el = document.createElementNS(NS, tag);
+  for (const k in attrs) {
+    if (k === 'text') el.textContent = attrs[k];
+    else el.setAttribute(k, attrs[k]);
+  }
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+// ---------------------------------------------------------------- escena
+const BX = 40, BY = 88, S = 1.2;                    // la placa: unidades EasyEDA (10 mil) → escenario
+const W = PCB.ancho, H = PCB.alto;
+const svg = $('svg');
+
+function texturaMesa() {                            // la misma mesa de nogal del simulador
+  const Wt = 800, Ht = 500, c = document.createElement('canvas');
+  c.width = Wt; c.height = Ht;
+  const g = c.getContext('2d'), img = g.createImageData(Wt, Ht), d = img.data;
+  const N = 256, tabla = new Float32Array(N * N);
+  let s = 7;
+  for (let i = 0; i < N * N; i++) { s = (s * 16807) % 2147483647; tabla[i] = s / 2147483647; }
+  const ruido = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+    const i0 = (yi & 255) * N, i1 = ((yi + 1) & 255) * N, j0 = xi & 255, j1 = (xi + 1) & 255;
+    const a = tabla[i0 + j0], b = tabla[i0 + j1], c2 = tabla[i1 + j0], dd = tabla[i1 + j1];
+    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + dd) * u * v;
+  };
+  const TABLA = 125;
+  for (let y = 0; y < Ht; y++) {
+    const t = Math.floor(y / TABLA), yy = y % TABLA, off = t * 37.1;
+    for (let x = 0; x < Wt; x++) {
+      const w = ruido(x * 0.004 + off, y * 0.02) * 6 + ruido(x * 0.02 + off, y * 0.08) * 1.5;
+      const veta = Math.sin(y * 0.35 + w * 6) * 0.5 + 0.5;
+      const fibra = ruido(x * 0.35 + off, y * 1.3);
+      let k = 0.78 + veta * 0.17 + (fibra - 0.5) * 0.12 + (ruido(x * 0.002 + off, t * 3.3) - 0.5) * 0.24;
+      if (yy < 1) k *= 0.3;
+      const o = (y * Wt + x) * 4;
+      d[o] = 96 * k; d[o + 1] = 63 * k; d[o + 2] = 38 * k; d[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.88);
+}
+
+svg.innerHTML = `<defs>
+  <filter id="sh" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000" flood-opacity=".65"/></filter>
+  <filter id="sh2" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="2.2" stdDeviation="1.8" flood-color="#000" flood-opacity=".7"/></filter>
+  <filter id="brillo" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="9"/></filter>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e4e6e8"/><stop offset="1" stop-color="#9ea3a8"/></linearGradient>
+  <radialGradient id="estano" cx=".38" cy=".35" r=".7"><stop offset="0" stop-color="#fbfbf8"/><stop offset=".55" stop-color="#b9bcbd"/><stop offset="1" stop-color="#6e7275"/></radialGradient>
+  <linearGradient id="hasl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e3de"/><stop offset="1" stop-color="#a9aba6"/></linearGradient>
+  <linearGradient id="resist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fb6e4"/><stop offset=".45" stop-color="#4e86c8"/><stop offset="1" stop-color="#2b5793"/></linearGradient>
+  <linearGradient id="diodo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4a4a"/><stop offset=".45" stop-color="#1c1c1c"/><stop offset="1" stop-color="#080808"/></linearGradient>
+  <linearGradient id="ceramico" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3c35c"/><stop offset=".5" stop-color="#d9962a"/><stop offset="1" stop-color="#a5661a"/></linearGradient>
+  <radialGradient id="aluminio" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#eef0f2"/><stop offset="1" stop-color="#9aa0a7"/></radialGradient>
+  <linearGradient id="tecla" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c3c3c"/><stop offset="1" stop-color="#111"/></linearGradient>
+  <radialGradient id="perilla" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#4a4a4a"/><stop offset="1" stop-color="#0b0b0b"/></radialGradient>
+  <linearGradient id="bornera" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1c4f8c"/><stop offset=".5" stop-color="#2f78c4"/><stop offset="1" stop-color="#235f9f"/></linearGradient>
+  <linearGradient id="hembra" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2c2c"/><stop offset="1" stop-color="#0c0c0c"/></linearGradient>
+</defs>`;
+E('image', { href: texturaMesa(), x: 0, y: 0, width: 1600, height: 1000, preserveAspectRatio: 'none' }, svg);
+
+const vistaPlaca = E('g', {}, svg);
+const capaBandeja = E('g', {}, vistaPlaca);
+E('rect', { x: BX, y: BY, width: W * S, height: H * S, fill: '#000', filter: 'url(#sh)' }, vistaPlaca);
+const caraTop = E('g', { id: 'caraTop', transform: `translate(${BX},${BY}) scale(${S})` }, vistaPlaca);
+const caraBot = E('g', { id: 'caraBot', transform: `translate(${BX + W * S},${BY}) scale(${-S},${S})`, display: 'none' }, vistaPlaca);
+const vistaEsq = E('g', { display: 'none' }, svg);
+const vistaCables = E('g', { display: 'none' }, svg);
+const capaEncima = E('g', {}, svg);                 // lo que se arrastra y la etiqueta del puntero
+
+// ---------------------------------------------------------------- utilidades de geometría
+const nums = s => (s.match(/-?\d*\.?\d+/g) || []).map(Number);
+function cajaSilk(lista) {                          // la caja de los trazos gruesos (los contornos, no los textos)
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const [d, w] of lista) {
+    if (w < 0.9 || d[0] === 'C') continue;
+    const v = nums(d);
+    for (let i = 0; i + 1 < v.length; i += 2) { x0 = Math.min(x0, v[i]); x1 = Math.max(x1, v[i]); y0 = Math.min(y0, v[i + 1]); y1 = Math.max(y1, v[i + 1]); }
+  }
+  return [x0, y0, x1, y1];
+}
+function dibujarSilk(lista, g, color) {
+  for (const [d, w] of lista) {
+    if (d[0] === 'C') { const [cx, cy, r] = nums(d); E('circle', { cx, cy, r, fill: 'none', stroke: color, 'stroke-width': w }, g); }
+    else if (w === 0) E('path', { d, fill: color }, g);
+    else E('path', { d, fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+  }
+}
+function texto(g, x, y, str, attrs, cara) {         // en la cara de abajo el grupo va espejado: el texto se vuelve a dar vuelta
+  const t = E('text', Object.assign({ x: 0, y: 0, text: str, 'font-family': 'Archivo, sans-serif' }, attrs), g);
+  t.setAttribute('transform', cara === 'bot' ? `translate(${x},${y}) scale(-1,1)` : `translate(${x},${y})`);
+  if (cara === 'bot' && attrs['text-anchor'] && attrs['text-anchor'] !== 'middle')
+    t.setAttribute('text-anchor', attrs['text-anchor'] === 'end' ? 'start' : 'end');
+  return t;
+}
+
+// ---------------------------------------------------------------- las redes: qué hay en cada punto
+const GPIO = { TX:43, BOTON1:44, POT1:1, POT2:2, BOTON2:42, BCK:41, DIN:40, LCK:39, SCL:38, BOTON3:0, BOTON4:45, BOTON5:47,
+  SDA:21, MIC1:4, MIC2:5, MIC3:6, MIC4:7, POT3:8, EXT1:3, PIXEL:46, EXT2:9, POT4:10, WS:11, SCK:12, SD:13 };
+const FUNCION = { TX:'MIDI TX', BOTON1:'BTN1', BOTON2:'BTN2', BOTON3:'BTN3', BOTON4:'BTN4', BOTON5:'BTN5', POT1:'POT1', POT2:'POT2',
+  POT3:'POT3', POT4:'POT4', BCK:'I2S BCK', DIN:'I2S DIN', LCK:'I2S LCK', SCL:'I2C SCL', SDA:'I2C SDA', MIC1:'piezo 1', MIC2:'piezo 2',
+  MIC3:'piezo 3', MIC4:'piezo 4', EXT1:'EXT1', EXT2:'EXT2', PIXEL:'datos LEDs', WS:'mic WS', SCK:'mic SCK', SD:'mic SD' };
+const POTENCIA = new Set(['GND', '3.3V', '5V']);
+function nombreRed(n) {
+  if (n === 'GND') return 'GND';
+  if (n === '3.3V') return '3,3 V';
+  if (n === '5V') return '5 V';
+  if (n in GPIO) return `GPIO ${GPIO[n]} · ${FUNCION[n]}`;
+  if (n === 'MIDI_OUT_4') return 'R10 → 5 V';
+  if (n === 'MIDI_OUT_5') return 'R11 → GPIO 43';
+  if (n === 'LED6_4') return 'datos que salen del LED6';
+  let m = n.match(/^LED(\d)_\d$/);
+  if (m) return `datos LED${m[1] - 1} → LED${m[1]}`;
+  return n ? 'sin conexión' : 'aleta: sólo sujeta';
+}
+const RED = {};                                     // red → pistas, vías y pads
+const red = n => RED[n] || (RED[n] = { top: [], bot: [], vias: [], pads: [] });
+for (const cara of ['top', 'bot']) for (const [n, w, d] of PCB.pistas[cara]) if (n) red(n)[cara].push([w, d]);
+for (const v of PCB.vias) if (v[3]) red(v[3]).vias.push(v);
+const comp = id => PCB.comps.find(c => c.id === id);
+const ESP = PCB.comps.find(c => c.pkg.startsWith('ESP32'));
+// los rótulos de los 44 pines del DevKitC-1, por número de pad (columna derecha 1–22, izquierda 23–44)
+const ESP_PIN = ['3V3','3V3','RST','4','5','6','7','15','16','17','18','8','3','46','9','10','11','12','13','14','5V','GND',
+                 'GND','43','44','1','2','42','41','40','39','38','37','36','35','0','45','48','47','21','20','19','GND','GND'];
+
+// ---------------------------------------------------------------- las piezas
+// bandas de 5 (metal film azul, la que traen los kits): 3 cifras · multiplicador · tolerancia
+const COLOR = { cafe:'#6b3a1e', negro:'#121212', rojo:'#c62f2f', naranjo:'#e8772a', amarillo:'#ecc93a', verde:'#2e8b4e' };
+const BANDAS = { r1M:['cafe','negro','negro','amarillo','cafe'], r100k:['cafe','negro','negro','naranjo','cafe'], r220:['rojo','rojo','negro','negro','cafe'] };
+const TIPOS = {
+  r1M:   { nombre:'Resistencia 1 MΩ', pila:'1 MΩ', bandas:BANDAS.r1M,
+           que:'Frena el paso de la corriente. No tiene polaridad: da lo mismo hacia qué lado quede.',
+           reconoce:'Café · negro · negro · amarillo · café: 1-0-0 y cuatro ceros, 1 000 000 Ω. Si es de cuatro bandas: café · negro · verde.',
+           soldar:'Dobla las patas a la medida de los agujeros, pásalas, suelda por abajo y corta lo que sobra.' },
+  r100k: { nombre:'Resistencia 100 kΩ', pila:'100 kΩ', bandas:BANDAS.r100k,
+           que:'Frena el paso de la corriente. No tiene polaridad.',
+           reconoce:'Café · negro · negro · naranjo · café: 1-0-0 y tres ceros, 100 000 Ω. Si es de cuatro bandas: café · negro · amarillo.',
+           soldar:'Dobla las patas, pásalas, suelda por abajo y corta lo que sobra.' },
+  r220:  { nombre:'Resistencia 220 Ω', pila:'220 Ω', bandas:BANDAS.r220,
+           que:'Frena el paso de la corriente. No tiene polaridad.',
+           reconoce:'Rojo · rojo · negro · negro · café: 2-2-0 sin ceros, 220 Ω. Si es de cuatro bandas: rojo · rojo · café.',
+           soldar:'Dobla las patas, pásalas, suelda por abajo y corta lo que sobra.' },
+  diodo: { nombre:'Diodo Schottky 1N5817', pila:'1N5817',
+           que:'Deja pasar la corriente en un solo sentido, como una válvula.',
+           reconoce:'Cuerpo negro con una franja gris. La franja es el cátodo y va hacia el lado donde la serigrafía dibuja la barra. Al revés no protege nada.',
+           soldar:'Igual que una resistencia, pero mirando la franja antes de soldar.' },
+  c10n:  { nombre:'Condensador cerámico 10 nF', pila:'10 nF',
+           que:'Guarda un poquito de carga por un instante.',
+           reconoce:'Lenteja amarilla con el código 103: 10 y tres ceros en picofaradios, 10 000 pF = 10 nF. No tiene polaridad.',
+           soldar:'Hasta el fondo, suelda y corta.' },
+  c100u: { nombre:'Condensador electrolítico 100 µF', pila:'100 µF',
+           que:'Un estanque chico de energía: guarda carga y la entrega cuando el consumo pega un salto.',
+           reconoce:'Tiene polaridad. La franja clara del costado marca el negativo (−); la pata larga es el positivo y va al agujero con el +.',
+           soldar:'Mira la franja antes de soldar: puesto al revés se calienta y se puede inflar.' },
+  led:   { nombre:'LED WS2812B (6028)', pila:'LED WS2812B',
+           que:'Un LED de tres colores con un chip adentro. Recibe los colores por un solo cable de datos y le pasa el resto al LED siguiente: van en cadena.',
+           reconoce:'Va por debajo de la placa, con la cara que alumbra hacia el agujero: la luz sale por la ventana. Su esquina marcada coincide con la marca de la serigrafía.',
+           soldar:'Es de montaje superficial: estaña un pad, apoya el LED con la pinza, recalienta ese pad y después suelda los otros tres. Con lupa.' },
+  sw:    { nombre:'Switch mecánico (MX)', pila:'Switch MX',
+           que:'El mecanismo del botón: mientras lo aprietas, une sus dos patas.',
+           reconoce:'El de los teclados mecánicos. El color de la cruz dice el tacto (rojo lineal, café táctil, azul con clic). El tetón del centro entra en el agujero grande y los dos pines de metal en sus pads.',
+           soldar:'Se suelda sin la tecla puesta. Que quede apoyado y derecho contra la placa antes de soldar las dos patas.' },
+  tecla: { nombre:'Tecla (keycap)', pila:'Tecla',
+           que:'La tapa del botón: es lo que tocas. No tiene nada eléctrico.',
+           reconoce:'Por debajo tiene un encastre en cruz (+), el del estándar MX, que calza en la cruz del switch.',
+           soldar:'No se suelda: va al final, cuando ya no queda nada que soldar. Se aprieta derecha sobre la cruz hasta el fondo; para sacarla se tira derecho hacia arriba, mejor con un extractor de teclas.' },
+  pot:   { nombre:'Potenciómetro B1K', pila:'Potenciómetro',
+           que:'Un divisor de voltaje que se ajusta girando: las patas de los extremos van a GND y a 3,3 V, y la del medio entrega cualquier voltaje entre los dos.',
+           reconoce:'B quiere decir lineal. 1 kΩ, 10 kΩ o 50 kΩ funcionan igual acá: lo que importa es que los cuatro sean iguales.',
+           soldar:'Tres patas en fila y dos aletas a los costados: suelda también las aletas, que lo sujetan cuando giras la perilla.' },
+  jack:  { nombre:'Jack 6,3 mm', pila:'Jack 6,3 mm',
+           que:'La entrada de un piezo, el disco que convierte un golpe en voltaje.',
+           reconoce:'La punta del plug (tip) lleva la señal y el cuerpo (sleeve) es GND. Las otras dos patas son contactos que se abren al enchufar; acá no se usan.',
+           soldar:'Patas gruesas: piden más calor y más estaño. La boca mira hacia el borde de la placa.' },
+  din:   { nombre:'Conector DIN-5 (MIDI OUT)', pila:'DIN-5',
+           que:'Manda notas y reloj MIDI a otro instrumento.',
+           reconoce:'El pin 2 es la malla (GND). El 4 recibe 5 V por R10 y el 5 la señal por R11: esa corriente prende el optoacoplador del aparato que recibe.',
+           soldar:'Las patas de la carcasa también se sueldan: aguantan los tirones del cable.' },
+  b2:    { nombre:'Bornera de 2 (5 V)', pila:'Bornera 2',
+           que:'Conecta cables apretándolos con un tornillo, sin soldar.',
+           reconoce:'Bloque de tornillos con paso de 5,08 mm (KF301). Con otro paso no entra en los agujeros.',
+           soldar:'Las bocas para los cables miran hacia afuera de la placa.' },
+  b3:    { nombre:'Bornera de 3', pila:'Bornera 3',
+           que:'Conecta cables apretándolos con un tornillo, sin soldar.',
+           reconoce:'Bloque de tornillos con paso de 5,08 mm (KF301).',
+           soldar:'Las bocas para los cables miran hacia afuera de la placa.' },
+  inmp:  { nombre:'Micrófono INMP441', pila:'INMP441',
+           que:'Un micrófono digital: entrega el sonido ya convertido en números, por I2S.',
+           reconoce:'Placa redonda con seis pines en dos filas de tres.',
+           soldar:'Va soldado directo, sin zócalo, en el círculo de la serigrafía.' },
+  h22:   { nombre:'Tira hembra de 22', pila:'Hembra 22',
+           que:'El zócalo del ESP32: el módulo se enchufa y se saca sin soldarlo, así se puede cambiar o reusar.',
+           reconoce:'Barra negra con 22 agujeros. Van dos, una por lado.',
+           soldar:'Suelda un pin de cada punta, revisa que quede derecha y pegada, y recién ahí el resto. Truco: suéldalas con el ESP32 enchufado y quedan a la medida exacta.' },
+  h8:    { nombre:'Tira hembra de 8', pila:'Hembra 8',
+           que:'El zócalo del IMU.', reconoce:'Barra negra con 8 agujeros.',
+           soldar:'Un pin de cada punta, revisa que quede derecha, y después el resto.' },
+  h5:    { nombre:'Tira hembra de 5', pila:'Hembra 5',
+           que:'El zócalo del DAC, por el lado de las señales.', reconoce:'Barra negra con 5 agujeros.',
+           soldar:'Un pin de cada punta, revisa que quede derecha, y después el resto.' },
+  h3:    { nombre:'Tira hembra de 3', pila:'Hembra 3',
+           que:'Sujeta el otro lado del DAC.', reconoce:'Barra negra con 3 agujeros.',
+           soldar:'Un pin de cada punta, revisa que quede derecha, y después el del medio.' },
+  h4:    { nombre:'Tira hembra de 4', pila:'Hembra 4', opcional:true,
+           que:'El zócalo de la pantalla OLED. Opcional: sólo si vas a poner la pantalla.', reconoce:'Barra negra con 4 agujeros.',
+           soldar:'Un pin de cada punta, revisa que quede derecha, y después el resto.' },
+  esp32: { nombre:'ESP32-S3 DevKitC-1 N16R8', pila:'ESP32-S3',
+           que:'El cerebro: un microcontrolador de dos núcleos a 240 MHz con 16 MB de flash y 8 MB de PSRAM. Lee botones, perillas y sensores por sus GPIO y calcula el audio.',
+           reconoce:'Tiene que ser S3: el ESP32 clásico no sirve. Trae dos USB-C: USB (el nativo, para programar y para USB-MIDI) y COM.',
+           soldar:'No se suelda: se enchufa en las dos tiras hembra, con los USB hacia el borde de la placa.' },
+  pcm:   { nombre:'DAC PCM5102A', pila:'PCM5102A',
+           que:'Convierte los números del audio en voltaje para tus audífonos o tu parlante. Recibe el audio por I2S: BCK (GPIO 41), DIN (40) y LCK (39).',
+           reconoce:'Placa morada con un jack de 3,5 mm. Ojo: PCM510**2**A.',
+           soldar:'Se enchufa en sus tiras, con el jack hacia el borde. Pero antes revisa sus puentes de soldadura: muchos vienen abiertos de fábrica.',
+           puentes:{
+             txt:'Atrás tiene cuatro puentes, H1L a H4L, cada uno con tres pads: el del medio va unido con estaño al lado H o al lado L. Adelante, junto al pin SCK, hay uno más que va a GND, porque esta placa no le manda SCK. Si XSMT queda abierto o en L, el DAC queda mudo: todo funciona menos el sonido. Si FMT queda abierto, suena a ruido.',
+             filas:[['H1L','FLT · filtro','L'], ['H2L','DEMP · de-énfasis','L'], ['H3L','XSMT · mute','H'], ['H4L','FMT · formato','L'], ['SCK','adelante · reloj','GND']],
+             medir:'Con la placa apagada y el multímetro en continuidad: una punta en el pin GND del módulo y la otra en el pad del medio de cada puente. FLT, DEMP y FMT pitan; XSMT no tiene que pitar. El pin SCK con GND también pita. Con el USB conectado, en voltaje: XSMT marca 3,3 V y los demás 0 V.' } },
+  mpu:   { nombre:'IMU MPU6050 (GY-521)', pila:'MPU6050',
+           que:'Acelerómetro y giroscopio: sabe cómo inclinas la placa y siente los golpes. Habla por I2C: SDA (GPIO 21) y SCL (GPIO 38).',
+           reconoce:'Placa azul con 8 pines rotulados VCC · GND · SCL · SDA · XDA · XCL · AD0 · INT.',
+           soldar:'No se suelda: se enchufa. Comparte el lugar con la pantalla OLED: va uno u otro.' },
+  oled:  { nombre:'Pantalla OLED 0,96"', pila:'OLED', opcional:true,
+           que:'128 × 64 puntos por I2C (dirección 0x3C), en el mismo bus del IMU.',
+           reconoce:'Revisa que el orden de sus pines (GND · VCC · SCL · SDA) coincida con la serigrafía.',
+           soldar:'Opcional. No se suelda: se enchufa. Ocupa el mismo lugar que el IMU, así que va uno u otro.' },
+};
+TIPOS.pcm.reconoce = 'Placa morada con un jack de 3,5 mm. Ojo: es PCM5102A, con un 2.';
+
+// cada lugar donde va una pieza. `pads` son los pads que suelda (o donde se enchufa) esa pieza.
+const LUGARES = [];
+function lugar(id, tipo, o) { const l = Object.assign({ id, tipo, rot: 0 }, o); LUGARES.push(l); return l; }
+const axial = (c, tipo, desde) => {                 // dos patas: el centro y el ángulo salen de los pads
+  let [a, b] = c.pads;
+  if (desde && b.red === desde) [a, b] = [b, a];    // `desde`: la red de la pata que va a la izquierda del dibujo
+  return lugar(c.id, tipo, { c, pads: c.pads, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2,
+    rot: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, largo: Math.hypot(b.x - a.x, b.y - a.y) });
+};
+for (let i = 1; i <= 6; i++) { const c = comp('LED' + i); lugar(c.id, 'led', { c, pads: c.pads, x: c.x, y: c.y, rot: 90, cara: 'bot', n: i }); }
+for (let i = 1; i <= 5; i++) axial(comp('R' + i), 'r1M').n = i;
+for (let i = 6; i <= 9; i++) axial(comp('R' + i), 'r100k').n = i - 5;
+axial(comp('R10'), 'r220'); axial(comp('R11'), 'r220');
+for (let i = 1; i <= 4; i++) axial(comp('D' + i), 'diodo', 'GND').n = i;          // ánodo a GND, la franja (cátodo) a la señal
+for (let i = 2; i <= 5; i++) axial(comp('C' + i), 'c10n').n = i - 1;
+axial(comp('C1'), 'c100u', '3.3V');                                              // + a la izquierda, la franja (−) a la derecha
+{ const c = comp('U3'); lugar('U3', 'inmp', { c, pads: c.pads, x: 430.4, y: 317.4 }); }
+{ const izq = ESP.pads.filter(p => p.x < 460), der = ESP.pads.filter(p => p.x > 460);
+  lugar('HE1', 'h22', { c: ESP, pads: izq, x: izq[0].x, y: 129.9, rot: 90, lado: 'izquierdo' });
+  lugar('HE2', 'h22', { c: ESP, pads: der, x: der[0].x, y: 129.9, rot: 90, lado: 'derecho' }); }
+{ const c = comp('PCM5102A'), cinco = c.pads.filter(p => +p.n >= 11), tres = c.pads.filter(p => +p.n < 11);
+  lugar('HD5', 'h5', { c, pads: cinco, x: cinco[0].x, y: 54.9, rot: 90 });
+  lugar('HD3', 'h3', { c, pads: tres, x: 563.9, y: tres[0].y, rot: 0 }); }
+{ const c = comp('IMU'); lugar('HI', 'h8', { c, pads: c.pads, x: 315.1, y: c.pads[0].y }); }
+{ const c = comp('OLED'); lugar('HO', 'h4', { c, pads: c.pads, x: 315.1, y: c.pads[0].y }); }
+for (let i = 1; i <= 5; i++) { const c = comp('BT' + i), x = c.agujeros[0][0], y = c.agujeros[0][1];
+  lugar(c.id, 'sw', { c, pads: c.pads, x, y, n: i });
+  lugar('TECLA' + i, 'tecla', { c, pads: [], x, y, n: i, necesita: [c.id] }); }
+for (let i = 1; i <= 4; i++) {
+  const c = comp('POT' + i), eje = c.silk.top.find(s => s[0][0] === 'C');
+  const [x, y] = nums(eje[0]);
+  lugar(c.id, 'pot', { c, pads: c.pads, x, y, n: i });
+}
+{ const def = [['[GND|PIN3|3V3]', 'EXT1', 'b3', 0], ['[GND|PIN9|3V3]', 'EXT2', 'b3', 0], ['[GND|5V]', '5V', 'b2', 180], ['[GND|PIN46|5V]', 'LED STRIP', 'b3', 180]];
+  for (const [id, nombre, tipo, rot] of def) { const c = comp(id), ys = c.pads.map(p => p.y);
+    lugar(nombre, tipo, { c, pads: c.pads, x: c.pads[0].x, y: (Math.min(...ys) + Math.max(...ys)) / 2, rot }); } }
+for (let i = 1; i <= 4; i++) { const c = comp('PIEZO' + i); lugar('JACK' + i, 'jack', { c, pads: c.pads, x: c.x, y: c.y, n: i }); }
+{ const c = comp('MIDI_OUT'); lugar('MIDI', 'din', { c, pads: c.pads, x: c.x, y: c.y }); }
+lugar('ESP32', 'esp32', { c: ESP, pads: [], x: 461.4, y: 130, necesita: ['HE1', 'HE2'] });
+lugar('DAC', 'pcm', { c: comp('PCM5102A'), pads: [], x: 600.9, y: 59.4, necesita: ['HD5', 'HD3'] });
+lugar('IMU', 'mpu', { c: comp('IMU'), pads: [], x: 315.1, y: 296.4, necesita: ['HI'], choca: 'OLED' });
+lugar('OLED', 'oled', { c: comp('OLED'), pads: [], x: 315.1, y: 316.5, necesita: ['HO'], choca: 'IMU' });
+const L = Object.fromEntries(LUGARES.map(l => [l.id, l]));
+const opcional = l => !!TIPOS[l.tipo].opcional;
+// el orden en que se dibujan: lo bajo primero, los módulos al final (encima de sus tiras)
+const CAPA = ['led','r1M','r100k','r220','diodo','c10n','inmp','c100u','h22','h8','h5','h3','h4','sw','tecla','pot','b2','b3','jack','din','esp32','pcm','mpu','oled'];
+LUGARES.sort((a, b) => CAPA.indexOf(a.tipo) - CAPA.indexOf(b.tipo));
+
+// la caja local de cada pieza (sin rotar), para tocarla y para soltar encima
+function cajaLocal(l) {
+  const t = l.tipo, n = l.pads.length;
+  if (t.startsWith('r') || t === 'diodo') return [-l.largo / 2 - 3, -7, l.largo / 2 + 3, 7];
+  if (t.startsWith('h')) return [-n * 5 - 1, -6, n * 5 + 1, 6];
+  return { c10n:[-11,-6,11,6], c100u:[-11,-11,11,11], led:[-13,-7,13,7], sw:[-28,-28,28,28], tecla:[-34,-34,34,34], pot:[-22,-26,22,30],
+           jack:[-37,-62,37,48], din:[-40,-35,40,26], b2:[-16,-21,16,21], b3:[-16,-31,16,31], inmp:[-26,-26,26,26],
+           esp32:[-56,-119,56,137], pcm:[-64,-42,64,34], mpu:[-43,-33,43,33], oled:[-54,-55,54,55] }[t];
+}
+for (const l of LUGARES) {
+  const [a, b, c2, d] = cajaLocal(l), r = l.rot * Math.PI / 180, co = Math.cos(r), si = Math.sin(r);
+  const xs = [], ys = [];
+  for (const [px, py] of [[a, b], [c2, b], [c2, d], [a, d]]) { xs.push(l.x + px * co - py * si); ys.push(l.y + px * si + py * co); }
+  l.caja = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+// el papel de cada pieza en el PercuSynth
+function papel(l) {
+  const n = l.n;
+  switch (l.tipo) {
+    case 'r1M': return `Es el pull-up del BTN${n}: mantiene el GPIO ${GPIO['BOTON' + n]} en 3,3 V mientras no aprietas (el código lee 1). Al apretar, el botón une el pin con GND y lee 0.`;
+    case 'r100k': return `Descarga el piezo ${n} a GND entre golpe y golpe, para que la lectura vuelva a cero.`;
+    case 'r220': return l.id === 'R10' ? 'Lleva los 5 V al pin 4 del MIDI y limita la corriente del lazo.' : 'Lleva la señal TX (GPIO 43) al pin 5 del MIDI y limita la corriente del lazo.';
+    case 'diodo': return `Protege la entrada del piezo ${n}. Un golpe fuerte genera decenas de voltios, también negativos, y el pin sólo aguanta entre 0 y 3,3 V. El diodo conduce apenas el voltaje baja de unos −0,3 V y se come esa parte.`;
+    case 'c10n': return `Estira el golpe del piezo ${n} unos milisegundos para que el ESP32 alcance a leerlo aunque esté ocupado calculando audio.`;
+    case 'c100u': return 'Está junto al IMU y aplana las caídas del 3,3 V.';
+    case 'led': return `LED ${n} de la cadena: recibe los datos ${n === 1 ? 'del GPIO 46' : 'del LED' + (n - 1)} y le pasa el resto ${n === 6 ? 'a la bornera LED STRIP, para una tira externa' : 'al LED' + (n + 1)}. En el código es el número ${n - 1}.`;
+    case 'tecla': return `La tecla del BTN${n}. Se calza en la cruz del switch ${'BT' + n}.`;
+    case 'sw': return `Es el BTN${n}, en el GPIO ${GPIO['BOTON' + n]}. Sin apretar lee 1 gracias a R${n}; apretado lee 0.`;
+    case 'pot': return `Es el POT${n}, en el GPIO ${GPIO['POT' + n]}. El ESP32 convierte su voltaje en un número entre 0 y 4095.`;
+    case 'jack': return `Es la entrada del piezo ${n}, en el GPIO ${GPIO['MIC' + n]}. La cuidan el diodo D${n}, el condensador C${n + 1} y la resistencia R${n + 5}.`;
+    case 'din': return 'La salida MIDI del PercuSynth: la señal sale del GPIO 43 a 31 250 bits por segundo.';
+    case 'b2': return 'Entrada de 5 V: alimenta la placa (y una tira LED larga) sin depender del USB.';
+    case 'b3': return { EXT1:'Sensor externo EXT1: GND · GPIO 3 · 3,3 V. Ahí se atornilla un FSR, un LDR o un DHT, sin soldar.',
+                        EXT2:'Sensor externo EXT2: GND · GPIO 9 · 3,3 V. Ahí se atornilla un FSR, un LDR o un DHT, sin soldar.',
+                        'LED STRIP':'Salida a una tira WS2812 externa: GND · datos · 5 V. Los datos salen del último LED de la placa, el LED6.' }[l.id];
+    case 'inmp': return 'Habla con el ESP32 por WS (GPIO 11), SCK (GPIO 12) y SD (GPIO 13). Lo usan los firmwares de voz y de IA.';
+    case 'h22': return `El lado ${l.lado} del ESP32. Por fuera hay otra fila de agujeros (H1 y H2), por si tu DevKit es más ancho.`;
+    case 'h5': return 'Lleva al DAC sus cinco señales: 3,3 V · GND · LCK · DIN · BCK.';
+    case 'h3': return 'Sostiene el otro lado del DAC (L · G · R). Esos pines no van a ninguna parte en esta placa: el audio sale por el jack del módulo.';
+    case 'h8': return 'Lleva al IMU 3,3 V · GND · SCL · SDA. Los otros cuatro pines quedan sin conectar.';
+    case 'h4': return 'Lleva a la pantalla GND · 3,3 V · SCL · SDA, el mismo bus I2C del IMU.';
+    default: return '';
+  }
+}
+const titulo = l => l.tipo === 'tecla' ? `Tecla del BTN${l.n}` : (l.tipo === 'b3' || l.tipo === 'b2' ? 'Bornera ' + l.id : /^H[EDIO]/.test(l.id) ? TIPOS[l.tipo].nombre : l.id + ' · ' + TIPOS[l.tipo].nombre);
+
+// ---------------------------------------------------------------- dibujo de cada pieza (coordenadas locales, sin rotar)
+function pieza(l, g) {
+  const t = l.tipo;
+  const patas = largo => E('line', { x1: -largo / 2, y1: 0, x2: largo / 2, y2: 0, stroke: '#c8cac7', 'stroke-width': 2.1, 'stroke-linecap': 'round' }, g);
+  if (t[0] === 'r' && BANDAS[t]) {
+    patas(l.largo);
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -12.2, y: -5.2, width: 24.4, height: 10.4, rx: 4.6, fill: 'url(#resist)' }, c);
+    BANDAS[t].forEach((b, i) => E('rect', { x: [-8.6, -5.2, -1.8, 1.6, 7.2][i], y: -5.1, width: 2.1, height: 10.2, fill: COLOR[b], opacity: .95 }, c));
+    E('rect', { x: -10, y: -4.2, width: 20, height: 1.4, rx: .7, fill: '#fff', opacity: .25 }, c);
+  } else if (t === 'diodo') {
+    patas(l.largo);
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -10.3, y: -5.3, width: 20.6, height: 10.6, rx: 2.4, fill: 'url(#diodo)' }, c);
+    E('rect', { x: 5.2, y: -5.3, width: 3.4, height: 10.6, fill: '#c3c7cb' }, c);
+    E('rect', { x: -8.5, y: -4.3, width: 12, height: 1.3, rx: .6, fill: '#fff', opacity: .18 }, c);
+  } else if (t === 'c10n') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -10.5, y: -4.6, width: 21, height: 9.2, rx: 4.6, fill: 'url(#ceramico)' }, c);
+    E('text', { x: 0, y: 1.6, 'font-size': 4.4, 'font-weight': 700, 'text-anchor': 'middle', fill: '#6a3f10', 'font-family': 'Archivo, sans-serif', text: '103' }, c);
+  } else if (t === 'c100u') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('circle', { r: 9.9, fill: '#1b2847' }, c);
+    E('path', { d: 'M5.2,-8.4 A9.9,9.9 0 0 1 5.2,8.4 Z', fill: '#c9cfd8' }, c);         // la franja del negativo
+    E('circle', { r: 7.6, fill: 'url(#aluminio)' }, c);
+    E('path', { d: 'M-4.5,-4.5 L4.5,4.5 M-4.5,4.5 L4.5,-4.5', stroke: '#7d848c', 'stroke-width': .9 }, c);
+  } else if (t === 'led') {
+    for (const [px, py] of [[-10.6, -3], [-10.6, 3], [10.6, -3], [10.6, 3]]) E('rect', { x: px - 1.8, y: py - 1.3, width: 3.6, height: 2.6, fill: '#d6d8d4' }, g);
+    E('rect', { x: -9.2, y: -5.5, width: 18.4, height: 11, rx: 1, fill: '#f3f0e6', filter: 'url(#sh2)' }, g);
+    E('rect', { x: -4, y: -4, width: 8, height: 8, fill: '#fffbec', stroke: '#d9d2bd', 'stroke-width': .5 }, g);
+    E('path', { d: 'M-9.2,-5.5 l3,0 l-3,3 z', fill: '#9a9480' }, g);                   // la esquina marcada
+  } else if (t === 'sw') {                           // el switch solo: carcasa negra, tapa y la cruz roja donde calza la tecla
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -27.5, y: -27.5, width: 55, height: 55, rx: 2.5, fill: '#151515' }, c);
+    E('path', { d: 'M-23,-25 H23 L25,-23 V23 L23,25 H-23 L-25,23 V-23 Z', fill: '#262626', stroke: '#333', 'stroke-width': .8 }, c);
+    E('rect', { x: -11, y: 12, width: 22, height: 9, rx: 1.5, fill: '#1c1c1c' }, c);           // la ventanita del LED
+    E('circle', { r: 11, fill: '#2e2e2e' }, c);
+    E('rect', { x: -1.7, y: -7.5, width: 3.4, height: 15, rx: .6, fill: '#c8352d' }, c);
+    E('rect', { x: -7.5, y: -1.7, width: 15, height: 3.4, rx: .6, fill: '#c8352d' }, c);
+  } else if (t === 'tecla') {
+    E('rect', { x: -34, y: -34, width: 68, height: 68, rx: 7, fill: 'url(#tecla)', filter: 'url(#sh2)' }, g);
+    E('rect', { x: -25.5, y: -30, width: 51, height: 49, rx: 6, fill: '#262626' }, g);
+  } else if (t === 'pot') {
+    for (const dx of [-10, 0, 10]) E('rect', { x: dx - 1.4, y: 22, width: 2.8, height: 7, fill: '#c8cac7' }, g);
+    for (const dx of [-22, 22]) E('rect', { x: dx - 1.5, y: -6, width: 3, height: 8, fill: '#c8cac7' }, g);
+    E('rect', { x: -19.7, y: -23.7, width: 39.4, height: 47.3, rx: 2, fill: 'url(#metal)', filter: 'url(#sh2)' }, g);
+    E('circle', { r: 16.5, fill: 'url(#perilla)', filter: 'url(#sh2)' }, g);
+    E('circle', { r: 14, fill: 'none', stroke: '#2a2a2a', 'stroke-width': 2.6, 'stroke-dasharray': '1.4 1.9' }, g);
+    E('line', { x1: 0, y1: -5, x2: 0, y2: -14, stroke: '#f2f2f2', 'stroke-width': 2.2, 'stroke-linecap': 'round', transform: `rotate(${[-60, 20, -20, 70][l.n - 1] || 0})` }, g);
+  } else if (t === 'jack') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -22, y: 35.6, width: 44, height: 11.8, fill: '#1b1b1b' }, c);
+    E('rect', { x: -35.9, y: -47.1, width: 71.7, height: 82.7, rx: 2.5, fill: '#121212' }, c);
+    for (let j = 0; j < 3; j++) { const fy = -38 + j * 23;
+      E('rect', { x: -35.9, y: fy, width: 71.7, height: 15, rx: 1.5, fill: '#1f1f1f' }, c);
+      E('rect', { x: -35.9, y: fy, width: 71.7, height: 2.4, fill: '#333' }, c); }
+    E('rect', { x: -18, y: -62, width: 36, height: 15, fill: '#171717' }, c);
+    for (let j = 0; j < 5; j++) E('line', { x1: -18, y1: -59.5 + j * 2.6, x2: 18, y2: -59.5 + j * 2.6, stroke: '#2e2e2e', 'stroke-width': 1 }, c);
+    E('rect', { x: -18, y: -63, width: 36, height: 3.6, fill: 'url(#metal)' }, c);
+  } else if (t === 'din') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -38.8, y: -33.4, width: 77.6, height: 58.2, rx: 3, fill: '#151515' }, c);
+    E('rect', { x: -34, y: -33.4, width: 68, height: 8, fill: 'url(#metal)', opacity: .85 }, c);
+    E('circle', { cx: 0, cy: -2, r: 21, fill: '#262626' }, c);
+    E('circle', { cx: 0, cy: -2, r: 15, fill: '#0a0a0a' }, c);
+    for (const a of [-90, -45, 45, 90, 180]) { const r = a * Math.PI / 180;
+      E('circle', { cx: Math.cos(r + Math.PI) * 9, cy: -2 + Math.sin(r + Math.PI) * 9 * -1, r: 1.6, fill: '#8d8d8d' }, c); }
+  } else if (t === 'b2' || t === 'b3') {
+    const n = t === 'b2' ? 2 : 3, h = n * 20;
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -15, y: -h / 2, width: 30, height: h - .4, rx: 1.5, fill: 'url(#bornera)' }, c);
+    for (let j = 0; j < n; j++) { const py = -h / 2 + 10 + j * 20;
+      E('rect', { x: -15, y: py - 5, width: 5, height: 10, fill: '#0d2238' }, c);
+      E('circle', { cx: 3, cy: py, r: 6.8, fill: 'url(#metal)' }, c);
+      E('line', { x1: -3, y1: py, x2: 9, y2: py, stroke: '#5a5e62', 'stroke-width': 1.6, transform: `rotate(45 3 ${py})` }, c); }
+  } else if (t[0] === 'h' && t.length <= 3) {
+    const n = l.pads.length, c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -n * 5, y: -5.1, width: n * 10, height: 10.2, rx: .8, fill: 'url(#hembra)' }, c);
+    for (let j = 0; j < n; j++) { const px = -n * 5 + 5 + j * 10;
+      E('rect', { x: px - 1.9, y: -1.9, width: 3.8, height: 3.8, fill: '#030303' }, c);
+      if (j) E('line', { x1: px - 5, y1: -5.1, x2: px - 5, y2: 5.1, stroke: '#000', 'stroke-width': .5 }, c); }
+  } else if (t === 'esp32') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -55, y: -112.5, width: 110, height: 225, rx: 3, fill: '#161616' }, c);
+    E('rect', { x: -35.5, y: 37, width: 71, height: 100, fill: '#1e2a35' }, c);       // el módulo WROOM
+    E('rect', { x: -33.5, y: 39, width: 67, height: 66, rx: 1.5, fill: 'url(#metal)' }, c);
+    E('path', { d: 'M-28,112 h10 v14 h8 v-14 h8 v14 h8 v-14 h8 v14 h8 v-14 h6', fill: 'none', stroke: '#c9a64a', 'stroke-width': 1.6 }, c);
+    E('text', { x: 0, y: 66, 'font-size': 9, 'font-weight': 700, 'text-anchor': 'middle', fill: '#5a5e62', 'font-family': 'Archivo, sans-serif', text: 'ESP32-S3' }, c);
+    E('text', { x: 0, y: 78, 'font-size': 6.5, 'text-anchor': 'middle', fill: '#6b6f73', 'font-family': 'Archivo, sans-serif', text: 'WROOM-1 N16R8' }, c);
+    for (let j = 0; j < 22; j++) for (const px of [-50, 50]) E('circle', { cx: px, cy: -105.1 + j * 10, r: 2.6, fill: '#d4a72c' }, c);
+    for (const px of [-21, 21]) E('rect', { x: px - 17, y: -119, width: 34, height: 13, rx: 6, fill: 'url(#metal)', stroke: '#7c8084', 'stroke-width': .6 }, c);
+    E('text', { x: -21, y: -96, 'font-size': 6, 'text-anchor': 'middle', fill: '#bbb', 'font-family': 'Archivo, sans-serif', text: 'USB' }, c);
+    E('text', { x: 21, y: -96, 'font-size': 6, 'text-anchor': 'middle', fill: '#bbb', 'font-family': 'Archivo, sans-serif', text: 'COM' }, c);
+    for (const px of [-36, 36]) { E('rect', { x: px - 7, y: -86, width: 14, height: 11, fill: '#d9d7cf' }, c); E('circle', { cx: px, cy: -80.5, r: 3, fill: '#2a2a2a' }, c); }
+    E('rect', { x: -4, y: -70, width: 8, height: 8, fill: '#f1f0ec' }, c);
+    E('rect', { x: -14, y: -40, width: 28, height: 16, fill: '#0e0e0e' }, c);
+    for (let j = 0; j < 4; j++) E('rect', { x: -30 + j * 17, y: -10, width: 7, height: 4, fill: '#cdbb91' }, c);
+  } else if (t === 'pcm') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -63, y: -33.5, width: 126, height: 67, rx: 2.5, fill: '#5d2f91' }, c);
+    E('rect', { x: -53.5, y: -41.5, width: 20, height: 36, rx: 1.5, fill: '#151515' }, c);
+    E('rect', { x: -53.5, y: -43, width: 20, height: 4.5, fill: 'url(#metal)' }, c);
+    E('rect', { x: -8, y: -12, width: 22, height: 14, fill: '#141414' }, c);
+    for (let j = 0; j < 6; j++) E('rect', { x: -26 + (j % 3) * 9, y: -24 + Math.floor(j / 3) * 34, width: 5, height: 3, fill: '#cdbb91' }, c);
+    for (let j = 0; j < 4; j++) E('rect', { x: 22 + j * 7, y: 8, width: 4.5, height: 4.5, fill: '#d4a72c' }, c);
+    E('text', { x: 4, y: 26, 'font-size': 7, 'text-anchor': 'middle', fill: '#e9dcff', 'font-family': 'Archivo, sans-serif', text: 'PCM5102A' }, c);
+    for (let j = 0; j < 6; j++) E('circle', { cx: 57, cy: -24.5 + j * 10, r: 2.6, fill: '#d4a72c' }, c);
+    for (let j = 0; j < 3; j++) E('circle', { cx: -47 + j * 10, cy: 27.5, r: 2.6, fill: '#d4a72c' }, c);
+  } else if (t === 'mpu') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -42, y: -32.5, width: 84, height: 65, rx: 2.5, fill: '#2156b3' }, c);
+    for (const px of [-32, 32]) { E('circle', { cx: px, cy: -22.5, r: 5.6, fill: '#d4a72c' }, c); E('circle', { cx: px, cy: -22.5, r: 3.6, fill: '#0b0806' }, c); }
+    E('rect', { x: -8, y: -12, width: 16, height: 16, fill: '#141414' }, c);
+    E('rect', { x: 14, y: -6, width: 9, height: 6, fill: '#1a1a1a' }, c);
+    E('rect', { x: -24, y: 2, width: 4, height: 3, fill: '#e64a3a' }, c);
+    E('text', { x: 0, y: 15, 'font-size': 6.5, 'text-anchor': 'middle', fill: '#cfe0ff', 'font-family': 'Archivo, sans-serif', text: 'GY-521' }, c);
+    for (let j = 0; j < 8; j++) E('circle', { cx: -35 + j * 10, cy: 27.5, r: 2.6, fill: '#d4a72c' }, c);
+  } else if (t === 'oled') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('rect', { x: -53.5, y: -54.5, width: 107, height: 109, rx: 3, fill: '#1f4fa8' }, c);
+    for (const [cx, cy] of [[-46, -47], [46, -47], [-46, 47], [46, 47]]) E('circle', { cx, cy, r: 3.6, fill: '#cfd6e0' }, c);
+    for (let j = 0; j < 4; j++) { E('circle', { cx: -15 + j * 10, cy: -46.1, r: 2.6, fill: '#d4a72c' }, c);
+      E('text', { x: -15 + j * 10, y: -38, 'font-size': 3.6, 'text-anchor': 'middle', fill: '#cfe0ff', 'font-family': 'Archivo, sans-serif', text: ['GND','VCC','SCL','SDA'][j] }, c); }
+    E('rect', { x: -51.5, y: -32, width: 103, height: 74, fill: '#0b0b0b' }, c);
+    E('rect', { x: -46, y: -22, width: 92, height: 46, fill: '#050608' }, c);
+    E('rect', { x: -20, y: 42, width: 40, height: 6, fill: '#2a2a2a' }, c);
+  } else if (t === 'inmp') {
+    const c = E('g', { filter: 'url(#sh2)' }, g);
+    E('circle', { r: 25, fill: '#1b3c82' }, c);
+    E('rect', { x: -8, y: -6, width: 16, height: 12, rx: 1, fill: 'url(#metal)' }, c);
+    E('circle', { r: 1.6, fill: '#3a3d40' }, c);
+    for (const px of [-10, 0, 10]) for (const py of [-15, 15]) E('circle', { cx: px, cy: py, r: 2.6, fill: '#d4a72c' }, c);
+    E('text', { x: 0, y: -19.5, 'font-size': 3.6, 'text-anchor': 'middle', fill: '#cfe0ff', 'font-family': 'Archivo, sans-serif', text: 'INMP441' }, c);
+  }
+}
+
+// ---------------------------------------------------------------- la placa desnuda (una vez por cara)
+function placa(cara, g) {
+  const otra = cara === 'top' ? 'bot' : 'top';
+  E('rect', { x: 0, y: 0, width: W, height: H, rx: 2, fill: '#0b0c0b' }, g);
+  const pistasFondo = E('g', { opacity: .55 }, g);                                  // la otra cara, apenas, a través de la fibra
+  for (const [, w, d] of PCB.pistas[otra]) E('path', { d, fill: 'none', stroke: '#101210', 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, pistasFondo);
+  const pistas = E('g', {}, g);                                                     // las de esta cara, bajo la máscara
+  for (const [, w, d] of PCB.pistas[cara]) E('path', { d, fill: 'none', stroke: '#1b1e1b', 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, pistas);
+  const cobre = E('g', { display: 'none' }, g);                                     // «ver pistas»: el cobre a la vista
+  for (const [, w, d] of PCB.pistas[otra]) E('path', { d, fill: 'none', stroke: '#6b4a2c', 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .55, 'stroke-dasharray': '3 2.2' }, cobre);
+  for (const [, w, d] of PCB.pistas[cara]) E('path', { d, fill: 'none', stroke: '#d08a4c', 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, cobre);
+  for (const [x, y, dia, , hr] of PCB.vias) { E('circle', { cx: x, cy: y, r: dia / 2, fill: '#1e211e' }, g); E('circle', { cx: x, cy: y, r: hr, fill: '#050505' }, g); }
+  const silk = E('g', {}, g);
+  dibujarSilk(PCB.silk[cara], silk, '#ecebe4');
+  for (const c of PCB.comps) dibujarSilk(c.silk[cara], silk, '#ecebe4');
+  // las ventanas de los LEDs atraviesan la placa
+  const ventanas = {};
+  for (const c of PCB.comps) if (c.ventanas) ventanas[c.id] = E('path', { d: c.ventanas[0], fill: '#140d08' }, g);
+  // pads: los de agujero se ven por las dos caras; los SMD sólo por la suya
+  const pads = E('g', {}, g);
+  for (const c of PCB.comps) for (const p of c.pads) {
+    if (p.cara !== 'tht' && p.cara !== cara) continue;
+    if (p.pts) E('path', { d: p.pts, fill: 'url(#hasl)' }, pads);
+    else if (p.w !== p.h) E('rect', { x: p.x - p.w / 2, y: p.y - p.h / 2, width: p.w, height: p.h, rx: Math.min(p.w, p.h) / 2, fill: 'url(#hasl)', transform: p.rot ? `rotate(${p.rot} ${p.x} ${p.y})` : '' }, pads);
+    else E('circle', { cx: p.x, cy: p.y, r: p.w / 2, fill: 'url(#hasl)' }, pads);
+    if (p.hueco) E('circle', { cx: p.x, cy: p.y, r: p.hueco, fill: '#0a0705' }, pads);
+  }
+  for (const [x, y, r] of PCB.agujeros) E('circle', { cx: x, cy: y, r, fill: '#140d08' }, g);
+  for (const c of PCB.comps) for (const [x, y, r] of c.agujeros) E('circle', { cx: x, cy: y, r, fill: '#140d08' }, g);
+  return {
+    cobre, pistas, ventanas,
+    zonas: E('g', {}, g),          // dónde se puede tocar un lugar vacío
+    piezas: E('g', {}, g),
+    soldadura: E('g', {}, g),
+    luz: E('g', {}, g),
+    marca: E('g', { 'pointer-events': 'none' }, g),
+    rotulos: E('g', {}, g),
+  };
+}
+const CARAS = { top: placa('top', caraTop), bot: placa('bot', caraBot) };
+let cara = 'top', verPistas = false;
+
+// ---------------------------------------------------------------- estado
+const puestas = new Set();
+let elegido = null;                 // el lugar elegido (puesto o vacío)
+let pasoActual = -1;                // −1 = sin paso a paso
+const PASOS = [
+  { t:'Los LEDs', tipos:['led'], cara:'bot',
+    txt:'Se parte por lo más bajo y por abajo: los seis LEDs van en la cara de abajo, con la placa plana sobre la mesa. Son lo más chico de todo; sin apuro.' },
+  { t:'Las resistencias', tipos:['r1M','r100k','r220'],
+    txt:'Once resistencias de tres valores, y cada una tiene su lugar. Lee las bandas antes de ponerla: se ven todas iguales.' },
+  { t:'Los diodos', tipos:['diodo'], txt:'Uno por piezo. Acá sí importa el sentido: la franja va hacia la barra de la serigrafía.' },
+  { t:'Los condensadores de 10 nF', tipos:['c10n'], txt:'Uno por piezo, al lado de su resistencia. No tienen polaridad.' },
+  { t:'El micrófono', tipos:['inmp'], txt:'El INMP441 va soldado directo, sin zócalo, en el círculo junto al ESP32.' },
+  { t:'El condensador de 100 µF', tipos:['c100u'], txt:'Tiene polaridad: la franja (−) va hacia GND, lejos del +.' },
+  { t:'Las tiras hembra', tipos:['h22','h5','h3','h8','h4'],
+    txt:'Los zócalos de los módulos. La de 4 es para la pantalla OLED y es opcional.' },
+  { t:'Los switches', tipos:['sw'], txt:'Sin tecla: las teclas van al final. Que queden apoyados y derechos antes de soldar.' },
+  { t:'Los potenciómetros', tipos:['pot'], txt:'Tres patas y dos aletas: se sueldan las cinco.' },
+  { t:'Las borneras', tipos:['b2','b3'], txt:'Con las bocas hacia afuera de la placa.' },
+  { t:'Los jacks', tipos:['jack'], txt:'Patas gruesas: más calor y más estaño.' },
+  { t:'El MIDI', tipos:['din'], txt:'El último que se suelda. Con él, la placa queda lista para los módulos.' },
+  { t:'Los módulos', tipos:['esp32','pcm','mpu'],
+    txt:'Los módulos no se sueldan: se enchufan. Antes de enchufar el DAC, revisa los puentes de soldadura de atrás (toca el PCM5102A para ver cómo van): abiertos, el DAC queda mudo. Antes de conectar el USB, revisa con el multímetro que no haya continuidad entre 3,3 V y GND, ni entre 5 V y GND.' },
+  { t:'Las teclas', tipos:['tecla'], txt:'Lo último: ya no queda nada que soldar. Cada tecla se aprieta derecha sobre la cruz de su switch, hasta el fondo.' },
+];
+
+function faltaPara(l) {                              // por qué no se puede poner (o '' si se puede)
+  for (const d of l.necesita || []) if (!puestas.has(d))
+    return l.tipo === 'tecla' ? `Primero va el switch ${d}: la tecla se calza en su cruz.` : `Primero va la ${TIPOS[L[d].tipo].nombre.toLowerCase()}: el módulo se enchufa en ella.`;
+  if (l.choca && puestas.has(l.choca)) return `El IMU y la pantalla OLED usan el mismo lugar: saca primero ${l.choca === 'IMU' ? 'el IMU' : 'la pantalla'}.`;
+  return '';
+}
+function encimaDe(l) { return LUGARES.find(m => m.necesita && m.necesita.includes(l.id) && puestas.has(m.id)); }
+function poner(l) {
+  const f = faltaPara(l);
+  if (f) { aviso(f); return false; }
+  puestas.add(l.id);
+  return true;
+}
+function sacar(l) {
+  const m = encimaDe(l);
+  if (m) {
+    aviso(m.tipo === 'tecla' ? 'Primero saca la tecla: está calzada en este switch.'
+      : `Primero saca ${{ ESP32:'el ESP32', DAC:'el DAC', IMU:'el IMU' }[m.id] || 'la pantalla'}: ${m.id === 'OLED' ? 'está enchufada' : 'está enchufado'} en esta tira.`);
+    return false;
+  }
+  puestas.delete(l.id);
+  return true;
+}
+
+let avisoT;
+function aviso(txt) { const a = $('aviso'); a.textContent = txt; a.classList.add('ver'); clearTimeout(avisoT); avisoT = setTimeout(() => a.classList.remove('ver'), 3800); }
+
+// ---------------------------------------------------------------- la bandeja: las piezas sueltas sobre la mesa
+const BANDEJA = {                    // centro en el escenario, giro y escala respecto de la placa
+  esp32:[150,780,90,.8], pcm:[355,780,0,.8], mpu:[490,780,0,.8], oled:[615,780,0,.8], inmp:[730,780,0,.95],
+  jack:[840,780,0,.75], din:[955,780,0,.8], b3:[1070,780,90,.9], b2:[1180,780,90,.9], pot:[1290,780,0,.95],
+  sw:[1405,780,0,.8], tecla:[1515,780,0,.8],
+  h22:[150,925,0,.8], h8:[350,925,0,.95], h5:[460,925,0,.95], h4:[550,925,0,.95], h3:[635,925,0,.95],
+  r1M:[730,925,0,1.25], r100k:[835,925,0,1.25], r220:[940,925,0,1.25], diodo:[1045,925,0,1.25],
+  c10n:[1145,925,0,1.4], c100u:[1240,925,0,1.4], led:[1340,925,0,1.6],
+};
+const ETQ_Y = { 780: 868, 925: 968 };
+const porTipo = t => LUGARES.filter(l => l.tipo === t);
+const sueltas = t => porTipo(t).filter(l => !puestas.has(l.id)).length;
+function transformBandeja(t, k = 0) {
+  const [x, y, r, e] = BANDEJA[t];
+  return `translate(${x + k * 5},${y - k * 5}) rotate(${r}) scale(${S * e})`;
+}
+function pintarBandeja() {
+  capaBandeja.innerHTML = '';
+  const tiposPaso = pasoActual >= 0 ? PASOS[pasoActual].tipos : [];
+  for (const t in BANDEJA) {
+    const n = sueltas(t), modelo = porTipo(t)[0], [x, y] = BANDEJA[t];
+    const g = E('g', { 'data-pila': t, style: 'cursor:grab' }, capaBandeja);
+    for (let k = Math.min(n, 3) - 1; k >= 0; k--) {
+      const c = E('g', { transform: transformBandeja(t, k) }, g);
+      pieza(Object.assign({}, modelo, { rot: 0 }), c);
+    }
+    const [x0, y0, x1, y1] = cajaLocal(modelo), e = BANDEJA[t][3] * S, rot = BANDEJA[t][2] === 90;
+    const hw = (rot ? (y1 - y0) : (x1 - x0)) * e / 2 + 6, hh = (rot ? (x1 - x0) : (y1 - y0)) * e / 2 + 6;
+    E('rect', { x: x - hw, y: y - hh, width: hw * 2, height: hh * 2, fill: 'transparent' }, g);
+    const enPaso = tiposPaso.includes(t);
+    const etq = E('text', { x, y: ETQ_Y[y], 'text-anchor': 'middle', 'font-size': 13, 'font-family': 'Archivo, sans-serif',
+      fill: enPaso ? '#F5B041' : '#f3e3c4', opacity: n ? (enPaso ? 1 : .75) : .3, 'font-weight': enPaso ? 650 : 400,
+      stroke: '#000', 'stroke-width': 3, 'paint-order': 'stroke' }, g);
+    etq.textContent = TIPOS[t].pila + '  ';
+    E('tspan', { fill: '#F5B041', text: '×' + n }, etq);
+    g.addEventListener('pointerdown', e => empezarArrastre(e, { tipo: t, desde: 'bandeja' }));
+  }
+}
+
+// ---------------------------------------------------------------- pintar la placa con lo que está puesto
+function transformLugar(l) { return `translate(${l.x},${l.y}) rotate(${l.rot})`; }
+function pintar() {
+  for (const k of ['top', 'bot']) { const c = CARAS[k];
+    c.piezas.innerHTML = ''; c.soldadura.innerHTML = ''; c.zonas.innerHTML = ''; c.luz.innerHTML = ''; }
+  const tiposPaso = pasoActual >= 0 ? PASOS[pasoActual].tipos : [];
+  for (const l of LUGARES) {
+    const puesta = puestas.has(l.id);
+    // la zona tocable (vacía o puesta): un rectángulo invisible bajo las piezas
+    // (sin zona si falta lo de abajo: tocar ahí elige el switch o la tira, no la tecla o el módulo)
+    const sinBase = !puesta && (l.necesita || []).some(d => !puestas.has(d));
+    if (!sinBase) for (const k of ['top', 'bot']) {
+      const [x0, y0, x1, y1] = l.caja;
+      const z = E('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: 'transparent', 'data-lugar': l.id }, CARAS[k].zonas);
+      z.addEventListener('pointerdown', e => tocarLugar(e, l));
+    }
+    if (l.tipo === 'led') {                          // el LED se ve por la ventana desde arriba, y entero desde abajo
+      CARAS.top.ventanas[l.c.id].setAttribute('fill', puesta ? '#f6f2e4' : '#140d08');
+      if (puesta) {
+        const g = E('g', { transform: transformLugar(l), 'data-lugar': l.id }, CARAS.bot.piezas);
+        pieza(l, g);
+        g.addEventListener('pointerdown', e => tocarLugar(e, l));
+        const v = E('g', { 'data-lugar': l.id }, CARAS.top.piezas);
+        const [x0, y0, x1, y1] = l.caja;
+        E('rect', { x: l.x - 3, y: l.y - 3, width: 6, height: 6, fill: '#ddd4b8' }, v);
+        E('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: 'transparent' }, v);
+        v.addEventListener('pointerdown', e => tocarLugar(e, l));
+      }
+      continue;
+    }
+    if (puesta) {
+      const g = E('g', { transform: transformLugar(l), 'data-lugar': l.id, style: 'cursor:grab' }, CARAS.top.piezas);
+      pieza(l, g);
+      g.addEventListener('pointerdown', e => tocarLugar(e, l));
+      // por abajo: el estaño de cada pata (las piezas que se enchufan no tienen)
+      for (const p of l.pads) if (p.cara === 'tht') {
+        E('circle', { cx: p.x, cy: p.y, r: Math.max(p.w, p.h) / 2 + .3, fill: 'url(#estano)' }, CARAS.bot.soldadura);
+        E('circle', { cx: p.x + .3, cy: p.y + .3, r: .9, fill: '#8a8d8f' }, CARAS.bot.soldadura);
+      }
+    }
+  }
+  // el paso a paso: los lugares que faltan en este paso laten en ámbar
+  for (const k of ['top', 'bot']) {
+    const m = CARAS[k].marca; m.innerHTML = '';
+    for (const l of LUGARES) if (tiposPaso.includes(l.tipo) && !puestas.has(l.id) && !opcional(l)) {
+      const [x0, y0, x1, y1] = l.caja;
+      E('rect', { x: x0 - 2, y: y0 - 2, width: x1 - x0 + 4, height: y1 - y0 + 4, fill: '#F5B041', 'fill-opacity': .08, stroke: '#F5B041', 'stroke-width': 1.4, class: 'late' }, m);
+    }
+  }
+  pintarBandeja();
+  pintarCables();
+  pintarSeleccion();
+  const total = LUGARES.filter(l => !opcional(l)).length, n = LUGARES.filter(l => !opcional(l) && puestas.has(l.id)).length;
+  $('cuenta').textContent = `${n} de ${total} piezas`;
+  revisarListo(n === total);
+  pintarPanel();
+}
+
+// ---------------------------------------------------------------- selección: la pieza y sus redes
+function pintarSeleccion() {
+  for (const k of ['top', 'bot']) CARAS[k].rotulos.innerHTML = '';
+  pintarSelEsquema();
+  pintarSelCables();
+  if (elegidoRed) { for (const k of ['top', 'bot']) resaltarRed(elegidoRed, CARAS[k].rotulos, k); return; }
+  if (!elegido) return;
+  const l = elegido;
+  for (const k of ['top', 'bot']) {
+    const g = CARAS[k].rotulos;
+    for (const n of redesResaltadas()) resaltarRed(n, g, k);
+    const [x0, y0, x1, y1] = l.caja;
+    E('rect', { x: x0 - 3, y: y0 - 3, width: x1 - x0 + 6, height: y1 - y0 + 6, fill: 'none', stroke: '#F5B041', 'stroke-width': 1.6, 'stroke-dasharray': '5 3', 'pointer-events': 'none' }, g);
+    if (l.tipo === 'esp32' || l.tipo === 'h22') rotulosESP(g, k);
+  }
+}
+function resaltarRed(n, g, k, fuerte = true) {
+  const r = RED[n]; if (!r) return;
+  const otra = k === 'top' ? 'bot' : 'top';
+  const h = E('g', { 'pointer-events': 'none' }, g);
+  for (const [w, d] of r[otra]) E('path', { d, fill: 'none', stroke: '#F5B041', 'stroke-width': w + .6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': '4 3', opacity: .55 }, h);
+  for (const [w, d] of r[k]) E('path', { d, fill: 'none', stroke: '#F5B041', 'stroke-width': w + 1.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: fuerte ? .95 : .7 }, h);
+  for (const v of r.vias) E('circle', { cx: v[0], cy: v[1], r: v[2] / 2 + .8, fill: '#F5B041' }, h);
+  for (const c of PCB.comps) for (const p of c.pads) if (p.red === n && (p.cara === 'tht' || p.cara === k))
+    E('circle', { cx: p.x, cy: p.y, r: Math.max(p.w, p.h) / 2 + 1.2, fill: 'none', stroke: '#F5B041', 'stroke-width': 1.6 }, h);
+  // dónde llega al ESP32: el número del GPIO junto al pin
+  const pinEsp = ESP.pads.find(p => p.red === n);
+  if (pinEsp && n in GPIO) {
+    const izq = pinEsp.x < 460, x = izq ? pinEsp.x - 8 : pinEsp.x + 8;
+    texto(h, x, pinEsp.y + 3, 'GPIO ' + GPIO[n], { 'font-size': 9, 'font-weight': 700, fill: '#F5B041', 'text-anchor': izq ? 'end' : 'start',
+      stroke: '#000', 'stroke-width': 3, 'paint-order': 'stroke' }, k);
+  }
+}
+function rotulosESP(g, k) {
+  for (const p of ESP.pads) {
+    const izq = p.x < 460, rot = ESP_PIN[+p.n - 1], fn = FUNCION[p.red];
+    const x = izq ? HE_IZQ - 6 : HE_DER + 6;
+    const t = texto(g, x, p.y + 3, (fn ? fn + ' · ' : '') + (/^\d+$/.test(rot) ? 'GPIO ' + rot : rot), {
+      'font-size': 7.6, fill: fn ? '#F5B041' : (/^\d+$/.test(rot) ? '#b9aa8e' : '#f3e3c4'), 'font-weight': fn ? 650 : 400,
+      'text-anchor': izq ? 'end' : 'start', stroke: '#000', 'stroke-width': 3.2, 'paint-order': 'stroke', style: 'cursor:help' }, k);
+    if (fn) {
+      const capa = E('g', {}, g);
+      t.addEventListener('pointerenter', () => { capa.innerHTML = ''; resaltarRed(p.red, capa, k); });
+      t.addEventListener('pointerleave', () => { capa.innerHTML = ''; });
+    }
+  }
+}
+const HE_IZQ = 400.4 - 4, HE_DER = 522.4 + 4;     // los rótulos van por fuera de la segunda fila de agujeros
+
+// ---------------------------------------------------------------- el panel
+// la misma pieza vista en la otra representación: en la placa se ve su símbolo, en el esquema y en los cables, su lugar en la placa
+function miniatura(l) {
+  const AR = 530 / 170;
+  const caja = (x0, y0, x1, y1, m) => {
+    let w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
+    if (w / h < AR) w = h * AR; else h = w / AR;
+    return [(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h];
+  };
+  if (vista === 'placa') {
+    const des = esqDe(l), c = des && ESQUEMA.cajas[des];
+    if (!c) return '';
+    const [x, y, w, h] = caja(...c, Math.max(14, (c[3] - c[1]) * .35));
+    return `<svg class="mini" viewBox="${x} ${y} ${w} ${h}"><use href="#esqContenido"/></svg>
+      <p class="tenue">Así aparece en el esquema, con sus cables en ámbar.</p>`;
+  }
+  const [x0, y0, x1, y1] = l.caja;
+  const sx0 = cara === 'top' ? BX + x0 * S : BX + (W - x1) * S, sx1 = cara === 'top' ? BX + x1 * S : BX + (W - x0) * S;
+  const [x, y, w, h] = caja(sx0, BY + y0 * S, sx1, BY + y1 * S, 40);
+  return `<svg class="mini" viewBox="${x} ${y} ${w} ${h}"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#3a2716"/><use href="#cara${cara === 'top' ? 'Top' : 'Bot'}"/></svg>
+    <p class="tenue">Así está en la placa${puestas.has(l.id) ? '' : ' (todavía sin poner)'}.</p>`;
+}
+const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function pintarPanel() {
+  const p = $('panel');
+  let h = '';
+  if (pasoActual >= 0) {
+    const P = PASOS[pasoActual], ls = LUGARES.filter(l => P.tipos.includes(l.tipo) && !opcional(l));
+    const n = ls.filter(l => puestas.has(l.id)).length;
+    h += `<div class="paso"><h2>${esc(P.t)}<small>Paso ${pasoActual + 1} de ${PASOS.length} · ${n} de ${ls.length} puestas</small></h2>
+      <p>${esc(P.txt)}</p>
+      <div class="acciones">
+        <button class="enlace" data-a="anterior" ${pasoActual ? '' : 'disabled'}>← anterior</button>
+        <button class="enlace${n === ls.length ? ' on' : ''}" data-a="siguiente">${pasoActual === PASOS.length - 1 ? 'terminar' : 'siguiente →'}</button>
+        <button class="enlace" data-a="ponerPaso" ${n === ls.length ? 'disabled' : ''}>poner las de este paso</button>
+        <button class="enlace" data-a="salir">salir</button>
+      </div></div>`;
+  }
+  if (elegidoRed) {
+    const n = elegidoRed, q = quienesEn(n);
+    h += `<h2>${esc(nombreRed(n))}<small>un cable · ${q.length} puntas</small></h2>
+      <p>Une ${esc(q.slice(0, -1).join(', '))}${q.length > 1 ? ' y ' : ''}${esc(q[q.length - 1] || '')}. En la placa es una pista de cobre; en el esquema, una línea o una etiqueta con el mismo nombre.</p>
+      <div class="acciones">${vista === 'cables' ? `<button class="enlace" data-a="cablear">${conectados.has(n) ? 'quitar este cable' : 'tirar este cable'}</button>` : ''}
+      <button class="enlace" data-a="cerrar">cerrar</button></div>`;
+  } else if (elegido) {
+    const l = elegido, T = TIPOS[l.tipo], puesta = puestas.has(l.id);
+    const bandas = T.bandas ? `<span class="bandas">${T.bandas.map(b => `<i style="background:${COLOR[b]}"></i>`).join('')}</span>` : '';
+    h += `<h2>${esc(titulo(l))}<small>${puesta ? 'puesta' : 'falta'}${l.cara === 'bot' ? ' · va por la cara de abajo' : ''}${T.opcional ? ' · opcional' : ''}</small></h2>
+      ${miniatura(l)}
+      <p>${esc(T.que)}</p>`;
+    const pap = papel(l);
+    if (pap) h += `<p>${esc(pap)}</p>`;
+    h += `<p>${bandas}<b>Cómo se reconoce.</b> ${esc(T.reconoce)}</p><p><b>${l.pads.length ? 'Al soldar.' : 'Al ponerlo.'}</b> ${esc(T.soldar)}</p>`;
+    if (T.puentes) {
+      h += `<p><b>Los puentes.</b> ${esc(T.puentes.txt)}</p>
+        <div class="pines puentes">${T.puentes.filas.map(f => `<span>${esc(f[0])}</span><span>${esc(f[1])}</span><span>a ${esc(f[2])}</span>`).join('')}</div>
+        <p><b>Cómo revisarlo.</b> ${esc(T.puentes.medir)}</p>`;
+    }
+    if (l.pads.length && l.pads.length <= 8) {
+      const pines = [...l.pads].sort((a, b) => a.n - b.n);
+      h += `<div class="pines">${pines.map(p => `<span>pin ${esc(p.n)}</span><span>${esc(nombreRed(p.red))}</span>`).join('')}</div>`;
+    } else if (l.tipo === 'esp32' || l.tipo === 'h22') {
+      h += `<p class="tenue">Los rótulos junto a los pines dicen qué hay en cada GPIO. Pasa el puntero por uno en ámbar para ver adónde llega.</p>`;
+    }
+    h += `<div class="acciones">${vista !== 'esquema' ? `<button class="enlace" data-a="${puesta ? 'sacar' : 'poner'}">${puesta ? 'sacar' : 'poner'}</button>` : ''}
+      ${vista !== 'placa' ? '<button class="enlace" data-a="acercar">acercar</button>' : ''}
+      <button class="enlace" data-a="cerrar">cerrar</button></div>`;
+  } else if (vista === 'cables') {
+    h += `<h2>Las conexiones, sin placa<small>${conectados.size} de ${TODAS_LAS_REDES.length} cables tirados</small></h2>
+      <p>Toca una pieza y usa «sacar» o «poner» en este panel. Las que faltan quedan punteadas en su lugar.</p>
+      <p>Para cablear uno a uno: «quitar cables» deja sólo las piezas, y cada pin libre muestra un <b>anillo</b> del color de su cable. Toca un anillo para tirar ese cable; toca un cable para ver qué une y «quitar este cable» para sacarlo.</p>
+      <p class="tenue">Un cable cuya otra punta todavía no está queda colgando. GND, 3,3 V y 5 V se tiran de una vez para todos sus pines. Rueda para acercarte, arrastra para moverte, doble clic en una pieza para verla de cerca.</p>`;
+  } else if (vista === 'esquema') {
+    h += `<h2>El esquema electrónico<small>el mismo circuito, dibujado con símbolos</small></h2>
+      <p>Toca un símbolo para ver qué pieza es y dónde va en la placa; toca un cable o una etiqueta para ver qué une. Las etiquetas con el mismo nombre (pot1, mic2…) están conectadas aunque no haya una línea entre ellas.</p>
+      <p class="tenue">Rueda para acercarte, arrastra para moverte, doble clic en un símbolo para verlo de cerca.</p>`;
+  } else if (pasoActual < 0) {
+    h += `<h2>La placa del PercuSynth<small>V2.0 · 201 × 124 mm · ${LUGARES.length} piezas</small></h2>
+      <p>Toca cualquier pieza para saber qué es, qué hace en el PercuSynth y cómo se suelda. Sus pistas se encienden en ámbar hasta el pin del ESP32 donde llegan.</p>
+      <p>Arrastra una pieza fuera de la placa para sacarla, o desde la mesa hasta su lugar para ponerla. Un clic sobre un montón pone una en el primer lugar libre.</p>
+      <p class="tenue">«Paso a paso» arma la placa en el orden en que se suelda: de lo más bajo a lo más alto, así se apoya pareja cuando la das vuelta. Teclas: V da vuelta la placa, P muestra las pistas, Esc suelta la selección.</p>`;
+  }
+  p.innerHTML = h;
+}
+$('panel').addEventListener('click', e => {
+  const a = e.target.closest('[data-a]'); if (!a || a.disabled) return;
+  const k = a.dataset.a;
+  if (k === 'sacar') { if ((vista === 'cables' ? sacarEnCables : sacar)(elegido)) pintar(); }
+  else if (k === 'poner') { if ((vista === 'cables' ? ponerEnCables : poner)(elegido)) pintar(); }
+  else if (k === 'acercar') {
+    if (vista === 'esquema') { const c = ESQUEMA.cajas[esqDe(elegido)]; if (c) zE.acercar(c); }
+    else { const pc = piezaCDe(elegido); if (pc) zC.acercar(cajaC(pc[0], pc[1], pc[2])); }
+  }
+  else if (k === 'cerrar') { elegido = null; elegidoRed = null; pintar(); }
+  else if (k === 'cablear') { if (conectados.has(elegidoRed)) { conectados.delete(elegidoRed); pintar(); } else conectar(elegidoRed); }
+  else if (k === 'anterior') irAPaso(pasoActual - 1);
+  else if (k === 'siguiente') irAPaso(pasoActual + 1);
+  else if (k === 'salir') { pasoActual = -1; pintar(); }
+  else if (k === 'ponerPaso') {
+    for (const l of LUGARES) if (PASOS[pasoActual].tipos.includes(l.tipo) && !opcional(l) && !puestas.has(l.id)) poner(l);
+    pintar();
+  }
+});
+function irAPaso(i) {
+  if (i >= PASOS.length) { pasoActual = -1; elegido = null; pintar(); aviso('Placa armada. Antes del USB: multímetro entre 3,3 V y GND, y entre 5 V y GND.'); return; }
+  pasoActual = Math.max(0, i); elegido = null;
+  ponerCara(PASOS[pasoActual].cara || 'top');
+  pintar();
+}
+
+// ---------------------------------------------------------------- tocar, arrastrar y soltar
+function aEscenario(ev) {
+  const m = svg.getScreenCTM();
+  const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
+  return { x: p.x, y: p.y };
+}
+function aPlaca(p) { return { x: cara === 'top' ? (p.x - BX) / S : (BX + W * S - p.x) / S, y: (p.y - BY) / S }; }
+function sobrePlaca(p) { return p.x >= BX && p.x <= BX + W * S && p.y >= BY && p.y <= BY + H * S; }
+function lugarEn(tipo, q) {                          // el lugar libre de ese tipo que queda bajo el puntero (o el más cercano)
+  let mejor = null, dm = 1e9;
+  for (const l of LUGARES) {
+    if (l.tipo !== tipo || puestas.has(l.id)) continue;
+    const [x0, y0, x1, y1] = l.caja, m = 10;
+    if (q.x < x0 - m || q.x > x1 + m || q.y < y0 - m || q.y > y1 + m) continue;
+    const d = Math.hypot(q.x - l.x, q.y - l.y);
+    if (d < dm) { dm = d; mejor = l; }
+  }
+  return mejor;
+}
+function lugarCualquieraEn(q) {                      // lo que se ve ahí: la pieza puesta de más arriba, o el lugar vacío más chico
+  const area = l => (l.caja[2] - l.caja[0]) * (l.caja[3] - l.caja[1]);
+  let mejor = null, arriba = null;
+  for (const l of LUGARES) {
+    const [x0, y0, x1, y1] = l.caja;
+    if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) continue;
+    if (puestas.has(l.id)) { arriba = l; continue; }   // LUGARES va ordenado de abajo hacia arriba
+    if ((l.necesita || []).some(d => !puestas.has(d))) continue;
+    if (!mejor || area(l) < area(mejor)) mejor = l;
+  }
+  // un lugar vacío más chico que la pieza puesta (y que no va encima de ella) es lo que se está apuntando
+  if (arriba && mejor && area(mejor) < area(arriba) && !(mejor.necesita || []).includes(arriba.id)) return mejor;
+  return arriba || mejor;
+}
+const enPlaca = l => cara === 'top'
+  ? `translate(${BX},${BY}) scale(${S}) ${transformLugar(l)}`
+  : `translate(${BX + W * S},${BY}) scale(${-S},${S}) ${transformLugar(l)}`;
+
+let arrastre = null;
+function tocarLugar(e, l) {
+  e.stopPropagation();
+  if (puestas.has(l.id)) empezarArrastre(e, { tipo: l.tipo, desde: l });
+  else { elegido = l; pintar(); }
+}
+function empezarArrastre(e, o) {
+  e.preventDefault();
+  svg.setPointerCapture(e.pointerId);
+  const p0 = aEscenario(e);
+  arrastre = Object.assign({ p0, movido: false, fantasma: null, destino: null }, o);
+}
+svg.addEventListener('pointermove', e => {
+  const p = aEscenario(e);
+  if (!arrastre) { if (vista === 'placa') etiquetaPuntero(p); else etiquetaRed(e, p); return; }
+  const a = arrastre;
+  if (!a.movido) {
+    if (Math.hypot(p.x - a.p0.x, p.y - a.p0.y) < 5) return;
+    if (a.desde !== 'bandeja') {
+      if (!sacar(a.desde)) { arrastre = null; return; }
+      pintar();
+    } else if (!sueltas(a.tipo)) { arrastre = null; return; }
+    a.movido = true;
+    a.fantasma = E('g', { 'pointer-events': 'none', opacity: .85 }, capaEncima);
+    a.cuerpo = E('g', {}, a.fantasma);
+    pieza(Object.assign({}, porTipo(a.tipo)[0], { rot: 0 }), a.cuerpo);
+    a.guias = E('g', {}, capaEncima);
+    // dónde puede ir: los lugares libres de ese tipo, marcados
+    for (const l of porTipo(a.tipo)) if (!puestas.has(l.id) && !faltaPara(l)) {
+      const [x0, y0, x1, y1] = l.caja;
+      const r = E('rect', { x: x0 - 2, y: y0 - 2, width: x1 - x0 + 4, height: y1 - y0 + 4, fill: 'none', stroke: '#F5B041', 'stroke-width': 1.4, 'stroke-dasharray': '4 3' }, a.guias);
+      r.setAttribute('transform', cara === 'top' ? `translate(${BX},${BY}) scale(${S})` : `translate(${BX + W * S},${BY}) scale(${-S},${S})`);
+    }
+  }
+  const q = aPlaca(p);
+  const l = sobrePlaca(p) ? lugarEn(a.tipo, q) : null;
+  a.destino = l && !faltaPara(l) ? l : null;
+  if (a.destino) { a.fantasma.setAttribute('transform', enPlaca(a.destino)); a.fantasma.setAttribute('opacity', .9); }
+  else { a.fantasma.setAttribute('transform', `translate(${p.x},${p.y}) rotate(${porTipo(a.tipo)[0].rot}) scale(${S})`); a.fantasma.setAttribute('opacity', .7); }
+});
+svg.addEventListener('pointerup', e => {
+  const a = arrastre; arrastre = null;
+  if (!a) return;
+  if (a.fantasma) { a.fantasma.remove(); a.guias.remove(); }
+  if (!a.movido) {                                   // un clic
+    if (a.desde === 'bandeja') ponerUna(a.tipo);
+    else { elegido = a.desde; pintar(); }
+    return;
+  }
+  const p = aEscenario(e);
+  if (a.destino) { poner(a.destino); elegido = a.destino; pintar(); return; }
+  if (sobrePlaca(p)) {                               // soltó sobre la placa pero no en un lugar suyo: decir por qué
+    const q = aPlaca(p), l = lugarEn(a.tipo, q) || lugarCualquieraEn(q);
+    if (l && l.tipo === a.tipo && faltaPara(l)) aviso(faltaPara(l));
+    else if (l && l.tipo !== a.tipo) aviso(`Ahí no: ${CON_NOMBRE.test(l.tipo) ? 'ahí' : 'en ' + l.id} va ${ARTICULO[l.tipo]}.`);
+  }
+  pintar();
+});
+const CON_NOMBRE = /^(h\d+|esp32|pcm|mpu|oled|inmp|din|c100u|tecla)$/;    // lugares únicos: se nombran por lo que va, no por su designador
+const ARTICULO = { esp32:'el ESP32-S3', pcm:'el DAC PCM5102A', mpu:'el IMU MPU6050', oled:'la pantalla OLED', inmp:'el micrófono INMP441',
+  din:'el conector MIDI', c100u:'el condensador de 100 µF', h22:'una tira hembra de 22', h8:'la tira hembra de 8', h5:'la tira hembra de 5',
+  h3:'la tira hembra de 3', h4:'la tira hembra de 4', b2:'una bornera de 2', b3:'una bornera de 3', jack:'un jack de 6,3 mm',
+  sw:'un switch', tecla:'una tecla', pot:'un potenciómetro', led:'un LED WS2812B', r1M:'una resistencia de 1 MΩ', r100k:'una resistencia de 100 kΩ',
+  r220:'una resistencia de 220 Ω', diodo:'un diodo 1N5817', c10n:'un condensador de 10 nF' };
+function ponerUna(tipo) {
+  let l = elegido && elegido.tipo === tipo && !puestas.has(elegido.id) ? elegido : null;
+  if (!l) l = porTipo(tipo).find(m => !puestas.has(m.id) && !faltaPara(m));
+  if (!l) {
+    const bloqueado = porTipo(tipo).find(m => !puestas.has(m.id));
+    if (bloqueado) aviso(faltaPara(bloqueado)); else aviso('Ya están todas puestas.');
+    return;
+  }
+  if (l.cara === 'bot' && cara === 'top') aviso('Los LEDs van por la cara de abajo: «dar vuelta la placa» para verlos enteros.');
+  poner(l); elegido = l;
+  volar(tipo, l, () => pintar());
+}
+function volar(tipo, l, fin) {                       // la pieza viaja desde su montón hasta su lugar
+  const [x, y, r, e] = BANDEJA[tipo];
+  const g = E('g', { 'pointer-events': 'none' }, capaEncima), c = E('g', {}, g);
+  pieza(Object.assign({}, l, { rot: 0 }), c);
+  const dx = cara === 'top' ? BX + l.x * S : BX + (W - l.x) * S, dy = BY + l.y * S, sx = cara === 'top' ? 1 : -1;
+  const t0 = performance.now(), dur = 380;
+  (function cuadro(t) {
+    const k = Math.min(1, (t - t0) / dur), s = k * k * (3 - 2 * k);
+    const px = x + (dx - x) * s, py = y + (dy - y) * s - Math.sin(s * Math.PI) * 60;
+    const esc2 = S * (e + (1 - e) * s);
+    g.setAttribute('transform', `translate(${px},${py}) scale(${(1 - s) + s * sx},1) rotate(${r + (l.rot - r) * s}) scale(${esc2})`);
+    if (k < 1) requestAnimationFrame(cuadro); else { g.remove(); fin(); }
+  })(t0);
+  pintarBandeja();
+}
+
+// la etiqueta que sigue al puntero sobre la placa
+const etiqueta = E('text', { 'font-size': 13, 'font-family': 'Archivo, sans-serif', fill: '#f3e3c4', stroke: '#000', 'stroke-width': 3.5, 'paint-order': 'stroke', 'pointer-events': 'none' }, capaEncima);
+function etiquetaPuntero(p) {
+  const l = sobrePlaca(p) ? lugarCualquieraEn(aPlaca(p)) : null;
+  if (!l) { etiqueta.textContent = ''; return; }
+  etiqueta.textContent = (puestas.has(l.id) ? '' : 'falta · ') + titulo(l);
+  etiqueta.setAttribute('x', p.x + 16); etiqueta.setAttribute('y', p.y - 12);
+}
+svg.addEventListener('pointerleave', () => { etiqueta.textContent = ''; });
+svg.addEventListener('pointerdown', e => {                                         // tocar la mesa suelta la selección
+  if (vista !== 'placa' || e.target.closest('[data-lugar],[data-pila]')) return;
+  if (elegido || elegidoRed) { elegido = null; elegidoRed = null; pintar(); }
+});
+
+// ---------------------------------------------------------------- listo: los LEDs se prenden
+let fiesta = 0, primera = true;
+function revisarListo(listo) {
+  const avisar = !primera; primera = false;
+  if (!listo) { if (fiesta) { cancelAnimationFrame(fiesta); fiesta = 0; } return; }
+  if (fiesta) return;
+  const t0 = performance.now();
+  const leds = LUGARES.filter(l => l.tipo === 'led');
+  (function cuadro(t) {
+    for (const k of ['top', 'bot']) CARAS[k].luz.innerHTML = '';
+    leds.forEach((l, i) => {
+      const hue = ((t - t0) / 12 + i * 40) % 360, col = `hsl(${hue} 100% 60%)`;
+      CARAS.top.ventanas[l.c.id].setAttribute('fill', `hsl(${hue} 100% 82%)`);
+      E('circle', { cx: l.x, cy: l.y, r: 16, fill: col, opacity: .55, filter: 'url(#brillo)', 'pointer-events': 'none' }, CARAS.top.luz);
+    });
+    fiesta = requestAnimationFrame(cuadro);
+  })(t0);
+  if (avisar) aviso('Placa completa: los seis LEDs ya tienen dónde prenderse.');
+}
+
+// ---------------------------------------------------------------- lo que une las tres vistas
+// Los módulos no tienen pads propios: sus pines son los de las tiras hembra donde se enchufan.
+function padsDe(l) {
+  if (l.pads.length) return l.pads;
+  const de = { esp32: () => ESP.pads, pcm: () => [...L.HD5.pads, ...L.HD3.pads], mpu: () => L.HI.pads, oled: () => L.HO.pads, tecla: () => L['BT' + l.n].pads }[l.tipo];
+  return de ? de() : [];
+}
+const redesSenal = l => [...new Set(padsDe(l).map(p => p.red).filter(n => n && !POTENCIA.has(n) && n in RED))];
+let elegidoRed = null;                      // un cable elegido (desde el esquema o la vista de cables)
+function redesResaltadas() {
+  if (elegidoRed) return [elegidoRed];
+  if (!elegido) return [];
+  const r = redesSenal(elegido);
+  if (elegido.tipo === 'esp32') return [];   // el ESP32 toca todas: se ven sus rótulos
+  return r;
+}
+// qué símbolo del esquema es cada lugar, y al revés
+function esqDe(l) {
+  if (l.id === 'HE1') return 'H1';
+  if (l.id === 'HE2') return 'H2';
+  return l.c && ESQUEMA.cajas[l.c.id] ? l.c.id : null;
+}
+const LUGAR_DE_ESQ = { H1: 'HE1', H2: 'HE2', 'ESP32-S3-WROOM2': 'ESP32', PCM5102A: 'DAC', IMU: 'IMU', OLED: 'HO', MIDI_OUT: 'MIDI' };
+function lugarDeEsq(des) {
+  if (LUGAR_DE_ESQ[des]) return L[LUGAR_DE_ESQ[des]];
+  if (L[des]) return L[des];
+  return LUGARES.find(l => l.c && l.c.id === des && !l.necesita) || null;
+}
+// quién está en una red: «R6 pin 2», «ESP32 GPIO 4»…
+function quienesEn(n) {
+  const out = [];
+  for (const l of LUGARES) {
+    if (l.tipo === 'tecla' || /^h/.test(l.tipo)) continue;
+    for (const p of padsDe(l)) if (p.red === n)
+      out.push(l.tipo === 'esp32' ? `ESP32 ${/^\d+$/.test(ESP_PIN[+p.n - 1]) ? 'GPIO ' + ESP_PIN[+p.n - 1] : ESP_PIN[+p.n - 1]}` : `${titulo(l).split(' · ')[0]} pin ${p.n}`);
+  }
+  return [...new Set(out)];
+}
+
+// ---------------------------------------------------------------- zoom y paneo (esquema y cables)
+// Rueda = acercar o alejar alrededor del puntero; arrastrar = mover; doble clic sobre una pieza = acercarse
+// a ella, sobre la mesa = verlo todo. Un clic sin arrastrar lo resuelve cada vista (elegir pieza o cable).
+function zoomable(sv, alClic, cajaDe) {
+  const z = { vb0: null, vb: null };
+  const poner = () => sv.setAttribute('viewBox', z.vb.join(' '));
+  const ar = () => sv.width.baseVal.value / sv.height.baseVal.value;
+  z.fijar = ([x, y, w, h]) => {                      // se ajusta al alto/ancho del área, centrado
+    if (w / h < ar()) { const w2 = h * ar(); x -= (w2 - w) / 2; w = w2; } else { const h2 = w / ar(); y -= (h2 - h) / 2; h = h2; }
+    z.vb0 = [x, y, w, h]; z.vb = [...z.vb0]; poner();
+  };
+  z.todo = () => { z.vb = [...z.vb0]; poner(); };
+  z.acercar = ([x0, y0, x1, y1], margen = 2.6) => {
+    const w = Math.max((x1 - x0) * margen, (y1 - y0) * margen * ar(), z.vb0[2] / 14);
+    z.vb = [(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - w / ar() / 2, w, w / ar()]; poner();
+  };
+  z.mostrar = ([x0, y0, x1, y1]) => {                // si no se ve, lo trae al centro sin cambiar el zoom
+    const [x, y, w, h] = z.vb;
+    if (x < x0 && y < y0 && x + w > x1 && y + h > y1) return;
+    z.vb = [(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h]; poner();
+  };
+  const aLocal = ev => new DOMPoint(ev.clientX, ev.clientY).matrixTransform(sv.getScreenCTM().inverse());
+  sv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = aLocal(e), f = Math.exp(Math.sign(e.deltaY) * 0.18);
+    const w = Math.min(z.vb0[2] * 1.3, Math.max(z.vb0[2] / 25, z.vb[2] * f)), k = w / z.vb[2];
+    z.vb = [p.x - (p.x - z.vb[0]) * k, p.y - (p.y - z.vb[1]) * k, w, z.vb[3] * k]; poner();
+  }, { passive: false });
+  let pan = null;
+  sv.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    pan = { x: e.clientX, y: e.clientY, vb: [...z.vb], movido: false, blanco: e.target };
+    sv.setPointerCapture(e.pointerId);
+  });
+  sv.addEventListener('pointermove', e => {
+    if (!pan) return;
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (!pan.movido && Math.hypot(dx, dy) < 4) return;
+    pan.movido = true;
+    const k = z.vb[2] / sv.getBoundingClientRect().width;
+    z.vb = [pan.vb[0] - dx * k, pan.vb[1] - dy * k, z.vb[2], z.vb[3]]; poner();
+  });
+  sv.addEventListener('pointerup', () => { const p = pan; pan = null; if (p && !p.movido) alClic(p.blanco); });
+  sv.addEventListener('dblclick', e => { const c = cajaDe(e.target); c ? z.acercar(c) : z.todo(); });
+  return z;
+}
+function clicEnVista(blanco) {                        // un clic sin arrastrar en el esquema o en los cables
+  const s = blanco.closest('[data-lugar]'), c = blanco.closest('[data-red]'), anillo = blanco.closest('[data-conectar]');
+  if (anillo) { conectar(anillo.dataset.conectar); return; }
+  if (s) { elegido = L[s.dataset.lugar]; elegidoRed = null; }
+  else if (c && c.dataset.red in RED && !POTENCIA.has(c.dataset.red)) { elegidoRed = c.dataset.red; elegido = null; }
+  else { elegido = null; elegidoRed = null; }
+  pintar();
+}
+
+// ---------------------------------------------------------------- vista: esquema
+// Sin hoja ni marco: el esquema va directo sobre la mesa, en todo el espacio a la izquierda del panel.
+const AREA_E = { x: 6, y: 58, w: 1018, h: 936 };
+const esqSvg = E('svg', { x: AREA_E.x, y: AREA_E.y, width: AREA_E.w, height: AREA_E.h }, vistaEsq);
+E('rect', { x: -9000, y: -9000, width: 20000, height: 20000, fill: 'transparent' }, esqSvg);
+const esqG = E('g', { id: 'esqContenido', 'font-family': 'Arial, Helvetica, sans-serif', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, esqSvg);
+esqG.innerHTML = ESQUEMA.svg;
+for (const el of esqG.querySelectorAll('[data-marco], image')) el.remove();          // el marco y el rótulo de la hoja
+const esqMarca = E('g', { 'pointer-events': 'none' }, esqSvg);
+for (const g of esqG.querySelectorAll('[data-esq]')) {
+  const l = lugarDeEsq(g.dataset.esq);
+  if (l) { g.dataset.lugar = l.id; g.style.cursor = 'pointer'; }
+}
+const zE = zoomable(esqSvg, clicEnVista, t => { const s = t.closest('[data-esq]'); return s && ESQUEMA.cajas[s.dataset.esq]; });
+function encuadrarEsquema() {                         // la caja real del dibujo se mide la primera vez que se ve
+  if (zE.vb0) return;
+  const b = esqG.getBBox();
+  zE.fijar([b.x - 6, b.y - 6, b.width + 12, b.height + 12]);
+}
+function centrarEsquema(des) { const c = ESQUEMA.cajas[des]; if (c) zE.mostrar(c); }
+let esqPintados = [];
+function ambar(el, fuerte) {
+  const t = el.tagName;
+  if (t === 'g') { for (const h of el.children) ambar(h, fuerte); return; }
+  esqPintados.push([el, el.getAttribute('style')]);
+  if (t === 'text') el.setAttribute('style', 'fill:#F5B041');
+  else if (t === 'circle' && el.classList.contains('union')) el.setAttribute('style', 'fill:#F5B041');
+  else el.setAttribute('style', `stroke:#F5B041;stroke-width:${fuerte ? 2.4 : 1.6}`);
+}
+function pintarSelEsquema() {
+  for (const [el, s] of esqPintados) s == null ? el.removeAttribute('style') : el.setAttribute('style', s);
+  esqPintados = [];
+  esqMarca.innerHTML = '';
+  for (const n of redesResaltadas()) for (const el of esqG.querySelectorAll(`[data-red="${CSS.escape(n)}"]`)) ambar(el, true);
+  const des = elegido && esqDe(elegido);
+  if (des) {
+    const g = esqG.querySelector(`[data-esq="${CSS.escape(des)}"]`);
+    if (g) for (const h of g.children) if (!h.dataset.red) ambar(h, false);
+    const c = ESQUEMA.cajas[des];
+    E('rect', { x: c[0] - 5, y: c[1] - 5, width: c[2] - c[0] + 10, height: c[3] - c[1] + 10, fill: 'none', stroke: '#F5B041', 'stroke-width': 1.2, 'stroke-dasharray': '4 3' }, esqMarca);
+  }
+}
+
+// ---------------------------------------------------------------- vista: cables
+// Las mismas piezas, sin placa: el ESP32 al centro y cada pieza a la altura de los pines donde llega,
+// las de su columna izquierda a la izquierda y las de la derecha a la derecha. Cada cable va por su
+// propio carril vertical; GND, 3,3 V y 5 V no se tiran como cable sino que se marcan en cada pin.
+const SC = 0.8, SE = 1.2;
+const ESPC = { x: 540, y: 530 };
+const COLOR_RED = n => {
+  if (n === 'GND') return '#2a2a2a';
+  if (n === '3.3V') return '#ff9a1f';
+  if (n === '5V' || n === 'MIDI_OUT_4') return '#e5413a';
+  if (/^BOTON/.test(n)) return '#f2c230';
+  if (/^POT/.test(n)) return '#43b85c';
+  if (/^MIC/.test(n)) return '#a970ff';
+  if (n === 'BCK') return '#3d7bfd'; if (n === 'DIN') return '#5aa0ff'; if (n === 'LCK') return '#2f5fd6';
+  if (n === 'SDA') return '#f2f2f2'; if (n === 'SCL') return '#9aa3ad';
+  if (n === 'WS' || n === 'SCK' || n === 'SD') return '#22c3d6';
+  if (n === 'PIXEL' || /^LED\d_\d$/.test(n)) return '#ff5fa2';
+  if (/^EXT/.test(n)) return '#c47c3a';
+  if (n === 'TX' || n === 'MIDI_OUT_5') return '#14b8a6';
+  return '#bbb';
+};
+// x, y, giro; sal = salida de todos los pads ('izq' 'der' 'arr' 'aba'); salN = salida por número de pad;
+// largo = largo del primer tramo por número de pad; rieles = red → y del riel; tenue = pieza opcional
+const CAB = {
+  IMU:  { x: 130, y: 150, rot: 0, largo: { 3: 40, 4: 32 }, salN: { 1: 'aba', 2: 'aba' } },
+  OLED: { x: 275, y: 145, rot: 0, largo: { 3: 40, 4: 32 }, salN: { 1: 'arr', 2: 'arr' }, tenue: true },
+  C1:   { x: 200, y: 132, rot: -90 },
+  DAC:  { x: 130, y: 505, rot: 0 },
+  MIDI: { x: 110, y: 905, rot: 0, salN: { 4: 'aba', 5: 'aba' } },
+  R11:  { x: 165, y: 900, rot: -90, largo: { 2: 34 } },
+  R10:  { x: 195, y: 900, rot: -90 },
+  U3:   { x: 850, y: 150, rot: 0, largo: { 6: 22, 2: 22, 3: 30 } },
+  POT4: { x: 800, y: 240, rot: 90, salN: { 1: 'arr', 3: 'aba' } }, EXT2: { x: 800, y: 315, rot: 0, sal: 'izq', salN: { 1: 'arr', 3: 'aba' } },
+  EXT1: { x: 800, y: 525, rot: 0, sal: 'izq', salN: { 1: 'arr', 3: 'aba' } }, POT3: { x: 800, y: 600, rot: 90, salN: { 1: 'arr', 3: 'aba' } },
+  'LED STRIP': { x: 968, y: 400, rot: 0, sal: 'izq', salRed: { GND: 'arr', '5V': 'aba' }, rieles: { GND: 380, '5V': 420 } },
+  '5V': { x: 968, y: 470, rot: 0, sal: 'izq' },
+};
+for (const [n, y] of [[5, 270], [4, 345], [3, 420], [2, 590], [1, 800]]) {
+  CAB['BT' + n] = { x: 110, y, rot: 90 };
+  CAB['R' + n] = { x: 155, y: y - 20, rot: 90, largo: { 2: 12 } };
+}
+CAB.POT2 = { x: 120, y: 662, rot: -90, salN: { 1: 'aba', 3: 'arr' } };
+CAB.POT1 = { x: 120, y: 722, rot: -90, salN: { 1: 'aba', 3: 'arr' } };
+for (let i = 1; i <= 6; i++) CAB['LED' + i] = { x: 735 + (i - 1) * 40, y: 400, rot: 180, salRed: { GND: 'arr', '5V': 'aba' }, rieles: { GND: 380, '5V': 420 } };
+for (const [n, y] of [[4, 690], [3, 765], [2, 840], [1, 915]]) {
+  CAB['D' + n] = { x: 740, y, rot: -90 };
+  CAB['R' + (n + 5)] = { x: 775, y, rot: -90 };
+  CAB['C' + (n + 1)] = { x: 808, y, rot: -90, largo: { 2: 22 } };
+  CAB['JACK' + n] = { x: 905, y: y + 9.6, rot: 90 };
+}
+const DIR = { izq: [-1, 0], der: [1, 0], arr: [0, -1], aba: [0, 1] };
+const centroDe = l => ({ esp32: [461.4, 130], pcm: [600.9, 59.4], mpu: [315.1, 296.4], oled: [315.1, 316.5] }[l.tipo] || [l.x, l.y]);
+const rotOriginal = l => (['esp32', 'pcm', 'mpu', 'oled'].includes(l.tipo) ? 0 : l.rot);
+function rotar(x, y, deg) { const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); return [x * c - y * s, x * s + y * c]; }
+function pinesCables(l, pos, esc) {          // cada pad de la pieza en el escenario de la vista de cables, con su salida
+  const [cx, cy] = centroDe(l), r0 = rotOriginal(l);
+  return padsDe(l).map(p => {
+    const [lx, ly] = rotar(p.x - cx, p.y - cy, -r0);
+    const [dx, dy] = rotar(lx * esc, ly * esc, pos.rot);
+    let sal = (pos.salN && pos.salN[p.n]) || (pos.salRed && pos.salRed[p.red]) || pos.sal;
+    if (!sal) sal = Math.abs(dx) >= Math.abs(dy) - .01 ? (dx < 0 ? 'izq' : 'der') : (dy < 0 ? 'arr' : 'aba');
+    return { p, x: pos.x + dx, y: pos.y + dy, sal, largo: (pos.largo && pos.largo[p.n]) || (POTENCIA.has(p.red) ? 7 : 10), pos };
+  });
+}
+function caminoRedondo(pts, r = 4) {
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const l1 = Math.hypot(x1 - x0, y1 - y0), l2 = Math.hypot(x2 - x1, y2 - y1);
+    if (!l1 || !l2) continue;
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    d += ` L${x1 - (x1 - x0) / l1 * rr},${y1 - (y1 - y0) / l1 * rr} Q${x1},${y1} ${x1 + (x2 - x1) / l2 * rr},${y1 + (y2 - y1) / l2 * rr}`;
+  }
+  const u = pts[pts.length - 1];
+  return d + ` L${u[0]},${u[1]}`;
+}
+// la vista entera va en su propio <svg> para poder acercarse; sus coordenadas son las del escenario
+const AREA_C = { x: 0, y: 56, w: 1026, h: 940 };
+const cabSvg = E('svg', { x: AREA_C.x, y: AREA_C.y, width: AREA_C.w, height: AREA_C.h }, vistaCables);
+E('rect', { x: -9000, y: -9000, width: 20000, height: 20000, fill: 'transparent' }, cabSvg);
+const capaCables = E('g', {}, cabSvg), capaPiezasC = E('g', {}, cabSvg), capaPuntas = E('g', { 'pointer-events': 'none' }, cabSvg), capaMarcaC = E('g', { 'pointer-events': 'none' }, cabSvg);
+const capaAnillos = E('g', {}, cabSvg);            // los pines sin cable: un anillo que se toca para tirarlo
+let cablesPorRed = {};
+function cable(n, pts, ancho = 3.2) {
+  const g = cablesPorRed[n] || (cablesPorRed[n] = E('g', { 'data-red': n, style: 'cursor:pointer' }, capaCables));
+  const d = caminoRedondo(pts);
+  E('path', { d, fill: 'none', stroke: n === 'GND' ? '#7d7d7d' : '#000', 'stroke-width': ancho + 2.2, opacity: n === 'GND' ? .9 : .55, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+  E('path', { d, fill: 'none', stroke: COLOR_RED(n), 'stroke-width': ancho, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+  E('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': .9, opacity: n === 'GND' ? .18 : .28, transform: 'translate(-.6,-.6)', 'stroke-linecap': 'round' }, g);
+  return g;
+}
+function bandera(n, x, y) {                  // GND, 3,3 V o 5 V: una ficha de color en la punta; todas las iguales están unidas
+  const g = E('g', { 'data-red': n }, capaPuntas);
+  if (n === 'GND') {
+    E('circle', { cx: x, cy: y, r: 6, fill: '#161616', stroke: '#a8a8a8', 'stroke-width': .9 }, g);
+    E('path', { d: `M${x},${y - 4} V${y - 1} M${x - 3.4},${y - 1} H${x + 3.4} M${x - 2.2},${y + 1} H${x + 2.2} M${x - 1},${y + 3} H${x + 1}`,
+      stroke: '#eee', 'stroke-width': 1, fill: 'none', 'stroke-linecap': 'round' }, g);
+  } else {
+    E('circle', { cx: x, cy: y, r: 6, fill: COLOR_RED(n), stroke: '#000', 'stroke-width': .8 }, g);
+    E('text', { x, y: y + 1.9, 'font-size': n === '5V' ? 5.6 : 4.9, 'font-weight': 800, 'font-family': 'Archivo, sans-serif', 'text-anchor': 'middle',
+      fill: n === '5V' ? '#fff' : '#2a1600', text: n === '3.3V' ? '3V3' : '5V' }, g);
+  }
+}
+// lo fijo se calcula una vez (dónde va cada pieza, sus pines, el carril de cada cable);
+// lo que se dibuja depende de qué piezas están puestas
+const piezasC = [];                          // [lugar, pos, esc, pines]
+const REDES_C = {}, CARRIL = {}, LOCALES = [];
+let PINES_ESP = [];
+function cajaC(l, pos, esc) {
+  const [a, b, c, d] = cajaLocal(l), xs = [], ys = [];
+  for (const [px, py] of [[a, b], [c, b], [c, d], [a, d]]) { const [x, y] = rotar(px * esc, py * esc, pos.rot); xs.push(pos.x + x); ys.push(pos.y + y); }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+(function calcularCables() {
+  for (const l of LUGARES) {
+    if (l.tipo === 'tecla' || /^h\d/.test(l.tipo)) continue;
+    const pos = l.tipo === 'esp32' ? { x: ESPC.x, y: ESPC.y, rot: 0 } : CAB[l.id];
+    if (!pos) continue;
+    const esc = l.tipo === 'esp32' ? SE : SC;
+    const pines = pinesCables(l, pos, esc);
+    for (const q of pines) q.l = l;
+    piezasC.push([l, pos, esc, pines]);
+  }
+  for (const [, , , pines] of piezasC) for (const q of pines) if (q.p.red) (REDES_C[q.p.red] = REDES_C[q.p.red] || []).push(q);
+  PINES_ESP = piezasC.find(([l]) => l.tipo === 'esp32')[3];
+  const carriles = { izq: [], der: [] };
+  for (const n in REDES_C) {
+    const qs = REDES_C[n];
+    if (POTENCIA.has(n)) continue;
+    const enEsp = PINES_ESP.find(q => q.p.red === n);
+    if (enEsp && qs.length > 1) {
+      const lado = enEsp.x < ESPC.x ? 'izq' : 'der';
+      const otros = qs.filter(q => q !== enEsp), ym = otros.reduce((s, q) => s + q.y, 0) / otros.length;
+      carriles[lado].push({ n, qs: otros, esp: enEsp, baja: ym < enEsp.y });
+    } else if (qs.length === 2) LOCALES.push(n);
+  }
+  // los que bajan al ESP32 primero (el de más arriba, más cerca del módulo), después los que suben: así casi no se cruzan
+  for (const lado of ['izq', 'der']) {
+    const baja = carriles[lado].filter(c => c.baja).sort((a, b) => a.esp.y - b.esp.y);
+    const sube = carriles[lado].filter(c => !c.baja).sort((a, b) => b.esp.y - a.esp.y);
+    [...baja, ...sube].forEach((c, i) => { CARRIL[c.n] = Object.assign(c, { x: lado === 'izq' ? ESPC.x - 70 - i * 6 : ESPC.x + 70 + i * 6 }); });
+  }
+})();
+const zC = zoomable(cabSvg, clicEnVista, t => {
+  const s = t.closest('[data-lugar]'); if (!s) return null;
+  const pc = piezasC.find(([l]) => l.id === s.dataset.lugar);
+  return pc && cajaC(pc[0], pc[1], pc[2]);
+});
+zC.fijar([AREA_C.x, AREA_C.y, AREA_C.w, AREA_C.h]);
+// los cables tirados, por red: se ponen y se quitan uno a uno, aparte de las piezas
+const TODAS_LAS_REDES = Object.keys(REDES_C).filter(n => REDES_C[n].length > 1 || POTENCIA.has(n));
+const conectados = new Set(TODAS_LAS_REDES);
+function suelto(q) {                               // un cable tirado cuya otra punta todavía no está: queda colgando
+  const [dx, dy] = DIR[q.sal], ex = q.x + dx * (q.largo + 8), ey = q.y + dy * (q.largo + 8);
+  cable(q.p.red, [[q.x, q.y], [ex, ey]], 2.6);
+  E('circle', { cx: ex, cy: ey, r: 2.4, fill: '#120c07', stroke: COLOR_RED(q.p.red), 'stroke-width': 1.4 }, cablesPorRed[q.p.red]);
+}
+function conectar(n) {
+  conectados.add(n);
+  const faltan = [...new Set(REDES_C[n].filter(q => !estaC(q.l)).map(q => titulo(q.l).split(' · ')[0]))];
+  if (!POTENCIA.has(n)) { elegidoRed = n; elegido = null; }
+  pintar();
+  aviso(POTENCIA.has(n) ? `${nombreRed(n)} conectado: todos los pines ${nombreRed(n)} quedan unidos.`
+    : `Cable tirado: ${nombreRed(n)}.${faltan.length ? ' Para que llegue a todas sus puntas falta poner ' + faltan.join(', ') + '.' : ''}`);
+}
+
+const estaC = l => puestas.has(l.id);
+function pintarCables() {
+  capaCables.innerHTML = ''; capaPiezasC.innerHTML = ''; capaPuntas.innerHTML = ''; capaAnillos.innerHTML = '';
+  cablesPorRed = {};
+  // las piezas: las puestas enteras; las que faltan, como un fantasma punteado en su lugar
+  for (const [l, pos, esc] of piezasC) {
+    const puesta = estaC(l);
+    const g = E('g', { transform: `translate(${pos.x},${pos.y}) rotate(${pos.rot}) scale(${esc})`, 'data-lugar': l.id, style: 'cursor:pointer' }, capaPiezasC);
+    const cuerpo = E('g', { opacity: puesta ? (pos.tenue ? .6 : 1) : .14 }, g);
+    pieza(Object.assign({}, l, { rot: 0 }), cuerpo);
+    const [x0, y0, x1, y1] = cajaLocal(l);
+    E('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: 'transparent', stroke: puesta ? 'none' : '#f3e3c4', 'stroke-opacity': .45,
+      'stroke-width': 1 / esc, 'stroke-dasharray': `${4 / esc} ${3 / esc}` }, g);
+    if (pos.tenue) E('text', { x: 0, y: 66, 'font-size': 11, 'text-anchor': 'middle', fill: '#b9aa8e', 'font-family': 'Archivo, sans-serif', text: 'opcional' }, g);
+  }
+  // los rótulos de los pines del ESP32, sobre el módulo
+  const espOn = estaC(L.ESP32);
+  for (const pin of PINES_ESP) {
+    const izq = pin.x < ESPC.x, rot = ESP_PIN[+pin.p.n - 1], num = /^\d+$/.test(rot);
+    E('text', { x: pin.x + (izq ? 6 : -6), y: pin.y + 2.8, 'font-size': 7.6, 'font-family': 'Archivo, sans-serif', 'text-anchor': izq ? 'start' : 'end',
+      fill: num ? (FUNCION[pin.p.red] ? '#f3e3c4' : '#7d7466') : COLOR_RED(rot === '3V3' ? '3.3V' : rot), 'font-weight': num ? 400 : 700,
+      opacity: espOn ? 1 : .35, text: num ? 'GPIO ' + rot : rot, 'pointer-events': 'none' }, capaPiezasC);
+  }
+  const conCable = new Set();                  // los pines a los que llega un cable dibujado
+  // cada cable al ESP32: sólo entre lo que está puesto
+  for (const c of Object.values(CARRIL)) {
+    if (!conectados.has(c.n)) continue;
+    const qs = c.qs.filter(q => estaC(q.l));
+    if (qs.length + (espOn ? 1 : 0) < 2) { for (const q of qs) { suelto(q); conCable.add(q); } if (espOn) { suelto(c.esp); conCable.add(c.esp); } continue; }
+    const x = c.x;
+    let y0 = espOn ? c.esp.y : 1e9, y1 = espOn ? c.esp.y : -1e9;
+    const ys = [];
+    for (const q of qs) {
+      const [dx, dy] = DIR[q.sal], sx = q.x + dx * q.largo, sy = q.y + dy * q.largo;
+      cable(c.n, [[q.x, q.y], [sx, sy], [x, sy]]);
+      y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); ys.push(sy); conCable.add(q);
+    }
+    if (y1 > y0) cable(c.n, [[x, y0], [x, y1]]);
+    if (espOn) { cable(c.n, [[x, c.esp.y], [c.esp.x, c.esp.y]]); conCable.add(c.esp); }
+    for (const sy of ys) if (sy > y0 + .1 && sy < y1 - .1) E('circle', { cx: x, cy: sy, r: 2.6, fill: COLOR_RED(c.n) }, cablesPorRed[c.n]);
+  }
+  // los cables entre dos piezas (la cadena de los LEDs, el MIDI): sólo si están las dos
+  for (const n of LOCALES) {
+    const [a, b] = REDES_C[n];
+    if (!conectados.has(n)) continue;
+    if (!estaC(a.l) || !estaC(b.l)) { for (const q of [a, b]) if (estaC(q.l)) { suelto(q); conCable.add(q); } continue; }
+    const la = [a.x + DIR[a.sal][0] * a.largo, a.y + DIR[a.sal][1] * a.largo], lb = [b.x + DIR[b.sal][0] * b.largo, b.y + DIR[b.sal][1] * b.largo];
+    let pts;
+    if (a.sal === 'aba' && b.sal === 'aba') { const yy = Math.max(la[1], lb[1]) + (n === 'MIDI_OUT_4' ? 14 : 4); pts = [[a.x, a.y], [a.x, yy], [b.x, yy], [b.x, b.y]]; }
+    else { const mx = (la[0] + lb[0]) / 2; pts = [[a.x, a.y], la, [mx, la[1]], [mx, lb[1]], lb, [b.x, b.y]]; }
+    cable(n, pts); conCable.add(a); conCable.add(b);
+  }
+  // GND, 3,3 V y 5 V: una ficha en la punta de un cable corto, o un riel común si la pieza lo tiene (los LEDs).
+  // Dos pines vecinos que salen hacia el mismo lado alternan el largo, así sus fichas no se pisan.
+  const rieles = {};
+  for (const [l, pos, , pines] of piezasC) {
+    if (!estaC(l) || l.tipo === 'esp32') continue;
+    const fichas = [];
+    for (const q of pines) {
+      if (!POTENCIA.has(q.p.red) || !conectados.has(q.p.red)) continue;
+      conCable.add(q);
+      if (pos.rieles && pos.rieles[q.p.red] != null) {
+        const yr = pos.rieles[q.p.red];
+        cable(q.p.red, [[q.x, q.y], [q.x, yr]], 2.6);
+        const r = rieles[q.p.red + yr] || (rieles[q.p.red + yr] = { n: q.p.red, y: yr, x0: q.x, x1: q.x });
+        r.x0 = Math.min(r.x0, q.x); r.x1 = Math.max(r.x1, q.x);
+        continue;
+      }
+      fichas.push(q);
+    }
+    for (const sal of ['izq', 'der', 'arr', 'aba']) {
+      const vertical = sal === 'arr' || sal === 'aba';
+      const fila = fichas.filter(q => q.sal === sal).sort((a, b) => vertical ? a.x - b.x : a.y - b.y);
+      let antes = null, largoAntes = 0;
+      for (const q of fila) {
+        const cerca = antes && Math.abs(vertical ? q.x - antes.x : q.y - antes.y) < 13;
+        const largo = cerca && largoAntes <= 9 ? 22 : 8;
+        const [dx, dy] = DIR[sal], fx = q.x + dx * (largo + 6), fy = q.y + dy * (largo + 6);
+        cable(q.p.red, [[q.x, q.y], [q.x + dx * largo, q.y + dy * largo]], 2.2);
+        bandera(q.p.red, fx, fy);
+        antes = q; largoAntes = largo;
+      }
+    }
+  }
+  for (const r of Object.values(rieles)) {
+    cable(r.n, [[r.x0 - 12, r.y], [r.x1, r.y]], 2.6);
+    bandera(r.n, r.x0 - 18, r.y);
+  }
+  // las puntas: un conector en cada pin al que llega algo
+  for (const q of conCable) E('circle', { cx: q.x, cy: q.y, r: 2.2, fill: COLOR_RED(q.p.red === 'GND' ? 'SCL' : q.p.red), stroke: '#000', 'stroke-width': .8 }, capaPuntas);
+  // y un anillo en cada pin de una pieza puesta cuyo cable no está tirado: tocarlo lo tira
+  for (const [l, , , pines] of piezasC) {
+    if (!estaC(l)) continue;
+    for (const q of pines) {
+      const n = q.p.red;
+      if (!n || conectados.has(n) || !TODAS_LAS_REDES.includes(n)) continue;
+      const g = E('g', { 'data-conectar': n, style: 'cursor:pointer' }, capaAnillos);
+      E('circle', { cx: q.x, cy: q.y, r: 6, fill: 'transparent' }, g);
+      E('circle', { cx: q.x, cy: q.y, r: 3, fill: '#120c07', 'fill-opacity': .7, stroke: COLOR_RED(n === 'GND' ? 'SCL' : n), 'stroke-width': 1.5 }, g);
+    }
+  }
+}
+function pintarSelCables() {
+  const rs = new Set(redesResaltadas());
+  const hay = rs.size > 0 || elegido;
+  for (const [n, g] of Object.entries(cablesPorRed)) g.setAttribute('opacity', !hay || rs.has(n) ? 1 : .16);
+  capaPuntas.setAttribute('opacity', hay ? .35 : 1);
+  capaMarcaC.innerHTML = '';
+  const pc = piezaCDe(elegido);
+  if (!pc) return;
+  const [l, pos, esc] = pc, [x0, y0, x1, y1] = cajaLocal(l);
+  const g = E('g', { transform: `translate(${pos.x},${pos.y}) rotate(${pos.rot}) scale(${esc})` }, capaMarcaC);
+  E('rect', { x: x0 - 4, y: y0 - 4, width: x1 - x0 + 8, height: y1 - y0 + 8, fill: 'none', stroke: '#F5B041', 'stroke-width': 1.6 / esc, 'stroke-dasharray': `${5 / esc} ${3 / esc}` }, g);
+}
+function piezaCDe(l) {                       // la pieza de la vista de cables que corresponde a un lugar (las tiras y teclas no se dibujan)
+  if (!l) return null;
+  const id = { HE1: 'ESP32', HE2: 'ESP32', HD5: 'DAC', HD3: 'DAC', HI: 'IMU', HO: 'OLED' }[l.id] || (l.tipo === 'tecla' ? 'BT' + l.n : l.id);
+  return piezasC.find(([m]) => m.id === id) || null;
+}
+// en la vista de cables no se ven las tiras hembra ni las teclas: poner un módulo pone su tira, y sacar un switch saca su tecla
+function ponerEnCables(l) { for (const d of l.necesita || []) puestas.add(d); return poner(l); }
+function sacarEnCables(l) { const m = encimaDe(l); if (m && m.tipo === 'tecla') puestas.delete(m.id); return sacar(l); }
+
+// la leyenda de los colores, bajo el panel (sólo en la vista de cables)
+const LEYENDA = [['GND', 'GND (tierra)'], ['3.3V', '3,3 V'], ['5V', '5 V'], ['BOTON1', 'botones'], ['POT1', 'perillas'], ['MIC1', 'piezos'],
+  ['BCK', 'audio al DAC (I2S)'], ['SDA', 'I2C: SDA'], ['SCL', 'I2C: SCL'], ['WS', 'micrófono (I2S)'], ['PIXEL', 'datos de los LEDs'], ['EXT1', 'sensores externos'], ['TX', 'MIDI']];
+const leyenda = document.createElement('div');
+leyenda.className = 'capa leyenda';
+leyenda.innerHTML = LEYENDA.map(([n, t]) => `<span><i style="background:${COLOR_RED(n)}${n === 'GND' ? ';outline:1px solid #7d7d7d' : ''}"></i>${t}</span>`).join('') +
+  '<p>GND, 3,3 V y 5 V no se tiran hasta el ESP32: cada pin termina en una ficha de su color, y todas las fichas iguales están unidas.</p>';
+$('escenario').appendChild(leyenda);
+
+// ---------------------------------------------------------------- cambiar de vista
+let vista = 'placa';
+function ponerVista(v) {
+  vista = v;
+  vistaPlaca.setAttribute('display', v === 'placa' ? '' : 'none');
+  vistaEsq.setAttribute('display', v === 'esquema' ? '' : 'none');
+  vistaCables.setAttribute('display', v === 'cables' ? '' : 'none');
+  leyenda.style.display = v === 'cables' ? '' : 'none';
+  // armar y desarmar sirven en la placa y en los cables (es el mismo circuito); lo demás es sólo de la placa
+  for (const [id, en] of [['bArmar', 'placa cables'], ['bDesarmar', 'placa cables'], ['bPasos', 'placa'], ['bVuelta', 'placa'], ['bPistas', 'placa'], ['bCablear', 'cables'], ['bDescablear', 'cables']])
+    $(id).style.display = en.includes(v) ? '' : 'none';
+  if (v === 'esquema') encuadrarEsquema();
+  document.querySelectorAll('[data-vista]').forEach(b => b.classList.toggle('on', b.dataset.vista === v));
+  etiqueta.textContent = '';
+  if (v === 'esquema' && elegido && esqDe(elegido)) centrarEsquema(esqDe(elegido));
+  pintar();
+}
+document.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => ponerVista(b.dataset.vista));
+leyenda.style.display = 'none';
+
+// la etiqueta del puntero en el esquema y en los cables: qué red es
+function etiquetaRed(e, p) {
+  const s = e.target.closest && e.target.closest('[data-red],[data-lugar]');
+  let txt = '';
+  if (s && s.dataset.red != null && s.dataset.red !== '') txt = nombreRed(s.dataset.red);
+  else if (s && s.dataset.lugar) txt = titulo(L[s.dataset.lugar]);
+  etiqueta.textContent = txt;
+  etiqueta.setAttribute('x', p.x + 16); etiqueta.setAttribute('y', p.y - 12);
+}
+
+// ---------------------------------------------------------------- barra
+function ponerCara(c) {
+  cara = c;
+  caraTop.setAttribute('display', c === 'top' ? '' : 'none');
+  caraBot.setAttribute('display', c === 'bot' ? '' : 'none');
+  $('bVuelta').classList.toggle('on', c === 'bot');
+  $('bVuelta').textContent = c === 'bot' ? 'ver por arriba' : 'dar vuelta la placa';
+}
+function ponerPistas(v) {
+  verPistas = v;
+  for (const k of ['top', 'bot']) CARAS[k].cobre.setAttribute('display', v ? '' : 'none');
+  $('bPistas').classList.toggle('on', v);
+}
+$('bArmar').onclick = () => { for (const l of LUGARES) if (!opcional(l)) puestas.add(l.id); pintar(); };
+$('bDesarmar').onclick = () => { puestas.clear(); pintar(); };
+$('bPasos').onclick = () => { puestas.clear(); irAPaso(0); };
+$('bVuelta').onclick = () => { ponerCara(cara === 'top' ? 'bot' : 'top'); pintar(); };
+$('bPistas').onclick = () => ponerPistas(!verPistas);
+$('bCablear').onclick = () => { for (const n of TODAS_LAS_REDES) conectados.add(n); pintar(); };
+$('bDescablear').onclick = () => { conectados.clear(); elegidoRed = null; pintar(); };
+addEventListener('keydown', e => {
+  if ((e.key === 'v' || e.key === 'V') && vista === 'placa') $('bVuelta').click();
+  else if ((e.key === 'p' || e.key === 'P') && vista === 'placa') $('bPistas').click();
+  else if (e.key === 'Escape') { elegido = null; elegidoRed = null; pintar(); }
+});
+
+// latido de los lugares del paso a paso
+const estilo = document.createElement('style');
+estilo.textContent = '#esqContenido text, .mini text { paint-order:stroke; stroke:#000; stroke-opacity:.6; stroke-width:1.5px; stroke-linejoin:round; } .late { animation: late 1.3s ease-in-out infinite; } @keyframes late { 50% { stroke-opacity:.25; fill-opacity:.02; } }';
+document.head.appendChild(estilo);
+
+for (const l of LUGARES) if (!opcional(l)) puestas.add(l.id);   // parte armada
+pintar();
+</script>
+</body>
+</html>

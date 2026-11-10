@@ -1,22 +1,64 @@
 // ==============================================================================================================================================
 // PERCU-SYNTH — Test IMU (MPU6050) — GC Lab Chile
 // ==============================================================================================================================================
-// Desarrollado por: Gonzalo - GC Lab Chile · MIT License
+// Desarrollado por: Gonzalo - GC Lab Chile
+// Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
+// Licencia de Hardware: CERN Open Hardware Licence v2 - Permissive (CERN-OHL-P)
+//
+// Puedes usar, modificar y distribuir este código y hardware, siempre que se mantenga
+// la atribución a GC Lab Chile. Se entrega "tal cual", sin garantías de ningún tipo.
 // ==============================================================================================================================================
-// HARDWARE
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
 // ==============================================================================================================================================
-// - ESP32-S3 + IMU MPU6050 (I2C) |SDA -> 21, SCL -> 38, VCC -> 3.3V, GND -> GND|  (dir. 0x68)
+// HARDWARE (usado por este firmware)
 // ==============================================================================================================================================
-// ARDUINO IDE
+// - Microcontrolador ESP32-S3
+// - IMU MPU6050 (I2C) |SDA -> 21, SCL -> 38, VCC -> 3.3V, GND -> GND|  (dir. 0x68)
+// - No usa botones, potenciómetros, audio ni LEDs.
 // ==============================================================================================================================================
-// - Board: ESP32S3 Dev Module · USB CDC On Boot: Enabled · Monitor Serie a 115200 baudios
-// - Librerías: solo Wire.h (incluida en el core)
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled
+// - Monitor Serie      : 115200 baudios
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - Solo Wire.h (incluida en el core ESP32)
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
 // Comprobación mínima del IMU: verifica que responde (WHO_AM_I = 0x68) y muestra
 // por el Monitor Serie la aceleración (g) y el giro (°/s) de los 3 ejes.
 // Si ves los números cambiar al mover el equipo, el IMU funciona.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → sin uso
+// - BTN2 → sin uso
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → sin uso
+// - POT2 → sin uso
+// - POT3 → sin uso
+// - POT4 → sin uso
+// - IMU → Mueve o gira el equipo y mira cambiar los números en el monitor serie.
+//
+// Al arrancar imprime "WHO_AM_I = 0x68" y ">> IMU detectado correctamente". Después, unas
+// 5 veces por segundo, una línea con ACC[g] x/y/z, GIRO[deg/s] x/y/z y la temperatura (T).
+// Quieto sobre la mesa, el eje que apunta hacia arriba marca ~1.00 g y los giros quedan
+// cerca de 0.
+//
+// Ojo: varios MPU6050 clones contestan otro WHO_AM_I (0x70, 0x72, 0x98…) y el sketch dice
+// "NO se detecta". Si igual ves los números moverse, el IMU funciona: la lectura no depende
+// de ese valor.
+//
+// MODO DE USO:
+// 1. Carga el sketch y abre el monitor serie a 115200 baudios.
+// 2. Revisa la primera línea: WHO_AM_I = 0x68 significa que el IMU responde.
+// 3. Mueve e inclina el equipo: los valores de aceleración y giro tienen que cambiar.
+// 4. Si dice "NO se detecta el IMU", revisa el cableado del IMU (pines 21 y 38, 3.3V y GND).
 // ==============================================================================================================================================
 
 #include <Wire.h>

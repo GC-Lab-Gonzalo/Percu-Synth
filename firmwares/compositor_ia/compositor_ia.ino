@@ -57,14 +57,46 @@
 // - driver/i2s_std.h                             (core ESP32 Arduino, nuevo driver I2S)
 // - FastLED
 // ==============================================================================================================================================
-// FUNCIONAMIENTO (LEDs de estado)
+// DESCRIPCIÓN
 // ==============================================================================================================================================
+// Le pides una canción con tu voz ("un techno oscuro", "un blues lento") y el PercuSynth la
+// compone y la toca: GPT inventa la receta (tonalidad, tempo, acordes, bajo, batería, melodía
+// y forma) y el sintetizador la hace sonar. Con las perillas mezclas pads+bajo, melodía y batería.
+//
+// La cadena es: mantienes BTN1 y hablas (INMP441, máx. 5 s) → Whisper transcribe → GPT-4o-mini
+// responde un JSON COMPACTO con los parámetros de la canción (ver COMPOSER_PROMPT) → el motor
+// de audio la toca en estéreo con percusión sintetizada. Al arrancar trae cargada una canción
+// "espacial" por defecto. Sin WiFi también funciona: pega un JSON en el Monitor Serie.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → mantener y hablar: pides una canción (máx. 5 s). Al soltarlo se detiene lo que
+//          sonaba, GPT compone y la canción nueva parte sola. Si algo falla, vuelve la anterior.
+// - BTN2 → Play / Stop de la última canción. Al prender trae cargada la "espacial" por defecto.
+// - BTN3 → sin uso
+// - BTN4 → sin uso
+// - BTN5 → sin uso
+// - POT1 → volumen de PADS + BAJO
+// - POT2 → volumen de la MELODÍA
+// - POT3 → volumen de la PERCUSIÓN
+// - POT4 → sin uso
+// - MIC → micrófono INMP441 por I2S: escucha tu pedido mientras mantienes BTN1.
+// - SERIAL → pega un JSON de canción (una línea) en el Monitor Serie (115200) y Enter: suena sin WiFi.
+//
+// LEDs de estado:
 //   Tocando       -> visualizador (VU del pad + punto de melodia + pulso del bombo)
 //   LED ROJO      -> GRABANDO (BTN1 presionado)
 //   LED AMBAR     -> PROCESANDO (Whisper / GPT)
 //   FLASH BLANCO  -> cancion nueva recibida y sonando
 //   LED MAGENTA   -> error (sin WiFi / JSON invalido) — vuelve a lo anterior
 //   Sin WiFi tambien funciona: pega un JSON (una linea) en el Monitor Serie y Enter.
+//
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h (en esta carpeta) y escribe tu WiFi y tu OPENAI_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V), compila y sube el código.
+// 3. Aprieta BTN2 para escuchar la canción por defecto y ajusta la mezcla con POT1, POT2 y POT3.
+// 4. Mantén BTN1, pide un estilo ("quiero un blues lento") y suéltalo: ámbar = componiendo.
+// 5. Con el flash blanco suena tu canción; pide otra cuando quieras o pega un JSON por Serial.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

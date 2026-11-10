@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PercuSynth · Matriz Oscura — Controles</title>
+<style>
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-SemiBold.ttf"); font-weight: 600; }
+  @page { size: A4 landscape; margin: 13mm 14mm; }
+  :root { --tinta: #111; --gris: #555; --linea: #d8d4cc; --ambar: #F5B041; --suave: #f6f3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 9.6pt; line-height: 1.3; color: var(--tinta); background: #fff; }
+  h1, h2, th { font-family: "Archivo Ancha", "Segoe UI", sans-serif; text-transform: uppercase; }
+  h1 { font-weight: 800; font-size: 19pt; margin: 0; letter-spacing: 0; }
+  h1 + .sub { color: var(--gris); margin: 2px 0 10px; font-size: 9.5pt; }
+  h2 { font-weight: 800; font-size: 11.5pt; margin: 10px 0 5px; padding-left: 8px; border-left: 4px solid var(--ambar); }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .fijos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-weight: 600; font-size: 8.4pt; text-align: left; background: var(--tinta); color: #fff; padding: 6px 7px; }
+  td { padding: 4px 7px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  td:first-child { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 8.8pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--suave); }
+  .nota { color: var(--gris); font-size: 9pt; margin-top: 6px; }
+  .pagina2 { break-before: page; }
+  .dos { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
+  .led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 1px; vertical-align: 0; border: 1px solid #0003; }
+  b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>PercuSynth · Matriz Oscura</h1>
+<div class="sub">Qué hace cada control · GC Lab Chile</div>
+
+<h2>En todos los paneles</h2>
+<div class="fijos">
+  <ul>
+    <li><b>BTN4</b> → siguiente panel: General → Bajo → Batería → Melodías → Oscilador → Samples → General.</li>
+    <li><b>BTN5</b> (un toque) → entra o sale del <b>break</b>: calla bombo y bajo.</li>
+    <li><b>BTN5</b> (mantenido más de 2 s) → <b>subida</b> de 16 compases que termina en un golpe y espera en silencio. El siguiente toque es el <b>drop</b>.</li>
+  </ul>
+  <ul>
+    <li><b>LED 5</b> = el panel: <span class="led" style="background:#2ecc40"></span>General <span class="led" style="background:#e53935"></span>Bajo <span class="led" style="background:#F5B041"></span>Batería <span class="led" style="background:#22c7d6"></span>Melodías <span class="led" style="background:#2f6fe0"></span>Oscilador <span class="led" style="background:#8e44d6"></span>Samples.</li>
+    <li>Al cambiar de panel, cada pot queda suelto hasta que lo muevas un 4&nbsp;%: nada salta.</li>
+    <li>Las secuencias corren siempre. Para callar un instrumento, baja su volumen (POT1 de su panel).</li>
+  </ul>
+</div>
+
+<h2>Panel por panel</h2>
+<table>
+  <tr><th style="width:9%">Panel</th><th style="width:11%">BTN1</th><th style="width:15%">BTN2</th><th style="width:16%">BTN3</th><th style="width:11%">POT1</th><th style="width:12%">POT2</th><th style="width:11%">POT3</th><th style="width:15%">POT4</th></tr>
+  <tr><td>General</td><td>Play / stop (arranca en el "1")</td><td>Estilo siguiente (8)</td><td>Fill al final del compás</td><td>Volumen</td><td>Tempo 70–175&nbsp;BPM</td><td>Swing (recto → 70&nbsp;%)</td><td>Pasa-bajos general</td></tr>
+  <tr><td>Bajo</td><td><b>Distorsión</b> sí / no</td><td>Patrón (4 por estilo)</td><td>Timbre: Rodante · Sucio · Limpio · 808 · Ácido · Pulso</td><td>Volumen</td><td>Filtro</td><td><b>Resonancia</b></td><td>Caída 40 ms – 1,2 s (el 808, más larga)</td></tr>
+  <tr><td>Batería</td><td><b>Percusión extra</b>: 1 → 2 → 3 pistas → nada</td><td>Patrón (4 por estilo)</td><td>Kit: Industrial · Psy · Duro · Rock · Trap</td><td>Volumen</td><td>Filtro</td><td>Largo de los golpes</td><td>Densidad (abajo del todo calla la percusión; el bombo sigue)</td></tr>
+  <tr><td>Melodías</td><td><b>Octava</b>: normal · +1 · −1</td><td>Patrón (4 por estilo)</td><td>Timbre: Ácido · FM · Stab · Sync · Pluck · Quintas</td><td>Volumen</td><td>Filtro</td><td><b>Resonancia</b></td><td>Caída 60 ms – 1,5 s</td></tr>
+  <tr><td>Oscilador</td><td>Enciende / apaga</td><td>Timbre: Gruñido · Sierras · FM · Cuadradas</td><td>Octava: normal · +1 · −1</td><td>Nota: 15 grados de la escala, tónica al centro</td><td>Filtro</td><td>Profundidad del LFO</td><td><b>Volumen</b></td></tr>
+  <tr><td>Samples</td><td>Dispara un <b>titular</b></td><td>Dispara al <b>presentador</b></td><td>Dispara una <b>señal caída</b></td><td>Volumen</td><td>Pitch (2 octavas abajo … 1 arriba; al centro, como está)</td><td>Reverb</td><td>Eco</td></tr>
+</table>
+<div class="nota">Percusión extra: recortes cortos, medios y largos de golpes y metales, sólo en los huecos del patrón. Los samples salen al azar de su banco y suenan también con la música detenida. El oscilador parte apagado.</div>
+
+<div class="pagina2">
+<div class="dos">
+  <div>
+    <h2>Estilos (BTN2 del General)</h2>
+    <p style="margin:0 0 6px">Cada estilo trae su escala, acordes, patrones y timbres. Después puedes cambiar los timbres en cada panel. El tempo lo pones tú (sugerido entre paréntesis).</p>
+    <table>
+      <tr><th style="width:27%">Estilo</th><th style="width:43%">Escala y acordes</th><th>Trae</th></tr>
+      <tr><td>Industrial (128)</td><td>Mi eólico: Em (6 compases) · C (2)</td><td>Kit Industrial, bajo Sucio, Stab</td></tr>
+      <tr><td>Psytrance (145)</td><td>Mi frigio: Em (7) · F (1)</td><td>Kit Psy, bajo Rodante, Ácido</td></tr>
+      <tr><td>Psycore (170)</td><td>Fa# doble armónica (árabe): F# (4) · G (2) · F# (2)</td><td>Kit Psy, bajo Rodante, FM</td></tr>
+      <tr><td>Electro Dark (124)</td><td>Fa frigio: F (2) · G♭ · F</td><td>Kit Industrial, bajo Sucio, Sync</td></tr>
+      <tr><td>Industrial Duro (136)</td><td>Re frigio dominante (hijaz): D, un solo acorde</td><td>Kit Duro, bajo Sucio, Stab</td></tr>
+      <tr><td>Cyberpunk (100)</td><td>Do# dórico: C#m · B · F# · G#m</td><td>Kit Rock, bajo Limpio, Pluck</td></tr>
+      <tr><td>Trap (140)</td><td>Fa dórico: Fm · A♭ · E♭ · B♭</td><td>Kit Trap, bajo 808 (con glide), Pluck</td></tr>
+      <tr><td>Rock Industrial (118)</td><td>Mi frigio dominante: E (6) · F (2)</td><td>Kit Rock, bajo Sucio, Quintas (el riff)</td></tr>
+    </table>
+    <h2>Samples: el noticiero del futuro</h2>
+    <ul>
+      <li><b>BTN1 · Titulares</b>: «Última hora: el agua potable ya cotiza en bolsa».</li>
+      <li><b>BTN2 · Presentador</b>: «Mantenga la calma. Su emoción ha sido registrada».</li>
+      <li><b>BTN3 · Señal caída</b>: «Reiniciando la realidad», la más rota. 8 frases por banco, dentro del firmware.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>LEDs de la placa</h2>
+    <ul>
+      <li><b>0</b> bombo · <b>1</b> bajo · <b>2</b> hats · <b>3</b> caja, perc, clap y tom · <b>4</b> melodías y samples.</li>
+      <li>En el break, 0 y 1 quedan rojos.</li>
+      <li><b>5</b> pulsa con cada negra en el color del panel; se pone <b>magenta</b> si el audio usa más del 80&nbsp;% de su tiempo.</li>
+    </ul>
+    <h2>Matriz 32×8</h2>
+    <ul>
+      <li>Once escenas que se sortean cada 4 compases, en cada Play y en cada cambio de estilo.</li>
+      <li>Al encender: 3 s de prueba de orientación.</li>
+    </ul>
+    <h2>Para cargarlo</h2>
+    <ul>
+      <li>Placa ESP32S3 Dev Module · Flash Mode <b>DIO</b> · USB CDC On Boot Enabled.</li>
+      <li>Partition Scheme: <b>Huge APP (3MB No OTA/1MB SPIFFS)</b>; con la partición por defecto los samples no caben.</li>
+      <li>Librería: FastLED.</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

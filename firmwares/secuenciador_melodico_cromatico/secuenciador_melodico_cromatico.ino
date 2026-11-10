@@ -1,6 +1,71 @@
 // ==============================================================================================================================================
-// PERCU-SYNTH — Secuenciador Melodico Cromatico (16 steps, 12 notes, Polifonico)
+// PERCU-SYNTH — Secuenciador Melódico Cromático (polifónico, 16 pasos, 12 notas)
 // ==============================================================================================================================================
+// Desarrollado por: Nicolás Martínez Contreras
+// (aporte al repositorio PercuSynth de GC Lab Chile, PR #4)
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3
+// - DAC PCM5102 vía I2S |LCK -> 39, DIN -> 40, BCK -> 41| (lo maneja la librería ESP32Synth)
+// - Los 6 LEDs WS2812 SMD internos de la placa |DATA -> 46| (índices 0..5; acá SÍ se usan)
+// - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled      (la webapp habla con la placa por el USB)
+// - Flash Mode         : DIO          (¡OPI rompe I2S!)
+// - Monitor Serie      : 115200 baudios
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32Synth (motor de síntesis que maneja el I2S)
+// - FastLED (gestor de librerías de Arduino)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Secuenciador polifónico de 16 pasos sobre una octava cromática (12 notas, de Do a Si):
+// cada paso puede tener cualquier combinación de notas sonando a la vez, así se escriben
+// acordes además de melodías. Arranca con un patrón de ejemplo cargado: dale Play y suena.
+//
+// Hay 12 voces, una por nota (Do4 = MIDI 60 … Si4), y todas comparten forma de onda y
+// envolvente. Cada paso es una máscara de 12 bits (bit 0 = Do … bit 11 = Si; 0 = silencio).
+// Los pasos son semicorcheas.
+//
+// WEBAPP: `secuenciador melodico cromatico webapp/secuenciador melodico cromatico.html` en
+// Chrome o Edge, se conecta por Web Serial (115200) para editar la grilla de 16 × 12 con el
+// mouse. La placa le manda su estado (PLAYING, DIR, PITCH, WAVE, VOL, BPM, ENV, STEP, SYNC)
+// y recibe la secuencia con "SEQ n n n …" (16 máscaras); desde la webapp también se puede
+// dar PLAY, STOP, TOGGLE y pedir GET_SYNC.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → Play / Stop. Al dar Play la secuencia vuelve al comienzo.
+// - BTN2 → Forma de onda siguiente: pulso → sierra → triángulo → seno (y vuelve).
+// - BTN3 → Reversa: la secuencia corre hacia atrás. Otro toque, vuelve hacia adelante.
+// - BTN4 → Secuencia al azar, con acordes. Cada nota tiene ~18 % de salir en cada paso.
+// - BTN5 → Borra la secuencia: todos los pasos en silencio.
+// - POT1 → Volumen.
+// - POT2 → Tempo (60–240 BPM, pasos de semicorchea).
+// - POT3 → Transposición de −12 a +12 semitonos.
+// - POT4 → Envolvente: centro corto; izquierda alarga el ataque, derecha la cola.
+//          A la izquierda el ataque llega a 0.8 s; a la derecha el release llega a 1.2 s.
+//
+// LEDs de la placa: con 16 pasos y 6 LEDs, el cursor da la vuelta (paso % 6). Mientras
+// suena, el LED del paso actual toma el color de su nota más grave; blanco si es silencio.
+//
+// MODO DE USO:
+// 1. Sube el POT1 (volumen) y aprieta BTN1: suena el patrón de ejemplo.
+// 2. Ajusta el tempo con el POT2 y la altura con el POT3.
+// 3. Aprieta BTN2 para cambiar la forma de onda y gira el POT4 para la envolvente.
+// 4. BTN4 sortea una secuencia nueva con acordes; BTN5 la borra.
+// 5. Para escribir tus propias notas y acordes, abre la webapp y conéctate por Web Serial.
+// ==============================================================================================================================================
+
 #include <Arduino.h>
 #include <FastLED.h>
 #include <ESP32Synth.h>

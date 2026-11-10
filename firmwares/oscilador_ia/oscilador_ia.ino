@@ -69,8 +69,53 @@
 // - Wire.h                                       (core ESP32 Arduino, IMU)
 // - FastLED
 // ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Pides un sonido hablando ("una cuerda metálica oxidada", "un coro de vidrio") y el PercuSynth
+// lo genera con IA y lo convierte en un sintetizador afinado: lo tocas como teclado con BTN2..BTN5,
+// lo dejas como drone, corres arpegios o una secuencia que compone sola, siempre dentro de la
+// escala y la tónica que elijas. Hasta que no generas el primer sonido, no suena nada.
+//
+// Cadena: mic INMP441 -> Whisper -> GPT traduce el pedido al inglés -> ElevenLabs genera el
+// sample -> el firmware MIDE su nota real (autocorrelación) y afina cada nota contra esa medición.
+// ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
+// - BTN1 → toque corto = siguiente escala · mantener = pedir un timbre nuevo. Mantener (más
+//          de 0.25 s) graba tu pedido (máx. 5 s); al soltarlo se genera el sonido y reemplaza
+//          al instrumento. Hay 10 escalas: Jónico, Dórico, Frigio, Lidio, Mixolidio, Eólico,
+//          Locrio, Menor armónica, Frigio dominante y Doble armónica. Arranca en Eólico (menor).
+// - POT1 → BPM del arpegiador y de la secuencia (60 - 200).
+// - POT2 → volumen master
+// - POT3 → tónica de la escala (12 zonas, de C2 a B2).
+// - POT4 → modo: teclado, arpegio o secuencia. Son 6 zonas: TECLADO · ARP subida · ARP bajada ·
+//          ARP sube-baja · ARP aleatorio · SECUENCIA generativa. Lo que hacen BTN2..BTN5
+//          depende de este modo.
+// - IMU → eje X = cutoff del filtro · eje Y = resonancia (Q). Inclina la placa para moverlos.
+// - MIC → micrófono INMP441 por I2S: escucha tu pedido mientras mantienes BTN1.
+//
+// ── MODO TECLADO (POT4 al mínimo) ─────────────────────────────────────────────
+// - BTN2 → fundamental de la escala. Suena mientras presionas; mantener > 0.6 s = DRONE
+//          infinito (el sample queda sonando como oscilador); otro toque lo apaga.
+// - BTN3 → tercera de la escala (igual: toque = nota, mantener = drone).
+// - BTN4 → quinta de la escala (igual: toque = nota, mantener = drone).
+// - BTN5 → octava (igual: toque = nota, mantener = drone).
+//
+// ── MODO ARP (POT4 en las zonas 2 a 5) ────────────────────────────────────────
+// - BTN2 → arpegio sobre el acorde del grado I (queda sonando). El mismo botón lo para.
+// - BTN3 → arpegio sobre el acorde del grado IV. El mismo botón lo para.
+// - BTN4 → arpegio sobre el acorde del grado V. El mismo botón lo para.
+// - BTN5 → arpegio sobre el acorde del grado VI. El mismo botón lo para.
+//
+//   Tocar otro botón cambia de acorde al vuelo.
+//
+// ── MODO SEQ (POT4 al máximo) ─────────────────────────────────────────────────
+// - BTN2 → play / stop de la secuencia generativa (4 compases).
+// - BTN3 → nueva melodía (misma progresión).
+// - BTN4 → nueva progresión de acordes (+ melodía nueva).
+// - BTN5 → pedal de DRONE en la tónica (prende / apaga).
+//
+// Recorrido completo de un pedido:
 //   1) MANTEN BTN1 y describe un SONIDO: "un cello de metal liquido", "una flauta de cristal".
 //   2) GPT lo traduce a una descripcion clara del sonido en ingles y ESO es todo el prompt
 //      (sin coletillas de afinacion ni loop: confunden al generador). La duracion (4 s) y el
@@ -93,6 +138,13 @@
 //   LED 3 = pulso (negra del reloj)
 //   LED 4 = filtro IMU (color por cutoff, brillo por resonancia)
 //   LED 5 = estado: VERDE listo · ROJO grabando · AMBAR procesando · MAGENTA error
+//
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h y escribe tu WiFi, OPENAI_API_KEY y ELEVEN_API_KEY.
+// 2. Conecta el micrófono INMP441 (pines 11, 12 y 13, a 3.3 V), compila y sube el código.
+// 3. Con el LED 5 en VERDE, mantén BTN1, describe un sonido y suéltalo: ámbar = generando.
+// 4. Cuando suene la nota de prueba, deja POT4 al mínimo y toca BTN2..BTN5 como teclado.
+// 5. Gira POT4 para arpegios o secuencia, cambia la tónica con POT3 y la escala con un toque de BTN1.
 // ==============================================================================================================================================
 
 #include <WiFi.h>

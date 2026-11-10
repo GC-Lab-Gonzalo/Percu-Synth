@@ -48,15 +48,38 @@
 //   - PIEZOS   : lectura cruda de los 4 piezos (golpéalos para ver el pico)
 //   - EXT      : lectura cruda de los 2 sensores externos
 // ==============================================================================================================================================
-// FUNCIONAMIENTO — comandos por el Monitor Serie (escribe la letra y pulsa Enter)
+// FUNCIONAMIENTO
 // ==============================================================================================================================================
+// Los controles no cambian nada: solo se muestran. Cada uno tiene su línea en el monitor.
+// - BTN1 → Aparece como apretado en la línea de botones del monitor. Casilla 1: PUL / ---.
+// - BTN2 → Aparece como apretado en la línea de botones del monitor. Casilla 2: PUL / ---.
+// - BTN3 → Aparece como apretado en la línea de botones del monitor. Casilla 3: PUL / ---.
+// - BTN4 → Aparece como apretado en la línea de botones del monitor. Casilla 4: PUL / ---.
+// - BTN5 → Aparece como apretado en la línea de botones del monitor. Casilla 5: PUL / ---.
+// - POT1 → Su lectura (0..4095 y %) aparece en la línea de pots del monitor.
+// - POT2 → Su lectura (0..4095 y %) aparece en la línea de pots del monitor.
+// - POT3 → Su lectura (0..4095 y %) aparece en la línea de pots del monitor.
+// - POT4 → Su lectura (0..4095 y %) aparece en la línea de pots del monitor.
+// - IMU → Aceleración, giro y temperatura aparecen en la línea IMU del monitor.
+// - Piezos y sensores externos → líneas PZ (1..4) y EXT (A, B), lectura cruda.
+//
+// COMANDOS por el Monitor Serie (escribe la letra y pulsa Enter):
 //   a  → Test de AUDIO: 3 beeps por el DAC (debes oírlos en el parlante/auriculares)
 //   l  → Test de LEDS : barrido de color por la tira (requiere ENABLE_LED_TEST = 1)
 //   p  → Pausa / reanuda el volcado continuo (para leer con calma)
 //   h  → Ayuda (vuelve a mostrar esta lista)
+//
+// El IMU se da por bueno si contesta con datos, no por su WHO_AM_I: muchos MPU6050 clones
+// devuelven 0x70 / 0x72 / 0x98 en vez de 0x68 y funcionan igual.
+//
+// MODO DE USO:
+// 1. Carga el sketch y abre el monitor serie a 115200 baudios.
+// 2. Revisa la línea IMU: si dice "NO detectado", revisa el cableado (pines 21 y 38, 3.3V y GND).
+// 3. Aprieta cada botón y gira cada pot: su valor tiene que cambiar en las líneas de botones y pots.
+// 4. Golpea los piezos y mira su línea; escribe "p" + Enter para pausar y leer con calma.
+// 5. Escribe "a" + Enter: tienes que oír 3 beeps (440, 660 y 880 Hz) por el jack.
 // ==============================================================================================================================================
 
-// ---- Activa/desactiva auto-tests pesados (dependencias de librerías/periféricos) ----
 #define ENABLE_AUDIO_TEST 1   // 1 = compila el test de tono I2S (solo core, sin libs externas)
 #define ENABLE_LED_TEST   0   // 1 = compila el test de tira WS2812 (REQUIERE instalar FastLED)
 

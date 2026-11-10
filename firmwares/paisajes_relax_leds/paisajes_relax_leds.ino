@@ -1,5 +1,5 @@
 // ==============================================================================================================================================
-// PERCU-SYNTH — Paisajes Relax + LEDs (10 sonidos relajantes combinables · 2 anillos WS2812 de 30 LEDs) — GC Lab Chile
+// PERCU-SYNTH — Paisajes Relax + LEDs (10 sonidos relajantes combinables · 2 anillos WS2812 de 19 y 20 LEDs) — GC Lab Chile
 // ==============================================================================================================================================
 // Desarrollado por: Gonzalo - GC Lab Chile
 // Licencia de Software: MIT License (https://opensource.org/licenses/MIT)
@@ -36,22 +36,27 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
-// Máquina de PAISAJES SONOROS RELAJANTES: 10 capas de sonido sintetizadas en tiempo real
-// (sin samples) que se pueden ENCENDER Y COMBINAR libremente. Cada capa activa pinta su
-// propio efecto de luz sobre dos anillos de 30 LEDs (uno hacia afuera, otro hacia adentro),
-// mezclándose de forma aditiva igual que el sonido. Todo suena DIRECTO Y NATURAL, sin
+// Máquina de PAISAJES SONOROS RELAJANTES: 10 sonidos de la naturaleza (viento, mar,
+// campanitas, gotas, grillos, fuego, lluvia, cuenco, arroyo, pájaros) que enciendes y
+// combinas libremente con los 5 botones. Cada sonido activo pinta su propio efecto de luz
+// en dos anillos de LEDs. Arranca en silencio: tú armas el paisaje.
+//
+// Son 10 capas de sonido sintetizadas en tiempo real (sin samples). Las luces van sobre
+// dos anillos de 19 y 20 LEDs (uno hacia afuera, otro hacia adentro), mezclándose de forma
+// aditiva igual que el sonido. Todo suena DIRECTO Y NATURAL, sin
 // efectos (sin delay/reverb). Motor de audio: I2S → PCM5102 44.1 kHz / 16-bit estéreo con
 // soft-limiter. Las luces corren por FastLED (RMT, no choca con el I2S) a ~30 FPS.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// BOTONES — cada botón alterna (toggle) una capa. Pulsación CORTA = capa principal,
-// pulsación LARGA (>0.6 s) = capa alternativa. Todas se pueden combinar:
-// - BTN1 (44) corta → VIENTO       · larga → FUEGO (fogata crepitando)
-// - BTN2 (42) corta → MAR (olas)   · larga → LLUVIA
-// - BTN3 (0)  corta → CAMPANITAS   · larga → CUENCO tibetano (dron armónico)
-// - BTN4 (45) corta → GOTAS de agua · larga → ARROYO (agua corriendo)
-// - BTN5 (47) corta → GRILLOS      · larga → PÁJAROS (trinos)
+// BOTONES — cada botón alterna (toggle) una capa. Pulsación CORTA = capa principal
+// (actúa al soltar), pulsación LARGA (mantener 0.6 s) = capa alternativa (actúa apenas se
+// cumplen los 0.6 s, sin soltar). Todas se pueden combinar. Un solo panel:
+// - BTN1 (44) → Viento (toque corto) · Fuego (mantener 0.6 s). Fuego = fogata crepitando.
+// - BTN2 (42) → Mar, olas (toque corto) · Lluvia (mantener 0.6 s).
+// - BTN3 (0)  → Campanitas (toque corto) · Cuenco tibetano (mantener 0.6 s). El cuenco es un dron armónico.
+// - BTN4 (45) → Gotas de agua (toque corto) · Arroyo (mantener 0.6 s). Arroyo = agua corriendo.
+// - BTN5 (47) → Grillos (toque corto) · Pájaros, trinos (mantener 0.6 s).
 // Al alternar una capa, los anillos hacen un flash con el color de la capa
 // (brillante = encendida, tenue = apagada).
 //
@@ -62,10 +67,10 @@
 //
 // POTENCIÓMETROS (globales, afectan a todas las capas activas):
 // - POT1 (ADC1)  → Volumen maestro
-// - POT2 (ADC2)  → Densidad / actividad (ritmo de campanitas, gotas, lluvia, ráfagas…)
+// - POT2 (ADC2)  → Densidad / actividad. Ritmo de campanitas, gotas, lluvia, ráfagas…
 // - POT3 (ADC8)  → Color tonal (oscuro ↔ brillante — filtro paso-bajos global)
-// - POT4 (ADC10) → Balance fondo ↔ eventos (sube/baja campanitas, gotas, grillos y pájaros
-//                  sobre los fondos continuos: viento, mar, fuego, lluvia, cuenco, arroyo)
+// - POT4 (ADC10) → Balance fondo ↔ eventos. Sube/baja campanitas, gotas, grillos y pájaros
+//                  sobre los fondos continuos: viento, mar, fuego, lluvia, cuenco, arroyo.
 //
 // LUCES — cada capa aporta su efecto (mezcla aditiva):
 // - VIENTO: banda azul-blanca que fluye por el anillo A al ritmo de las ráfagas
@@ -81,6 +86,15 @@
 //
 // AL ENCENDER: barrido de luz por los dos anillos y arranca EN SILENCIO — el usuario
 // decide qué sonidos activar. Sin IMU y sin Serial.
+//
+// MODO DE USO:
+// 1. Sube POT1 (volumen) hasta la mitad y da un toque corto a BTN2: empieza el mar.
+// 2. Suma más capas: toque corto a BTN1 (viento) y a BTN3 (campanitas). Otro toque
+//    a un botón apaga su capa; su LED de la placa muestra qué está encendido.
+// 3. Mantén apretado un botón 0.6 s para su capa alternativa: BTN1 fuego, BTN2 lluvia,
+//    BTN3 cuenco, BTN4 arroyo, BTN5 pájaros.
+// 4. Ajusta el paisaje: POT2 más o menos actividad, POT3 más oscuro o brillante y
+//    POT4 cuánto destacan los sonidos sueltos sobre el fondo.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

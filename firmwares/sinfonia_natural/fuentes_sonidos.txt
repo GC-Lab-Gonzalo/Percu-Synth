@@ -1,0 +1,24 @@
+SONIDOS NATURALES DE sinfonia_natural — de dónde viene cada uno
+================================================================
+
+Todos son grabaciones de campo de Freesound con licencia Creative Commons 0 (dominio público):
+se pueden usar, modificar y publicar sin pedir permiso ni dar crédito. Igual se nombra a cada autor.
+Se usó la vista previa de calidad alta (mp3 128 kbps) y de cada grabación se tomó un tramo de ~3 s
+(recortar.py elige el tramo más parejo en los ambientes y una frase completa en los animales).
+Licencia de cada uno verificada en su página el 2026-10-30.
+Los 9 primeros son los animales de BTN5; continua_vertiente.wav es la vertiente que suena continua con el POT4.
+
+archivo en sonidos/   grabación original                                        autor            enlace
+-------------------   -------------------------------------------------------   --------------   ---------------------------------------------
+buho.wav              Tawny owl hooting                                         Patrick_Corra    https://freesound.org/s/745208/
+carpintero.wav        Woodpecker drumming in a pine forest                      zachrau          https://freesound.org/s/867542/
+chochin.wav           Wren song close                                           Sacha.Julien     https://freesound.org/s/734533/
+grillo.wav            Cricket, close recording: Santiago                        felix.blume      https://freesound.org/s/495396/
+mirlo.wav             Blackbird (isolated)                                      richwise         https://freesound.org/s/811988/
+pajaros.wav           Birdsong Beauty.wav                                       lukabea          https://freesound.org/s/660470/
+paloma.wav            dove calling with out other side noise                    idreesbari       https://freesound.org/s/517526/
+ranas.wav             frogs_01.flac                                             musicbrain       https://freesound.org/s/426462/
+zorzal.wav            Song Thrush                                               richwise         https://freesound.org/s/785669/
+continua_vertiente.wav  Small stream in forest (6 s, la vertiente del POT4)      Cinetony         https://freesound.org/s/559955/
+
+Para cambiarlos: deja otros audios en sonidos/ (o quita alguno) y corre  python preparar_muestras.py sonidos

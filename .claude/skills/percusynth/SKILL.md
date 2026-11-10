@@ -120,6 +120,31 @@ Estas reglas vienen de iteraciones con usuarios reales en talleres:
   resonante arriba); **toda la saturación antes del filtro del master** (si va después,
   reinyecta agudos que el filtro ya no puede sacar); y la ganancia del **limitador suavizada**
   (~0.5 ms): un escalón de ganancia por muestra es un click de banda ancha.
+- **Ese `+ 1e-18f` a la entrada de cada filtro no es un adorno: es anti-subnormales.** Un filtro al
+  que le entra silencio decae hacia cero y a mitad de camino sus estados caen en el rango
+  **subnormal**, donde cada multiplicación cuesta del orden de **cien veces más** (en x86 y también
+  en el WASM del simulador, que no pone flush-to-zero). Medido en `triphop_viaje`: el vinilo costaba
+  179 µs por bloque en vez de 3.9 y el vocoder **3137 en vez de 17** — el motor corría a la mitad del
+  tiempo real y se oía todo arrastrado, sin un solo problema de señal. La defensa va **dentro de las
+  primitivas** (`pasoBQ` y `pasoFiltro` suman `DITHER` a su entrada), para que ningún filtro que se
+  agregue después se quede sin ella; y los suavizadores de un polo, que no tienen entrada donde
+  inyectar, se van a **cero exacto** (`sinSub()`), porque el cero no es subnormal. `1e-18` es un
+  float normal (el subnormal empieza en `1.2e-38`) y a la salida son −360 dB.
+- **«Sin discontinuidad» no es «no suena a clic».** Un tic de 0.2 ms que sale de un pasa-banda es
+  perfectamente suave —su `max|d2|` queda por debajo de la cota del ancho de banda— y aun así el
+  oído lo registra como un chasquido. Para juzgar esto no sirve un detector de discontinuidades:
+  hay que medir **transitorios audibles** (envolvente rápida de ~1.5 ms contra lenta de ~50 ms, y
+  contar lo que sobresale 4×). En `triphop_viaje` costó tres rondas de medir lo que no era.
+  Corolario de diseño: una capa cuyo trabajo es hacer chasquidos (crepitar de vinilo, ruido de
+  superficie) **no va encendida y audible por omisión**, y su pot tiene que poder llevarla a
+  inaudible — un control con 10 dB de recorrido no sirve, va cuadrático y de punta a punta.
+- **Una entrada de audio en vivo: continuidad antes que latencia, y la compuerta con histéresis.**
+  Si el anillo del micrófono, cuando el productor se adelanta, "salta a lo último" para no acumular
+  latencia, está tirando decenas de ms de voz de golpe y eso se oye como intermitencia: se consume
+  **un bloque por bloque, siempre**, y quien descarta es el productor, de a uno. Y una compuerta sin
+  histéresis chatea con cualquier voz que ronde el umbral: abre en un umbral, cierra en otro más
+  bajo, retiene ~200 ms tras la última sílaba y cierra a −18 dB, no a silencio. El umbral no se pone
+  a ojo: sigue al ruido de la sala (seguidor de piso que baja rápido y sube lentísimo).
 - **Cuidado con el umbral de apagado de la voz.** A -64 dB, una cola de tau 1.5 s mantiene la voz
   ocupada 11 s después de dejar de oírse y la polifonía se agota tocando normal; -48 dB la libera
   3 veces antes y el corte no se escucha.
@@ -130,6 +155,19 @@ No mandes archivos de audio renderizados: la placa está al lado y se escucha ah
 lógica de un firmware de audio antes de flashear, se compila el `.ino` en el PC con mocks de
 `Arduino.h` / `Wire.h` / `i2s_std.h` y se renderiza a WAV local — eso encuentra NaN, clipping,
 notas fuera de escala y voces trabadas que `arduino-cli` no ve.
+
+Para **verlo funcionar sin placa** (o mostrarlo en un taller online) está `tools/simulador/`:
+`python tools/simulador/servidor.py` y el `.ino` corre tal cual en una placa dibujada en el
+navegador, con sonido, LEDs y matrices, Serial, MIDI, IMU u OLED, microSD, sensores en EXT (FSR, LDR, DHT11) y micrófono.
+No tiene WiFi ni librerías externas fuera de FastLED y las del DHT; el IMU se lee por registros con `Wire`. No mide el presupuesto de CPU del S3.
+
+Dos cosas al medir ahí: `ESP.getCycleCount()` es reloj de pared a 240 MHz nominales, así que
+**`-DMEDIR=1` da porcentajes reales del presupuesto por bloque dentro del navegador** y suele ser el
+camino más corto para encontrar un problema de tiempo; y **con el volumen en 0 la relación entre
+audio producido y reloj baja a ~0.65× en cualquier firmware**, así que de ese número no se concluye
+nada estando muteado. Y un **I2S de entrada se marca el ritmo igual que uno de salida**: si el
+micrófono se lee dentro del bucle que además escribe al DAC, cada bloque dura el doble — va en su
+propia tarea en el core 0, dejando bloques en un anillo que el audio sólo copia.
 
 ## Flashear
 

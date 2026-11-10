@@ -21,7 +21,7 @@
 //       L/R .............. GND       (dato en el slot IZQUIERDO)
 //       VDD .............. 3.3V      (NO 5V)
 //
-// - Botones (INPUT_PULLUP, presionado = LOW): 44, 42, 0, 45, 47  (sólo se usa BTN1)
+// - Botones (INPUT_PULLUP, presionado = LOW): 44, 42, 0, 45, 47  (se usan BTN1 y BTN2)
 // - Potenciómetros: ADC 1, 2, 8, 10
 // - Indicadores: 6 LEDs SMD WS2812 on-board (data GPIO 46)
 //
@@ -75,14 +75,22 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - BTN1 (GPIO44) -> EFECTO SIGUIENTE (1 → 11 → 1). El cambio es un fundido de 5 ms, sin clic.
-// - BTN2 (GPIO42) -> PUERTA DE RUIDO on/off. Encendida (al arrancar) = sólo pasa la voz;
+// - BTN1 (GPIO44) -> Efecto siguiente (1 → 11 → 1). El cambio es un fundido de 5 ms, sin clic.
+// - BTN2 (GPIO42) -> Puerta de ruido on/off. Encendida (al arrancar) = sólo pasa la voz;
 //                    apagada = pasa todo, también el sonido ambiente. LED 0 blanco = apagada.
+// - BTN3 (GPIO0)  -> sin uso
+// - BTN4 (GPIO45) -> sin uso
+// - BTN5 (GPIO47) -> sin uso
 //
-// - POT4 (ADC10)  -> VOLUMEN general. Siempre. En cero = silencio.
-// - POT1..POT3    -> los parámetros del efecto activo:
+// - POT1 (ADC1)   -> Primer ajuste del efecto activo. Ej.: graves en VOZ, tiempo en ECO.
+// - POT2 (ADC2)   -> Segundo ajuste del efecto activo. Ej.: agudos en VOZ, realimentación en ECO.
+// - POT3 (ADC8)   -> Tercer ajuste del efecto activo. Ej.: compresión en VOZ, brillo en ECO.
+// - POT4 (ADC10)  -> Volumen general. Siempre, en todos los efectos. En cero = silencio.
+// - MICRÓFONO     -> INMP441: lo que hablas o cantas sale transformado por los audífonos
 //
-//   EFECTO        POT1                      POT2                     POT3
+// Qué hace cada perilla en cada efecto:
+//
+//   EFECTO        pot1                      pot2                     pot3
 //   VOZ           graves ±6 dB              agudos ±6 dB             compresión (0 = nada)
 //   ELECTRO       tempo 70–180 BPM          división del trémolo     profundidad del trémolo
 //   AUTOTUNE      mezcla autotune/vocoder   octava abajo (vocoder)   velocidad (natural → robot)
@@ -105,6 +113,13 @@
 //   FLANGER rosado
 //   AUTOTUNE: escala fija Si♭ menor (atTono / atEscala en el código)
 //   En ELECTRO el LED 0 late con el trémolo.
+//
+// MODO DE USO:
+// 1. Conecta el micrófono INMP441 con los pines de arriba (a 3.3 V, nunca 5 V).
+// 2. Sube el sketch y conecta AUDÍFONOS a la salida de audio (con parlante el micrófono se acopla).
+// 3. Sube POT4 (volumen) y habla o canta al micrófono: parte en el efecto 1, voz limpia.
+// 4. Aprieta BTN1 para pasar al efecto siguiente; el color del LED 0 te dice en cuál estás.
+// 5. Mueve POT1, POT2 y POT3 para cambiar el efecto (la tabla de arriba dice qué hace cada una).
 // ==============================================================================================================================================
 
 #ifndef SIMULADOR

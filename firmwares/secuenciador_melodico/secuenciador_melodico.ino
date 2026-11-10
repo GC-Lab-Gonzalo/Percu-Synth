@@ -1,6 +1,71 @@
 // ==============================================================================================================================================
-// PERCU-SYNTH — Secuenciador Melodico (16 steps, Scales, Pitch)
+// PERCU-SYNTH — Secuenciador Melódico (modos griegos, 16 pasos, transposición)
 // ==============================================================================================================================================
+// Desarrollado por: Nicolás Martínez Contreras
+// (aporte al repositorio PercuSynth de GC Lab Chile, PR #4)
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-S3
+// - DAC PCM5102 vía I2S |LCK -> 39, DIN -> 40, BCK -> 41| (lo maneja la librería ESP32Synth)
+// - Los 6 LEDs WS2812 SMD internos de la placa |DATA -> 46| (índices 0..5; acá SÍ se usan)
+// - 5 Botones con pull-up |BTN1 -> 44, BTN2 -> 42, BTN3 -> 0, BTN4 -> 45, BTN5 -> 47|
+// - 4 Potenciómetros analógicos |POT1 -> ADC1, POT2 -> ADC2, POT3 -> ADC8, POT4 -> ADC10|
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32S3 Dev Module
+// - USB CDC On Boot    : Enabled      (la webapp habla con la placa por el USB)
+// - Flash Mode         : DIO          (¡OPI rompe I2S!)
+// - Monitor Serie      : 115200 baudios
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - ESP32Synth (motor de síntesis que maneja el I2S)
+// - FastLED (gestor de librerías de Arduino)
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Secuenciador monofónico de 16 pasos donde cada paso es un grado de la escala o un
+// silencio, así todo lo que toca queda dentro del modo elegido. Recorre los 7 modos
+// griegos con un botón y arranca con la secuencia vacía: la llenas al azar con BTN4 o
+// la dibujas en la webapp.
+//
+// La voz es una onda de pulso (50 %) con envolvente, sobre Do4 (MIDI 60). Cada paso guarda
+// un grado de 0 a 7 (tónica → octava) o −1 = silencio. Los pasos son semicorcheas.
+//
+// WEBAPP: `secuenciador_melodico webapp/secuenciador melodico.html` en Chrome o Edge, se
+// conecta por Web Serial (115200) para editar los 16 pasos con el mouse y ver el que suena.
+// La placa le manda su estado (SCALE, DIR, PITCH, VOL, BPM, ENV, STEP, SYNC) y recibe la
+// secuencia con "SEQ n n n …" (16 valores, −1 = silencio).
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// - BTN1 → Play / Stop. Al dar Play la secuencia vuelve al comienzo.
+// - BTN2 → Modo griego siguiente (7 modos, de jónico a locrio). Orden: jónico (mayor),
+//          dórico, frigio, lidio, mixolidio, eólico (menor) y locrio; después vuelve al jónico.
+// - BTN3 → Reversa: la secuencia corre hacia atrás. Otro toque, vuelve hacia adelante.
+// - BTN4 → Secuencia al azar: 16 pasos nuevos, ~40 % de silencios.
+// - BTN5 → Borra la secuencia: todos los pasos en silencio.
+// - POT1 → Volumen.
+// - POT2 → Tempo (60–240 BPM, pasos de semicorchea).
+// - POT3 → Transposición de −12 a +12 semitonos.
+// - POT4 → Envolvente: centro corto; izquierda alarga el ataque, derecha la cola.
+//          A la izquierda el ataque llega a 1 s; a la derecha el release llega a 1.5 s.
+//
+// LEDs de la placa: con 16 pasos y 6 LEDs, el cursor da la vuelta (paso % 6). El LED del
+// paso que suena se enciende del color de su grado; blanco si ese paso es un silencio.
+//
+// MODO DE USO:
+// 1. Arranca en silencio: aprieta BTN4 para llenar la secuencia al azar (o dibújala en la webapp).
+// 2. Aprieta BTN1 para dar Play y sube el POT1 (volumen).
+// 3. Ajusta el tempo con el POT2 y la altura con el POT3.
+// 4. Aprieta BTN2 para pasar por los 7 modos griegos: la misma secuencia cambia de color.
+// 5. ¿No te gusta? BTN4 otra vez sortea una nueva; BTN5 la borra.
+// ==============================================================================================================================================
+
 #include <Arduino.h>
 #include <FastLED.h>
 #include <ESP32Synth.h>

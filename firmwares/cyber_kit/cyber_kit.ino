@@ -71,9 +71,17 @@
 //   · BTN3 + BTN5           → entra/sale del PANEL D (escala / secuencia) +
 //   · BTN4 + BTN5           → cicla los paneles A → B → C → A
 //   · BTN1 + BTN5 (>1 seg)  → cambia MODO DE FILTRO (POTS ↔ IMU)
-// +56222509344
-// MODO PERC : BTN1..BTN5 disparan los 5 sonidos del banco activo (al instante).
-//             Los sonidos afinados avanzan por el patrón de notas en cada golpe.
+// - IMU → inclinar la placa mueve el filtro (sólo en modo de filtro IMU). La aceleración
+//   en X abre el corte; la del eje Y, la resonancia. El modo IMU se activa con el último
+//   combo de arriba; en modo POTS el IMU no hace nada.
+//
+// En PERC los sonidos afinados avanzan por el patrón de notas en cada golpe.
+// MODO PERC : cada botón dispara un sonido del banco activo, al instante:
+//   · BTN1 → dispara el sonido 1 del banco activo
+//   · BTN2 → dispara el sonido 2 del banco activo
+//   · BTN3 → dispara el sonido 3 del banco activo
+//   · BTN4 → dispara el sonido 4 del banco activo
+//   · BTN5 → dispara el sonido 5 del banco activo
 // MODO SEQ  : transporte de performance (el secuenciador toca el patrón):
 //   · BTN1 → PLAY / STOP (play reinicia en el paso 0)
 //   · BTN2 → REVERSA (invierte la dirección del secuenciador)
@@ -88,9 +96,12 @@
 // - POT3 → Drive (saturación) · POT4 → Tempo (60–180 BPM)
 //
 // ── PANEL B — FILTRO / LFO (violeta) ──────────────────────────────────────────
-// - POT1 → Cutoff (modo POTS) · POT2 → Resonancia (modo POTS)
-// - POT3 → Velocidad del LFO (0.25–16 Hz) · POT4 → WOBBLE (LFO → cutoff)
-//   En modo filtro IMU, POT1/POT2 no actúan: manda el acelerómetro.
+// - POT1 → Cutoff del filtro (60 Hz – 12 kHz). Sólo en modo filtro POTS; en modo IMU
+//          manda el acelerómetro.
+// - POT2 → Resonancia del filtro. Sólo en modo filtro POTS; en modo IMU manda el
+//          acelerómetro.
+// - POT3 → Velocidad del LFO (0.25–16 Hz)
+// - POT4 → WOBBLE: cuánto mueve el LFO el cutoff
 //
 // ── PANEL C — SÍNTESIS (naranja) — transforma los sonidos de forma NOTABLE ────
 // - POT1 → Attack (0.5 ms – 0.8 s: de golpe a swell/reverse)
@@ -98,11 +109,13 @@
 // - POT3 → TEXTURA (FM/armónicos + capa de ruido blanco)
 // - POT4 → PITCH global (−12 … +12 semitonos, afecta a todos los sonidos)
 //
-// ── PANEL D — ESCALA / SECUENCIA (verde) — BTN3+BTN5 ──────────────────────────
-// - POT1 → Nota fundamental (Do..Si) · POT2 → Escala (10): Jónico · Dórico ·
-//   Frigio · Lidio · Mixolidio · Eólico · Locrio · Frigio dominante (flamenca) ·
-//   Doble armónica (gitana oscura) · Menor armónica
-// - POT3 → Patrón rítmico (8) · POT4 → Patrón de notas (8)
+// ── PANEL D — ESCALA / SECUENCIA — verde, se entra con BTN3+BTN5 ──────────────
+// - POT1 → Nota fundamental (Do..Si)
+// - POT2 → Escala (10 a elegir). Jónico · Dórico · Frigio · Lidio · Mixolidio ·
+//          Eólico · Locrio · Frigio dominante (flamenca) · Doble armónica (gitana
+//          oscura) · Menor armónica
+// - POT3 → Patrón rítmico del secuenciador (8)
+// - POT4 → Patrón de notas (8). Por él caminan los sonidos afinados.
 // ==============================================================================================================================================
 // FUNCIONAMIENTO (LEDs — 6 SMD de placa)
 // ==============================================================================================================================================
@@ -113,6 +126,16 @@
 // - CAOS → chispas blancas · BEAT REPEAT → LED 5 rojo.
 // - MENSAJES: banco → N LEDs amarillos · SEQ verde / PERC azul · filtro IMU
 //   violeta / POTS blanco · velocidad → 1 (×½) / 2 (×1) / 4 (×2) LEDs celestes.
+//
+// MODO DE USO:
+// 1. Aprieta BTN1 a BTN5: cada uno dispara un sonido del banco LEADS (modo PERC).
+// 2. Aprieta BTN2 y BTN4 a la vez para pasar al siguiente banco: TEXTURAS, FX, BAJOS.
+// 3. Aprieta BTN1 y BTN3 a la vez: entras al modo SEQ y el secuenciador parte solo.
+//    BTN1 lo para, BTN3 mantenido repite y BTN5 mantenido mete caos.
+// 4. Aprieta BTN4 y BTN5 a la vez para ir al panel B: POT1 cierra el filtro y POT4
+//    le pone wobble. Otra vez al panel C: POT1 y POT2 cambian ataque y cola.
+//    Cada pot toma el control recién cuando lo mueves.
+// 5. BTN3 y BTN5 a la vez abren el panel D: nota, escala y patrones.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

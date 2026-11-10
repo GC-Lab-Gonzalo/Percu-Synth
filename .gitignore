@@ -10,6 +10,9 @@
 # Arduino IDE build artifacts — el .bin que importa ya está en firmware/
 tools/percu_control/build/
 
+# Compilaciones del simulador (se regeneran al abrir un .ino)
+tools/simulador/build/
+
 # Python (herramientas locales)
 __pycache__/
 *.pyc
@@ -69,3 +72,18 @@ tools/oximeter_midi_sync/
 # de la placa son los gerbers y los PDF, no el respaldo del editor.
 Hardware/*.json
 Hardware/Percu-synth_*.zip
+
+# Se quedan en local por ahora (pedido de Gonzalo, 2026-11-10)
+firmwares/terror/
+firmwares/lampara_lava/
+firmwares/aves_samples/
+firmwares/lanzador_canciones/
+firmwares/reel_taller/
+firmwares/oled_imagen/
+firmwares/oled_clip/
+canciones/
+Imagenes/conexion_servo/
+Imagenes/PCB V2.jpeg
+Imagenes/Percusynth V2.jpeg
+Imagenes/Percusynth V2-2.jpeg
+Imagenes/v2.jpg

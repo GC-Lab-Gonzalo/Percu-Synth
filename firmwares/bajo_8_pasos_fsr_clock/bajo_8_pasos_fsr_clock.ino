@@ -54,8 +54,11 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
-// Secuenciador de 8 pasos que toca un BAJO MONOFÓNICO lleno de armónicos:
+// Secuenciador de 8 pasos que toca un BAJO MONOFÓNICO lleno de armónicos. Un sensor de
+// presión (FSR) abre el filtro mientras lo aprietas, y por el DIN-5 sale el reloj MIDI
+// para que otro sinte siga el tempo del bajo.
 //
+// El sonido:
 //   · Dos sierras PolyBLEP (una desafinada +9 cents) + una cuadrada una octava abajo
 //   · Saturación suave → filtro pasa-bajos resonante (SVF) con ENVOLVENTE DE FILTRO:
 //     cada nota abre el filtro y se cierra con el decay → el "pluck" típico de bajo
@@ -90,6 +93,7 @@
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
 // - BTN1 → PLAY / STOP. Play arranca siempre desde el paso 1 y suena en el acto.
+//          Manda MIDI Start al dar Play y MIDI Stop al parar.
 // - BTN2 → PANEL A : POT1..POT4 = nota de los pasos 1..4
 // - BTN3 → PANEL B : POT1..POT4 = nota de los pasos 5..8
 // - BTN4 → PANEL C : POT1 volumen · POT2 velocidad (60–200 BPM, semicorcheas) ·
@@ -142,6 +146,16 @@
 // 3. Apriétalo todo lo que vayas a apretarlo tocando, mira `raw` → va en FSR_APRETADO.
 // 4. Vuelve MOSTRAR_ESTADO a 0 y flashea de nuevo (un print por USB CDC bloquea el core
 //    que lo hace hasta que el PC lea, y eso vacía el DMA del audio: se oye como un clic).
+//
+// MODO DE USO:
+// 1. Aprieta BTN1: suena al tiro un patrón de arranque de 8 notas a ~120 BPM.
+// 2. Aprieta el FSR mientras suena: el bajo se abre y brilla; al soltarlo vuelve al
+//    sonido del POT4 del panel C.
+// 3. Aprieta BTN2 y mueve POT1..POT4 para cambiar las notas de los pasos 1 a 4;
+//    BTN3 hace lo mismo con los pasos 5 a 8. Un pot al mínimo deja ese paso en silencio.
+// 4. Aprieta BTN4: POT2 cambia el tempo (también el del reloj MIDI), POT3 el decay y
+//    POT4 el cutoff. BTN5 sube la octava.
+// 5. Conecta un sinte o caja de ritmos al DIN-5: arranca y para junto con BTN1.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

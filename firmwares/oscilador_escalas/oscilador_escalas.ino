@@ -35,6 +35,11 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Un dron de cuatro osciladores: cada perilla es un oscilador y elige su nota dentro
+// de la escala activa, así que todo lo que armes suena en tono. Los botones cambian
+// la escala, la octava y la forma de onda, cortan el sonido al tempo que marques, y
+// al inclinar el equipo (IMU) abres y cierras el filtro.
+//
 // Port del "Oscilador 4 escalas" del PROTO-SYNTH V2 (que usaba Mozzi sobre el DAC de
 // 8 bits del ESP32) al hardware del PERCU-SYNTH, SIN Mozzi: síntesis propia a
 // 44.1 kHz · 16 bits ESTÉREO por I2S hacia el PCM5102.
@@ -68,24 +73,37 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - POT1..POT4 → nota del oscilador 1..4, cuantizada a la escala activa (4 octavas,
-//                28 notas). Al mínimo (< 2 % del recorrido) ese oscilador queda EN
-//                SILENCIO, igual que en el original.
+// Cada perilla es un oscilador: su nota va cuantizada a la escala activa (4 octavas,
+// 28 notas) y al mínimo (< 2 % del recorrido) ese oscilador queda EN SILENCIO, igual
+// que en el original.
+// - POT1 → Nota del oscilador 1 (al mínimo, en silencio).
+// - POT2 → Nota del oscilador 2 (al mínimo, en silencio).
+// - POT3 → Nota del oscilador 3 (al mínimo, en silencio).
+// - POT4 → Nota del oscilador 4 (al mínimo, en silencio).
 //
-// - BTN1 → ESCALA siguiente (10 escalas, ciclo):
+// - BTN1 → Escala siguiente (ciclo de 10). Arranca en Lidio, en este orden:
 //            Jónico · Dórico · Frigio · Lidio · Mixolidio · Eólico · Locrio ·
 //            Frigio dominante (flamenca) · Doble armónica (gitana) · Menor armónica
-// - BTN2 → OCTAVA global (ciclo de 4: −1 · 0 · +1 · +2)
-// - BTN3 → INTERMITENCIA ON/OFF (el sonido se corta y enciende al tempo)
-// - BTN4 → TAP TEMPO de la intermitencia (marca 2 o más golpes; también reengancha la
-//          fase, así que el corte cae donde tú marcas). Sin tocarlo: 120 BPM
-// - BTN5 → FORMA DE ONDA siguiente (toque) · TÓNICA +1 semitono (mantener > 0.8 s)
+// - BTN2 → Octava global: −1 · 0 · +1 · +2 (ciclo de 4). Arranca en 0.
+// - BTN3 → Intermitencia on/off: el sonido se corta al tempo. El reloj corre
+//          siempre, así que puedes marcar el tempo antes de encenderla.
+// - BTN4 → Tap tempo de la intermitencia y del eco. Marca 2 o más golpes; también
+//          reengancha la fase, así que el corte cae donde tú marcas. Sin tocarlo: 120 BPM.
+// - BTN5 → Toque: forma de onda · mantener 0,8 s: tónica +1 semitono. Ondas: sierra
+//          (la de partida) · cuadrada · pulso 25 % · triangular · seno. Tónica de partida: La.
 //
-// - IMU (MPU6050): el EJE X (fijo) abre y cierra el filtro pasa-bajos resonante.
-//   Inclina el equipo y el dron respira.
+// - IMU → Inclina el equipo y el filtro se abre; plano, se cierra. Usa el EJE X
+//   del MPU6050 (para cualquier lado), con un pasa-bajos resonante: el dron respira.
 //
 // LEDs de la placa: 0..3 = los 4 osciladores (color = nota, brillo = nivel) ·
 //                   4 = escala activa (brillo = octava) · 5 = filtro (IMU) + latido del tempo.
+//
+// MODO DE USO:
+// 1. Sube el POT1 un poco desde el mínimo: suena el oscilador 1, ya en la escala.
+// 2. Sube POT2, POT3 y POT4 para sumar notas y armar un acorde que no desafina.
+// 3. Inclina el equipo para abrir el filtro (en el simulador, arrastra el pad de inclinación).
+// 4. Cambia la escala con BTN1 y la forma de onda con un toque de BTN5.
+// 5. Enciende la intermitencia con BTN3 y marca el tempo con BTN4 (2 o más toques).
 // ==============================================================================================================================================
 
 #include <Arduino.h>

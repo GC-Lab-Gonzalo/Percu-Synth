@@ -68,5 +68,6 @@ paneles, los bancos de acordes y el arpegio. Resumen:
 | Colores invertidos | `COLOR_ORDER` GRB → RGB |
 | Brillo de la tira de 6 | `LED_BRIGHT` (0–255, def 250) |
 | Brillo del LED frontal (módulo) | `ONBOARD_BRIGHT` (0–255, def 45 — bajo porque apunta a la cara) |
-| LEDs "lentos" o glitch de audio | sube `LED_REFRESH_MS` (def 22 ms) |
+| LEDs "lentos" | sube `LED_REFRESH_MS` (def 22 ms) |
+| Chasquidos de audio | ya resuelto igual que en [`pads_imu`](../pads_imu/README.md#sin-chasquidos-no-deshacer): audio en el core 1, LEDs/pots/IMU en el core 0, sin cortes de voz en seco, filtro interpolado por muestra. Si el **LED 5 destella magenta**, un buffer tardó más del 80 % de su tiempo: ahí el problema es CPU |
 | El LED RGB del módulo no enciende / va a otro pin | `ONBOARD_PIN` (def 48; algunas placas usan otro) |

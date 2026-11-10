@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PercuSynth · Terror sin SD — Controles</title>
+<style>
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-SemiBold.ttf"); font-weight: 600; }
+  @page { size: A4 landscape; margin: 13mm 14mm; }
+  :root { --tinta: #111; --gris: #555; --linea: #d8d4cc; --ambar: #F5B041; --suave: #f6f3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 10.2pt; line-height: 1.38; color: var(--tinta); background: #fff; }
+  h1, h2, th { font-family: "Archivo Ancha", "Segoe UI", sans-serif; text-transform: uppercase; }
+  h1 { font-weight: 800; font-size: 19pt; margin: 0; letter-spacing: 0; }
+  h1 + .sub { color: var(--gris); margin: 2px 0 12px; font-size: 9.5pt; }
+  h2 { font-weight: 800; font-size: 11.5pt; margin: 14px 0 6px; padding-left: 8px; border-left: 4px solid var(--ambar); }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .fijos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-weight: 600; font-size: 8.4pt; text-align: left; background: var(--tinta); color: #fff; padding: 6px 7px; }
+  td { padding: 6px 7px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  td:first-child { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 8.8pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--suave); }
+  .nota { color: var(--gris); font-size: 9pt; margin-top: 6px; }
+  .pagina2 { break-before: page; }
+  .dos { display: grid; grid-template-columns: 1.15fr 1fr; gap: 26px; }
+  .led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 1px; vertical-align: 0; border: 1px solid #0003; }
+  b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>PercuSynth · Terror sin SD</h1>
+<div class="sub">Qué hace cada control · GC Lab Chile</div>
+
+<h2>En todos los paneles</h2>
+<div class="fijos">
+  <ul>
+    <li><b>BTN4</b> → siguiente panel: General → Bajo → Capas → Voces → General.</li>
+    <li>Cada <b>Play</b> es una canción nueva (otro tema, nunca el mismo) y empieza con una <b>intro de 16 s</b>: latidos que se aceleran y un viento que crece hasta que entra la percusión con un golpe.</li>
+    <li>Un botón hace una sola cosa y suena en el momento en que lo aprietas.</li>
+  </ul>
+  <ul>
+    <li><b>LED 5</b> = el panel: <span class="led" style="background:#c80000"></span>General <span class="led" style="background:#c83c00"></span>Bajo <span class="led" style="background:#be7800"></span>Capas <span class="led" style="background:#7800a0"></span>Voces.</li>
+    <li>Al cambiar de panel, cada pot queda suelto hasta que lo muevas un 4&nbsp;%: nada salta.</li>
+    <li>Las capas y las voces suenan aunque la música esté detenida.</li>
+  </ul>
+</div>
+
+<h2>Panel por panel</h2>
+<table>
+  <tr><th style="width:8%">Panel</th><th style="width:13%">BTN1</th><th style="width:11%">BTN2</th><th style="width:14%">BTN3</th><th style="width:10%">BTN5</th><th style="width:9%">POT1</th><th style="width:11%">POT2</th><th style="width:12%">POT3</th><th style="width:12%">POT4</th></tr>
+  <tr><td>General</td><td>Play / stop: canción nueva con su intro</td><td>Tema siguiente, sin parar</td><td>Suspenso: corta todo y vuelve a entrar con un golpe a los 10&nbsp;s (otra vez = entra ya)</td><td>—</td><td>Volumen</td><td>Tempo 60–140&nbsp;BPM</td><td><b>Tensión</b> (ver página 2)</td><td>Filtro general: oscuro ↔ abierto</td></tr>
+  <tr><td>Bajo</td><td>Suena / calla</td><td>Patrón (8 ritmos)</td><td>—</td><td>—</td><td>Volumen</td><td>Filtro</td><td>Caída 40&nbsp;ms – 1,2&nbsp;s</td><td>Resonancia</td></tr>
+  <tr><td>Capas</td><td>Cuerdas que suben</td><td>Coro oscuro</td><td>Tono de tensión</td><td>Caja de música</td><td>Volumen cuerdas</td><td>Volumen coro</td><td>Volumen tono</td><td>Volumen caja</td></tr>
+  <tr><td>Voces</td><td>Dispara una voz</td><td>Categoría: risas · lamentos · susurros · niños · bebés</td><td>Reversa sí / no</td><td>—</td><td>Volumen</td><td>Pitch: 2 octavas abajo … 1 arriba (centro = como está)</td><td>Reverb</td><td>Eco</td></tr>
+</table>
+<div class="nota">Capas: un toque la hace entrar y crecer durante 24&nbsp;s en tono y presencia; otro toque la apaga en 4&nbsp;s. Voces: nunca sale la misma dos veces seguidas, y el pitch se puede girar mientras suena.</div>
+
+<div class="pagina2">
+<div class="dos">
+  <div>
+    <h2>La tensión (POT3 del General)</h2>
+    <table>
+      <tr><th style="width:24%">Recorrido</th><th>Qué entra</th></tr>
+      <tr><td>Abajo</td><td>Sólo el dron grave</td></tr>
+      <tr><td>Un poco</td><td>El bajo que pulsa</td></tr>
+      <tr><td>Un cuarto</td><td>El tic del reloj</td></tr>
+      <tr><td>Un tercio</td><td>El arpegio que sube, con eco</td></tr>
+      <tr><td>La mitad</td><td>Los tambores: taiko, tom, caja y golpe metálico, cada vez más densos</td></tr>
+      <tr><td>Dos tercios</td><td>El arpegio sube un escalón cada 2 compases; patrones intensos</td></tr>
+      <tr><td>Arriba</td><td>Un braam al empezar cada frase y un glitch al terminarla</td></tr>
+    </table>
+    <h2>Las capas (panel Capas)</h2>
+    <ul>
+      <li><b>Cuerdas</b>: cuatro notas del acorde que suben un escalón cada 3,5&nbsp;s y se van abriendo. Con la tensión alta tiemblan.</li>
+      <li><b>Coro</b>: voces oscuras cuya vocal se abre de «uu» a «aa».</li>
+      <li><b>Tono de tensión</b>: un tono que sube sin parar y nunca llega.</li>
+      <li><b>Caja de música</b>: una canción de cuna que se va desafinando.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Temas (BTN2 del General o cada Play)</h2>
+    <table>
+      <tr><th style="width:30%">Tema</th><th>Tonalidad y acordes</th></tr>
+      <tr><td>Cripta</td><td>Re frigio: Rem · Mi♭ · Rem</td></tr>
+      <tr><td>Ritual</td><td>Mi menor armónica: Mim · Do · Lam · Si</td></tr>
+      <tr><td>Abismo</td><td>Do#m · Lam · Do#m · Solm</td></tr>
+      <tr><td>Manicomio</td><td>Fa húngara menor: Fam · Re♭ · Do</td></tr>
+      <tr><td>Espiral</td><td>Mi frigio: Mim · Fam · Mim · Si♭m</td></tr>
+    </table>
+    <h2>Voces</h2>
+    <ul>
+      <li>No necesita tarjeta: trae <b>2 voces por categoría</b> (10 en total) guardadas en el firmware.</li>
+      <li>Se carga con la partición <b>Huge APP (3MB No OTA)</b>. Para cambiar las voces: <b>generar_voces_h.py</b>.</li>
+    </ul>
+    <h2>LEDs</h2>
+    <ul>
+      <li>Todo en rojo. La tira late con los tambores, un punto sube con el arpegio, las capas hacen una ola lenta y las voces una onda que la recorre.</li>
+      <li>En la intro y el suspenso hay una brasa que crece con el viento; el golpe de entrada es un estrobo.</li>
+      <li>Placa: <b>0</b> tambores · <b>1</b> bajo · <b>2</b> arpegio · <b>3</b> capas · <b>4</b> voces · <b>5</b> panel; se pone <b>magenta</b> si el audio usa más del 80&nbsp;% de su tiempo.</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

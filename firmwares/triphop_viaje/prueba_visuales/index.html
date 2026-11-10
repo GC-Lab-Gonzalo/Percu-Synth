@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor y matriz</title>
+<style>
+  :root { --fondo: #e9e6df; --texto: #1d1d1b; --suave: #5d5a54; --borde: #b9b4aa; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: var(--suave); }
+  .grilla { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 32px; }
+  @media (max-width: 860px) { .grilla { grid-template-columns: 1fr; } }
+  canvas { display: block; width: 100%; height: auto; background: #000; image-rendering: pixelated; }
+  .placa { margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; }
+  .placa label { font-size: 13px; color: var(--suave); display: flex; flex-direction: column; gap: 2px; }
+  .placa input { width: 100%; }
+  .botones { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .botones button { flex: 1; min-width: 56px; padding: 10px 0; font: 600 14px system-ui; background: #fff; border: 1px solid var(--borde); border-radius: 4px; cursor: pointer; }
+  .botones button:active { background: #ddd; }
+  .escena { margin-top: 8px; font-size: 13px; color: var(--suave); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Monitor en la OLED · efectos en la matriz</h1>
+  <p>Mueve los pots y aprieta los botones de abajo como si fueran los de la placa. La música es de mentira (86 BPM, un acorde cada 2 compases); en la placa los efectos leen los golpes reales.</p>
+  <div class="grilla">
+    <div>
+      <h2>OLED: monitor de controles</h2>
+      <p>Arriba, el panel y su estado. Después, los 4 pots: punteado y con una rayita en la posición física mientras el pot está suelto (todavía no lo tomaste); lleno cuando ya manda. El que estás moviendo se marca. Abajo, qué hacen BTN2 y BTN3 en ese panel, y los 16 pasos del compás. Al apretar un botón, su valor aparece grande por un segundo.</p>
+      <canvas id="oled" width="128" height="64"></canvas>
+      <div class="botones">
+        <button data-b="0">BTN1</button><button data-b="1">BTN2</button><button data-b="2">BTN3</button>
+        <button data-b="3">BTN4 panel</button><button data-b="4">BTN5 break</button>
+      </div>
+      <div class="placa">
+        <label>POT1<input type="range" min="0" max="1000" value="700" data-p="0"></label>
+        <label>POT2<input type="range" min="0" max="1000" value="538" data-p="1"></label>
+        <label>POT3<input type="range" min="0" max="1000" value="450" data-p="2"></label>
+        <label>POT4<input type="range" min="0" max="1000" value="1000" data-p="3"></label>
+      </div>
+    </div>
+    <div>
+      <h2>Matriz: efectos que mutan</h2>
+      <p>Bandas nítidas con negro entre medio. Cambia de efecto, de paleta y de simetría cada 2 compases, siempre en el «1». El bombo engorda las bandas, la caja gira la paleta y el patrón avanza a saltos al ritmo (negra, corchea o semicorchea, según el efecto).</p>
+      <canvas id="matriz" width="640" height="160"></canvas>
+      <div class="escena" id="escena"></div>
+    </div>
+  </div>
+</main>
+<script>
+// ════════ reloj musical de mentira ════════
+const BPM = 86, T0 = performance.now();
+const KICK = [0, 10], CAJA = [4, 12];
+let tocando = true, brk = false;
+function reloj() {
+  const s = (performance.now() - T0) / 1000, beat = s * BPM / 60;
+  return { s, beat, paso: Math.floor(beat * 4), compas: Math.floor(beat / 4) };
+}
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+// ════════ fuente 5x7 (columnas, bit 0 arriba) — la misma tabla irá al .ino ════════
+const FUENTE = {
+ ' ':[0,0,0,0,0], '%':[0x23,0x13,0x08,0x64,0x62], '+':[0x08,0x08,0x3E,0x08,0x08], '-':[0x08,0x08,0x08,0x08,0x08],
+ '.':[0,0,0x60,0x60,0], '/':[0x20,0x10,0x08,0x04,0x02], ':':[0,0,0x14,0,0], '>':[0,0x41,0x22,0x14,0x08],
+ '0':[0x3E,0x51,0x49,0x45,0x3E], '1':[0,0x42,0x7F,0x40,0], '2':[0x72,0x49,0x49,0x49,0x46], '3':[0x21,0x41,0x49,0x4D,0x33],
+ '4':[0x18,0x14,0x12,0x7F,0x10], '5':[0x27,0x45,0x45,0x45,0x39], '6':[0x3C,0x4A,0x49,0x49,0x31], '7':[0x41,0x21,0x11,0x09,0x07],
+ '8':[0x36,0x49,0x49,0x49,0x36], '9':[0x46,0x49,0x49,0x29,0x1E],
+ 'A':[0x7C,0x12,0x11,0x12,0x7C], 'B':[0x7F,0x49,0x49,0x49,0x36], 'C':[0x3E,0x41,0x41,0x41,0x22], 'D':[0x7F,0x41,0x41,0x41,0x3E],
+ 'E':[0x7F,0x49,0x49,0x49,0x41], 'F':[0x7F,0x09,0x09,0x09,0x01], 'G':[0x3E,0x41,0x41,0x51,0x73], 'H':[0x7F,0x08,0x08,0x08,0x7F],
+ 'I':[0,0x41,0x7F,0x41,0], 'J':[0x20,0x40,0x41,0x3F,0x01], 'K':[0x7F,0x08,0x14,0x22,0x41], 'L':[0x7F,0x40,0x40,0x40,0x40],
+ 'M':[0x7F,0x02,0x1C,0x02,0x7F], 'N':[0x7F,0x04,0x08,0x10,0x7F], 'O':[0x3E,0x41,0x41,0x41,0x3E], 'P':[0x7F,0x09,0x09,0x09,0x06],
+ 'Q':[0x3E,0x41,0x51,0x21,0x5E], 'R':[0x7F,0x09,0x19,0x29,0x46], 'S':[0x26,0x49,0x49,0x49,0x32], 'T':[0x03,0x01,0x7F,0x01,0x03],
+ 'U':[0x3F,0x40,0x40,0x40,0x3F], 'V':[0x1F,0x20,0x40,0x20,0x1F], 'W':[0x3F,0x40,0x38,0x40,0x3F], 'X':[0x63,0x14,0x08,0x14,0x63],
+ 'Y':[0x03,0x04,0x78,0x04,0x03], 'Z':[0x61,0x59,0x49,0x4D,0x43],
+};
+
+// ════════ OLED ════════
+const px = new Uint8Array(128 * 64);
+const cOled = document.getElementById('oled'), gOled = cOled.getContext('2d'), imgOled = gOled.createImageData(128, 64);
+function pix(x, y, v) { if (x >= 0 && x < 128 && y >= 0 && y < 64) px[y * 128 + x] = v; }
+function rect(x, y, w, h, v) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) pix(i, j, v); }
+function marco(x, y, w, h, v) { rect(x, y, w, 1, v); rect(x, y + h - 1, w, 1, v); rect(x, y, 1, h, v); rect(x + w - 1, y, 1, h, v); }
+function texto(x, y, s, v = 1, esc = 1, avance = 6) {
+  for (const ch of s) {
+    const g = FUENTE[ch] || FUENTE[' '];
+    for (let c = 0; c < 5; c++) for (let r = 0; r < 7; r++) if (g[c] >> r & 1) rect(x + c * esc, y + r * esc, esc, esc, v);
+    x += avance * esc - (esc > 1 ? 1 : 0);
+  }
+}
+const ancho = (s, esc = 1) => s.length * (6 * esc - (esc > 1 ? 1 : 0)) - esc;
+function mostrarOled() { for (let i = 0; i < px.length; i++) { const v = px[i] ? 1 : 0; imgOled.data[i*4] = 230*v; imgOled.data[i*4+1] = 240*v; imgOled.data[i*4+2] = 255*v; imgOled.data[i*4+3] = 255; } gOled.putImageData(imgOled, 0, 0); }
+
+// ════════ los controles del firmware (mismos nombres y rangos) ════════
+const DIALECTOS = ['BRISTOL', 'PORTIS', 'JAZZ HOP', 'DUB', 'NOCTURNO', 'CELESTE'];
+const KITS = ['POLVO', 'BOOM BAP', '808 DUB', 'ESCOBILLAS', 'CINTA', 'PESADO', 'SECO', 'QUEBRADO'];
+const TBAJO = ['SUB', 'DUB', 'CONTRABAJO', 'PUA', 'REESE', 'ACIDO'];
+const TMEL = ['RHODES', 'VIBRAFONO', 'PIANO POLVO', 'CLAVE', 'GUITARRA', 'CUERDAS'];
+const TPAD = ['CUERDAS', 'MELOTRON', 'CORO', 'VIDRIO'];
+const REG = ['NORMAL', '+1 OCT', '-1 OCT'];
+const pct = v => Math.round(v * 100) + '%';
+const tiempo = s => s < 1 ? Math.round(s * 1000) + 'MS' : s.toFixed(1) + 'S';
+const PANELES = [
+  { nombre: 'GENERAL', pots: [['VOL', pct], ['TEMPO', v => Math.round(58 + 52 * v) + ' BPM'], ['SWING', v => Math.round(50 + 22 * v) + '%'], ['FILTRO', pct]] },
+  { nombre: 'BATERIA', pots: [['VOL', pct], ['FILTRO', pct], ['LARGO', v => 'X' + (0.5 + v).toFixed(1)], ['DENS', pct]] },
+  { nombre: 'BAJO',    pots: [['VOL', pct], ['FILTRO', pct], ['ATAQUE', v => tiempo(0.001 * Math.pow(150, v))], ['CAIDA', v => tiempo(0.06 * Math.pow(30, v))]] },
+  { nombre: 'ARMONIA', pots: [['VOL', pct], ['FILTRO', v => 'X' + Math.pow(2, (v - 0.5) * 4).toFixed(2)], ['ATAQUE', v => tiempo(0.003 * Math.pow(120, v))], ['CAIDA', v => tiempo(0.08 * Math.pow(30, v))]] },
+  { nombre: 'PAD',     pots: [['VOL', pct], ['FILTRO', pct], ['ENVOLV', v => tiempo(0.04 * Math.pow(60, v))], ['ECO', pct]] },
+];
+const st = { panel: 0, estilo: 1, on: [true, true, true, true, true], pat: [0, 0, 0, 0, 0], kit: 4, tBajo: 2, tMel: 3, tPad: 1, reg: 0, fill: 0 };
+const pPot = [[0.70, 0.538, 0.45, 1.0], [0.88, 1.0, 0.5, 0.55], [0.9, 0.3, 0.1, 0.45], [0.85, 0.5, 0.05, 0.4], [0.7, 0.35, 0.45, 0.4]];
+const fisico = [0.7, 0.538, 0.45, 1.0], entrada = fisico.slice(), tomado = [true, true, true, true], movido = [0, 0, 0, 0];
+let aviso = null;   // { titulo, valor, hasta }
+
+function lineasBotones(p) {   // lo que dicen BTN2 y BTN3 en cada panel
+  switch (p) {
+    case 0: return [['DIALECTO', DIALECTOS[st.estilo]], ['FILL', performance.now() < st.fill ? 'EN CAMINO' : '']];
+    case 1: return [['PATRON', st.pat[1] + 1 + '/6'], ['KIT', KITS[st.kit]]];
+    case 2: return [['PATRON', st.pat[2] + 1 + '/6'], ['TIMBRE', TBAJO[st.tBajo]]];
+    case 3: return [['PATRON', st.pat[3] + 1 + '/6'], ['INSTR', TMEL[st.tMel]]];
+    case 4: return [['TIMBRE', TPAD[st.tPad]], ['REGISTRO', REG[st.reg]]];
+  }
+}
+function boton(b) {
+  const p = st.panel, ahora = performance.now();
+  let t = null;
+  if (b === 3) { st.panel = (p + 1) % 5; for (let i = 0; i < 4; i++) { entrada[i] = fisico[i]; tomado[i] = false; } t = ['PANEL', PANELES[st.panel].nombre]; }
+  else if (b === 4) { brk = !brk; t = ['BREAK', brk ? 'ADENTRO' : 'AFUERA']; }
+  else if (b === 0) {
+    if (p === 0) { tocando = !tocando; brk = false; t = ['TRANSPORTE', tocando ? 'PLAY' : 'STOP']; }
+    else { st.on[p] = !st.on[p]; t = [PANELES[p].nombre, st.on[p] ? 'SUENA' : 'CALLADO']; }
+  } else if (b === 1) {
+    if (p === 0) { st.estilo = (st.estilo + 1) % 6; t = ['DIALECTO ' + (st.estilo + 1) + '/6', DIALECTOS[st.estilo]]; }
+    else if (p === 4) { st.tPad = (st.tPad + 1) % 4; t = ['TIMBRE ' + (st.tPad + 1) + '/4', TPAD[st.tPad]]; }
+    else { st.pat[p] = (st.pat[p] + 1) % 6; t = ['PATRON', st.pat[p] + 1 + ' DE 6']; }
+  } else {
+    if (p === 0) { st.fill = ahora + 2500; t = ['FILL', 'AL FINAL']; }
+    else if (p === 1) { st.kit = (st.kit + 1) % 8; t = ['KIT ' + (st.kit + 1) + '/8', KITS[st.kit]]; }
+    else if (p === 2) { st.tBajo = (st.tBajo + 1) % 6; t = ['TIMBRE ' + (st.tBajo + 1) + '/6', TBAJO[st.tBajo]]; }
+    else if (p === 3) { st.tMel = (st.tMel + 1) % 6; t = ['INSTRUMENTO ' + (st.tMel + 1) + '/6', TMEL[st.tMel]]; }
+    else { st.reg = (st.reg + 1) % 3; t = ['REGISTRO', REG[st.reg]]; }
+  }
+  aviso = { titulo: t[0], valor: t[1], hasta: ahora + 1100 };
+}
+document.querySelectorAll('[data-b]').forEach(e => e.addEventListener('click', () => boton(+e.dataset.b)));
+document.querySelectorAll('[data-p]').forEach(e => e.addEventListener('input', () => {
+  const i = +e.dataset.p, v = e.value / 1000;
+  fisico[i] = v;
+  if (!tomado[i] && Math.abs(v - entrada[i]) > 0.04) tomado[i] = true;
+  if (tomado[i]) { pPot[st.panel][i] = v; movido[i] = performance.now(); }
+}));
+
+function dibujarMonitor(r) {
+  const ahora = performance.now(), P = PANELES[st.panel];
+  px.fill(0);
+  // cabecera invertida: nombre del panel · los 5 paneles · estado
+  rect(0, 0, 128, 9, 1);
+  texto(2, 1, P.nombre, 0);
+  for (let k = 0; k < 5; k++) { if (k === st.panel) rect(62 + k * 7, 2, 5, 5, 0); else { rect(62 + k * 7, 2, 5, 5, 0); rect(63 + k * 7, 3, 3, 3, 1); } }
+  let estado = st.panel === 0 ? (tocando ? 'PLAY' : 'STOP') : (st.on[st.panel] ? 'ON' : 'OFF');
+  if (brk && Math.floor(r.beat * 2) % 2 === 0) estado = 'BRK';
+  texto(127 - ancho(estado), 1, estado, 0);
+  // los 4 pots
+  for (let i = 0; i < 4; i++) {
+    const y = 11 + i * 8, v = pPot[st.panel][i], [nom, fmt] = P.pots[i];
+    const activo = ahora - movido[i] < 900;
+    if (activo) { rect(0, y - 1, 37, 9, 1); texto(1, y, nom, 0); } else texto(1, y, nom);
+    marco(39, y, 50, 7, 1);
+    const lleno = Math.round(v * 48);
+    for (let x = 0; x < lleno; x++) for (let j = 0; j < 5; j++) if (tomado[i] || ((x + j) & 1) === 0) pix(40 + x, y + 1 + j, 1);
+    if (!tomado[i]) { const xf = 40 + Math.round(fisico[i] * 47); rect(xf, y - 1, 1, 9, 1); }
+    const val = fmt(v);
+    texto(127 - ancho(val), y, val);
+  }
+  // BTN2 y BTN3
+  const L = lineasBotones(st.panel);
+  for (let k = 0; k < 2; k++) {
+    const y = 45 + k * 8;
+    rect(0, y - 1, 7, 9, 1);
+    texto(1, y, String(k + 2), 0);
+    texto(10, y, L[k][0]);
+    texto(127 - ancho(L[k][1]), y, L[k][1]);
+  }
+  // los 16 pasos
+  const paso = tocando ? r.paso % 16 : -1;
+  for (let s = 0; s < 16; s++) { if (s === paso) rect(s * 8, 61, 7, 3, 1); else if (s % 4 === 0) rect(s * 8 + 3, 62, 1, 2, 1); }
+  // el aviso grande de un botón
+  if (aviso && ahora < aviso.hasta) {
+    rect(6, 14, 116, 38, 0); marco(6, 14, 116, 38, 1);
+    texto(64 - (ancho(aviso.titulo) >> 1), 18, aviso.titulo);
+    const esc = ancho(aviso.valor, 2) <= 110 ? 2 : 1;
+    texto(64 - (ancho(aviso.valor, esc) >> 1), esc === 2 ? 30 : 34, aviso.valor, 1, esc);
+  }
+  mostrarOled();
+}
+
+// ════════ MATRIZ 32x8 ════════
+const cM = document.getElementById('matriz'), gM = cM.getContext('2d');
+function hsv(h, s, v) { h = ((h % 1) + 1) % 1; const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  return [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6]; }
+const TIPOS = ['INTERFERENCIA', 'ANILLOS', 'ESPIRAL', 'RAYOS', 'RAYAS', 'ROMBOS', 'CUADROS', 'DAMERO'];
+const SIMETRIAS = ['SIN SIMETRIA', 'ESPEJO', 'ESPEJO DOBLE'];
+const PALETAS = ['TRIADA', 'COMPLEMENTO', 'VECINOS', 'FUEGO Y AGUA'];
+let esc = null, fase = 0, faseObj = 0, giroPal = 0, ultimoPaso = -1, ultimoCompas = -1, kick = 0, caja = 0, ultimoT = performance.now();
+const azar = (a, b) => a + Math.random() * (b - a), elegir = a => a[Math.floor(Math.random() * a.length)];
+function sortearEscena(compas) {
+  let tipo; do tipo = Math.floor(Math.random() * TIPOS.length); while (esc && tipo === esc.tipo);
+  const hue = (compas >> 1) * 0.137 % 1;   // el tono base lo pone el acorde (aquí: cada 2 compases)
+  const paleta = Math.floor(Math.random() * PALETAS.length);
+  const pal = paleta === 0 ? [hue, hue + 1/3, hue + 2/3] : paleta === 1 ? [hue, hue + 0.5, hue] :
+              paleta === 2 ? [hue, hue + 0.08, hue + 0.16] : [0.02, 0.55, 0.08];
+  esc = { tipo, sim: Math.floor(Math.random() * 3), paleta, pal,
+    k: azar(0.25, 0.55), n: elegir([2, 3, 4, 5, 6]), sep: azar(5, 11), dif: Math.random() < 0.5, ang: elegir([0, 0.5, 1, 1.5, 2.36]),
+    sub: elegir([1, 2, 2, 4]), salto: elegir([0.25, 0.5, -0.25, 0.5]), duty: azar(0.38, 0.52), lado: elegir([2, 3, 4]) };
+  document.getElementById('escena').textContent = `${TIPOS[tipo]} · ${SIMETRIAS[esc.sim]} · paleta ${PALETAS[paleta]} · avanza ${['', 'por negra', 'por corchea', '', 'por semicorchea'][esc.sub]}`;
+}
+function campo(cx, cy) {   // el valor del campo en un LED; las bandas son sus niveles enteros
+  const r = Math.hypot(cx, cy), a = Math.atan2(cy, cx) / (2 * Math.PI);
+  switch (esc.tipo) {
+    case 0: { const d1 = Math.hypot(cx - esc.sep, cy), d2 = Math.hypot(cx + esc.sep, cy); return (esc.dif ? d1 - d2 : d1 + d2) * esc.k * 0.8; }
+    case 1: return r * esc.k;
+    case 2: return a * esc.n + r * esc.k;
+    case 3: return a * esc.n * 2;
+    case 4: return (cx * Math.cos(esc.ang) + cy * 3 * Math.sin(esc.ang)) * esc.k * 0.6;
+    case 5: return (Math.abs(cx) + Math.abs(cy) * 2) * esc.k * 0.7;
+    case 6: return Math.max(Math.abs(cx) / 4, Math.abs(cy)) * esc.k * 2.4;
+    case 7: return Math.floor(cx / esc.lado) + Math.floor(cy / esc.lado);
+  }
+}
+function matriz(r) {
+  const ahora = performance.now(), dt = (ahora - ultimoT) / 1000; ultimoT = ahora;
+  if (tocando && r.compas !== ultimoCompas && r.compas % 2 === 0) sortearEscena(r.compas);
+  if (!esc) sortearEscena(0);
+  ultimoCompas = r.compas;
+  while (tocando && ultimoPaso < r.paso) {   // cada semicorchea: los golpes y el salto del patrón
+    ultimoPaso = ultimoPaso < 0 ? r.paso : ultimoPaso + 1;
+    const s = ultimoPaso % 16;
+    if (!brk && KICK.includes(s)) kick = 1;
+    if (CAJA.includes(s)) { caja = 1; giroPal++; }
+    if (s % (4 / esc.sub) === 0) faseObj += esc.salto;
+  }
+  fase += (faseObj - fase) * (1 - Math.exp(-dt / 0.035));   // salta y se asienta en ~35 ms: se mueve a golpes
+  kick *= Math.exp(-dt / 0.12); caja *= Math.exp(-dt / 0.08);
+  const duty = clamp(esc.duty + 0.32 * kick, 0, 0.92);
+  gM.fillStyle = '#000'; gM.fillRect(0, 0, 640, 160);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 32; x++) {
+    let cx = x - 15.5, cy = y - 3.5;
+    if (esc.sim >= 1) cx = Math.abs(cx);
+    if (esc.sim === 2) cy = Math.abs(cy);
+    let c = [0, 0, 0];
+    if (esc.tipo === 7) {   // damero: los cuadros se corren de a uno con el ritmo
+      const b = campo(cx + Math.round(fase * 4) , cy);
+      if (((b % 2) + 2) % 2 === 0) c = hsv(esc.pal[((Math.floor(b / 2) + giroPal) % 3 + 3) % 3], 1, 0.6 + 0.4 * kick);
+    } else {
+      const b = campo(cx, cy) + fase, i = Math.floor(b), f = b - i;
+      if (f < duty) c = hsv(esc.pal[((i + giroPal) % 3 + 3) % 3], 1 - 0.5 * caja, 0.7 + 0.3 * kick);
+    }
+    gM.fillStyle = `rgb(${c[0] * 255 | 0},${c[1] * 255 | 0},${c[2] * 255 | 0})`;
+    gM.beginPath(); gM.arc(x * 20 + 10, y * 20 + 10, 7.5, 0, Math.PI * 2); gM.fill();
+  }
+}
+
+function cuadro() { const r = reloj(); dibujarMonitor(r); matriz(r); requestAnimationFrame(cuadro); }
+requestAnimationFrame(cuadro);
+</script>
+</body>
+</html>

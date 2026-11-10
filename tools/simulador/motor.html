@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>placa</title>
+</head>
+<body>
+<!--
+  La placa corre dentro de este iframe invisible. Así "desenchufar" o
+  "reiniciar" es simplemente recargarlo: los hilos del sketch mueren con él.
+  La interfaz (index.html) lee y escribe la memoria compartida directamente.
+-->
+<script>
+  const id = new URLSearchParams(location.search).get('b');
+  const s = document.createElement('script');
+  s.src = `build/${id}/sim.js`;
+  s.onload = () => {
+    crearPlaca({
+      locateFile: f => `build/${id}/${f}`,
+      print: t => console.log('[placa]', t),
+      printErr: t => console.warn('[placa]', t),
+      onAbort: why => parent.postMessage({ tipo: 'aborto', motivo: String(why) }, '*'),
+    }).then(m => {
+      window.placa = m;
+      parent.postMessage({ tipo: 'lista' }, '*');
+    }).catch(e => parent.postMessage({ tipo: 'aborto', motivo: String(e) }, '*'));
+  };
+  s.onerror = () => parent.postMessage({ tipo: 'aborto', motivo: 'no se pudo cargar sim.js' }, '*');
+  document.head.appendChild(s);
+  window.addEventListener('error', e => parent.postMessage({ tipo: 'aborto', motivo: String(e.message) }, '*'));
+</script>
+</body>
+</html>

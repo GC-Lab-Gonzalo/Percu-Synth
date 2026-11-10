@@ -130,6 +130,20 @@ pot **retoma el control solo cuando se mueve** ≥ 2 % desde su posición (inmun
 ruido del ADC) y solo sobre el parámetro del panel activo. El acorde, la armonía
 (Panel B) y el timbre (Panel C) **persisten** al volver al Panel A.
 
+## Sin chasquidos (no deshacer)
+
+- **El audio corre en su propia tarea en el core 1**; pots e IMU van en otra tarea en el core 0
+  a 1 kHz. Antes todo iba en `loop()` y las lecturas del ADC + el I2C del IMU podían dejar sin
+  datos al DMA, que entonces suelta ceros (chasquido que va y viene). Los botones se leen en el
+  audio, al borde de cada buffer, porque son los que tocan las voces.
+- **Ninguna voz se corta en seco.** Al cambiar de acorde con release largo, `capPad()` apagaba
+  las colas sobrantes de golpe, y `capArp()` hacía lo mismo con el arpegio rápido; en la
+  simulación eran 265 cortes de voces audibles en 84 s. Ahora salen con un fundido de ~3 ms, las
+  colas normales pasan a ~1.5 ms al cruzar −62 dB y se liberan a −82 dB, y una voz robada se
+  apaga con un declick de ~1.5 ms.
+- El filtro (IMU + LFO) se interpola **muestra a muestra**, el volumen del pad y el trémolo se
+  suavizan, y cambiar la forma de onda en vivo hace un fundido de 5 ms.
+
 ## Compilar y flashear (Arduino IDE)
 
 - Board: **ESP32S3 Dev Module**

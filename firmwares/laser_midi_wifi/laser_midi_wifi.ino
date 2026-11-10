@@ -1,54 +1,93 @@
-// ============================================================================
-// LASER MIDI WIFI — PRUEBA DE ENLACE: una nota MIDI por segundo — GC Lab Chile
-// ============================================================================
+// ==============================================================================================================================================
+// LASER MIDI WIFI — Prueba de enlace: una nota MIDI por segundo — GC Lab Chile
+// ==============================================================================================================================================
+// Desarrollado por: GC Lab Chile
+// ==============================================================================================================================================
+// REPOSITORIO: https://github.com/GC-Lab-Gonzalo/Percu-Synth
+// ==============================================================================================================================================
+// HARDWARE (usado por este firmware)
+// ==============================================================================================================================================
+// - Microcontrolador ESP32-C3 (por ejemplo una SuperMini). NO es un PercuSynth: es el nodo
+//   sensor que le va a hablar a la música.
+// - LED integrado de la placa |LED -> 8| (en la SuperMini se enciende en LOW). Si tu placa lo
+//   tiene en otro pin, pon LED_ACTIVO en false: la prueba funciona igual.
+// - Sin botones, sin perillas, sin audio y todavía sin sensor.
+// ==============================================================================================================================================
+// ARDUINO IDE — settings críticos
+// ==============================================================================================================================================
+// - Board              : ESP32C3 Dev Module
+// - USB CDC On Boot    : Enabled     <- sin esto no ves nada por el monitor serie
+// - Upload Speed       : 921600
+// - Monitor Serie      : 115200 baudios
+// ==============================================================================================================================================
+// LIBRERÍAS REQUERIDAS
+// ==============================================================================================================================================
+// - "Arduino AppleMIDI Library" de lathoub: Gestor de librerías -> buscar "AppleMIDI" ->
+//   instalar. Arrastra sola la librería MIDI de FortySevenEffects.
+// - WiFi.h y ESPmDNS.h (incluidas en el core ESP32)
+// ==============================================================================================================================================
+// CREDENCIALES
+// ==============================================================================================================================================
+// No viven en este archivo. Copia secretos.example.h a secretos.h (misma
+// carpeta del sketch) y escribe ahí el nombre y la clave de la red que crea el
+// ESP32, y los de tu WiFi si vas a usar el modo cliente. secretos.h está en el
+// .gitignore: nunca se sube al repo. Si falta, el sketch no compila y te dice qué hacer.
+// - AP_SSID / AP_CLAVE    : la red que CREA el ESP32. La inventas tú; la clave tiene que
+//                           tener 8 caracteres o más, si no la red no levanta.
+// - WIFI_SSID / WIFI_CLAVE: tu red de siempre (modo cliente). Tiene que ser de 2.4 GHz.
+// ==============================================================================================================================================
+// DESCRIPCIÓN
+// ==============================================================================================================================================
+// Prueba de enlace para un ESP32-C3 (no es un PercuSynth): manda un Do (nota MIDI 48) cada
+// segundo por WiFi usando RTP-MIDI, el "MIDI de red" que Mac, iPhone y Windows ya entienden.
+// No tiene botones ni perillas: no hay nada que tocar, solo conectarse y escuchar que llega.
+//
+// Comprueba que la cadena completa funciona antes de ponerle un sensor:
+//   ESP32-C3  ->  WiFi  ->  sesión RTP-MIDI  ->  computador
+// Cuando esto suene, el sensor es lo único que falta y lo demás ya está probado.
 //
 // DE DÓNDE VIENE
 // Nació experimentando con malabarismo: la idea es detectar las clavas en el
 // aire y que sus pasos generen música. El nodo sensor va lejos del computador
 // (en el cuerpo, en el espacio donde se lanza), por eso el MIDI viaja por WiFi.
+// ==============================================================================================================================================
+// FUNCIONAMIENTO
+// ==============================================================================================================================================
+// Esta placa no tiene botones ni perillas: no hay nada que tocar. Todo se ajusta en el
+// código antes de cargarlo.
+// - Nota       → un Do (48), canal 1, velocidad 100, cada 1 s y sostenido 200 ms.
+// - LED (8)    → se enciende con cada nota.
+// - MODO_AP    → true (por defecto): el ESP32 crea su propia red · false: se une a tu WiFi.
+// - Nombre     → se anuncia en la red como "GCLab-Laser" (NOMBRE_SESION).
+// - Monitor    → muestra la IP y el puerto, y una línea por nota con "sesión: SI/no".
 //
-// PARA QUÉ ES ESTE SKETCH
-// No hay sensor todavía. Este firmware solo manda una nota MIDI cada segundo
-// por WiFi usando RTP-MIDI, para verificar que la cadena completa funciona:
-//   ESP32-C3  ->  WiFi  ->  sesión RTP-MIDI  ->  computador
-// Cuando esto suene, el sensor es lo único que falta y lo demás ya está probado.
+// Sobre MODO_AP: el punto de acceso propio es el modo para tocar (red vacía, un salto
+// menos, no dependes del WiFi del lugar; el computador queda sin internet mientras está
+// conectado). El modo cliente es más cómodo para desarrollar. En una casa tranquila la
+// diferencia de latencia es de pocos milisegundos; el punto de acceso gana de verdad en
+// lugares con WiFi saturado. El detalle está junto a la línea MODO_AP, más abajo.
 //
-// PLACA: ESP32-C3  (no es un PercuSynth: es el nodo sensor que le va a hablar)
-//
-// AJUSTES DEL ARDUINO IDE
-// - Placa: "ESP32C3 Dev Module"
-// - USB CDC On Boot: Enabled     <- sin esto no ves nada por el monitor serie
-// - Upload Speed: 921600
-//
-// LIBRERÍA
-// Gestor de librerías -> buscar "AppleMIDI" -> instalar
-// "Arduino AppleMIDI Library" de lathoub. Arrastra sola la librería MIDI de
-// FortySevenEffects.
-//
-// CREDENCIALES
-// No viven en este archivo. Copia secretos.example.h a secretos.h (misma
-// carpeta del sketch) y escribe ahí el nombre y la clave de la red que crea el
-// ESP32, y los de tu WiFi si vas a usar el modo cliente. secretos.h está en el
-// .gitignore: nunca se sube al repo.
-//
-// CÓMO PROBARLO
-// 1. Elige el modo de red abajo (MODO_AP). Viene en true: el ESP32 crea su
-//    propia red con el nombre y la clave que pusiste en secretos.h.
-// 2. Carga y abre el monitor serie a 115200. Te muestra la IP.
-// 3. Conecta el computador a la red del ESP32. Va a decir "sin internet":
-//    es lo esperado, la red es solo para el MIDI.
-// 4. Abre la app que ESTABLECE la sesión de red. No cualquier app sirve:
+// MODO DE USO:
+// 1. Copia secretos.example.h a secretos.h y escribe ahí el nombre y la clave de la red.
+// 2. Carga el sketch y abre el monitor serie a 115200: te muestra la dirección y el puerto.
+// 3. Conecta el computador a la red del ESP32 ("sin internet" es lo esperado).
+// 4. Abre la app que ABRE la sesión de red (ver la lista abajo) y conéctate a "GCLab-Laser".
+// 5. Elige esa entrada MIDI en cualquier sinte o DAW: debería sonar un Do cada segundo.
+// ==============================================================================================================================================
+// APPS QUE ABREN LA SESIÓN (paso 4)
+// ==============================================================================================================================================
+// No cualquier app sirve:
 //    - iPhone/iPad : "RTP-MIDI (Network MIDI)" o "NetMIDI" en la App Store.
 //                    Una vez conectada, la sesión queda disponible para el
 //                    resto de apps CoreMIDI del teléfono (Synth One la ve sola).
 //                    OJO: midimittr NO sirve, solo hace Bluetooth.
 //    - Windows     : rtpMIDI de Tobias Erichsen.
 //    - Mac         : Audio MIDI Setup -> ventana Red.
-//    Busca "GCLab-Laser" (NOMBRE_SESION, más abajo) y dale Conectar.
-// 5. Abre cualquier sinte o DAW y elige esa entrada MIDI de red.
-//    Debería sonar un Do cada segundo.
-//
+// Busca "GCLab-Laser" (NOMBRE_SESION, más abajo) y dale Conectar.
+// Synth One NO abre sesiones: solo recibe MIDI que ya exista.
+// ==============================================================================================================================================
 // SI NO APARECE EN LA LISTA
+// ==============================================================================================================================================
 // - En modo punto de acceso: confirma que el computador quedó realmente en la
 //   red del ESP32 y no volvió solo a la de siempre. Pasa seguido, porque los
 //   sistemas prefieren las redes con internet.
@@ -57,14 +96,16 @@
 //   rompen el descubrimiento. Y algunos bloquean multicast entre clientes.
 // - En cualquier caso, en Mac se puede agregar a mano por IP con el botón "+"
 //   del directorio, y la sesión funciona igual.
-//
-// ----------------------------------------------------------------------------
+// - El monitor serie separa dos problemas que se confunden: "en el WiFi: 1" dice que el
+//   computador está en la red del ESP32; "sesión: SI" dice que además la sesión MIDI se abrió.
+// ==============================================================================================================================================
 // OJO CON EL AHORRO DE ENERGÍA
+// ==============================================================================================================================================
 // La línea WiFi.setSleep(false) de más abajo NO es opcional. Sin ella el ESP32
 // duerme entre paquetes y mete decenas de milisegundos de jitter impredecible
 // — justo lo que fuimos a buscar el WiFi para evitar. Si algún día notas el
 // timing errático, lo primero que hay que mirar es esa línea.
-// ----------------------------------------------------------------------------
+// ==============================================================================================================================================
 
 #include <Arduino.h>
 #include <WiFi.h>

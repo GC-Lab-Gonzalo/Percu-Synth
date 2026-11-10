@@ -72,23 +72,34 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - BTN1 → PLAY / STOP. Play arranca en el paso 1 y en el primer cuadro del video.
-// - BTN2 → PATRÓN NUEVO de la línea ácida (entra en el paso siguiente)
-// - BTN3 → TAP TEMPO (dos toques o más; 60–200 BPM)
-// - BTN4 → BOMBO sí / no (para armar quiebres; el video sigue corriendo)
-// - BTN5 → GRABAR / PARAR la grabación a la microSD (independiente de Play: puedes empezar a grabar
-//          antes del Play para tener el arranque entero)
+// - BTN1 → Play / Stop. Play arranca en el paso 1 y en el primer cuadro del video.
+// - BTN2 → Patrón nuevo de la línea ácida. Entra en el paso siguiente.
+// - BTN3 → Tap tempo (60–200 BPM). Dos toques o más; una serie nueva no arrastra el tempo de la anterior.
+// - BTN4 → Bombo sí / no. Para armar quiebres; el video sigue corriendo.
+// - BTN5 → Grabar / parar la grabación a la microSD. Independiente de Play: puedes empezar a grabar
+//          antes del Play para tener el arranque entero.
 //
 // LED 0 de la placa: apagado = sin grabar · ROJO = grabando · NARANJO = la tarjeta no alcanzó y se
 // perdió algo de audio (cámbiala por una más rápida) · ROJO PARPADEANDO 3 s = no hay tarjeta o falló.
 //
-// - POT1 → CORTE del filtro (60 Hz – 7.7 kHz)
-// - POT2 → RESONANCIA (atada al corte: con el filtro muy abierto se modera sola, nunca un pico en el agudo)
-// - POT3 → ENVOLVENTE: cuánto abre el filtro cada nota (0 – 5 octavas)
-// - POT4 → DECAY de la envolvente de filtro (40 ms – 1 s)
+// - POT1 → Corte del filtro de la línea ácida (60 Hz – 7.7 kHz).
+// - POT2 → Resonancia del filtro. Va atada al corte: con el filtro muy abierto se modera sola, nunca
+//          un pico en el agudo.
+// - POT3 → Envolvente: cuánto abre el filtro cada nota (0–5 octavas).
+// - POT4 → Decay de la envolvente de filtro (40 ms – 1 s).
+// - OLED → el video, de lado, avanzando al tempo; el contraste late con cada bombo
+// - microSD → cada toma queda en TECHNO_0001.WAV, TECHNO_0002.WAV… (estéreo 16 bit 44.1 kHz)
 //
+// El volumen es fijo (MASTER): se ajusta en el parlante o en la mesa. Parte en 126 BPM (BPM_INICIAL).
 // Pantalla al revés: cambia GIRO_180 a true (gira la imagen por hardware, sin regenerar el video).
 // Si la imagen sale con basura o se corta: baja I2C_HZ a 400000.
+//
+// MODO DE USO:
+// 1. Conecta la pantalla OLED en el conector OLED y audífonos o parlante a la salida de audio.
+// 2. Sube el sketch (ya trae un video de ejemplo en video.h) y pon la placa de lado para ver el video vertical.
+// 3. Aprieta BTN1: parte el techno y el video baila al tempo. Mueve POT1–POT4 para abrir y cerrar el filtro.
+// 4. Cambia la melodía con BTN2, marca el tempo con BTN3 y saca o mete el bombo con BTN4.
+// 5. (Opcional) Con una microSD en FAT32 en el módulo microSD, aprieta BTN5 para grabar lo que suena.
 // ==============================================================================================================================================
 
 #include <Arduino.h>

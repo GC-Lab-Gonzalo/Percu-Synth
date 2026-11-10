@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arkanoid PercuSynth — GC Lab Chile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --papel:#F3EDE0; --papel2:#E9E0CC; --tinta:#1A1A1A;
+    --rojo:#D7442E; --azul:#1F4E9C; --amarillo:#F2B630;
+    --sans:'Archivo','Arial Black',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--papel);color:var(--tinta);font-family:var(--sans);overflow:hidden}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #lienzo{display:block;border:4px solid var(--tinta);box-shadow:8px 8px 0 var(--tinta);background:var(--papel)}
+
+  /* luz de conexión: un cuadrado, rojo = sin placa, azul = conectada */
+  #conn{position:fixed;top:14px;right:14px;display:flex;align-items:center;gap:8px;
+    font-size:12px;font-weight:800;font-stretch:125%;text-transform:uppercase}
+  #connDot{width:14px;height:14px;background:var(--rojo);border:2px solid var(--tinta)}
+  #connDot.ok{background:var(--azul)}
+
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10;
+    background:rgba(243,237,224,.82)}
+  .overlay.hide{display:none}
+  .card{background:var(--papel);border:4px solid var(--tinta);box-shadow:10px 10px 0 var(--tinta);
+    padding:28px 32px 26px;max-width:min(520px,calc(100vw - 32px));text-align:center;position:relative}
+  .formas{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+  .formas i{display:block;width:26px;height:26px;border:3px solid var(--tinta)}
+  .formas .c{border-radius:50%;background:var(--rojo)}
+  .formas .q{background:var(--azul)}
+  .formas .t{width:0;height:0;border:none;border-left:15px solid transparent;border-right:15px solid transparent;
+    border-bottom:26px solid var(--amarillo)}
+  .card h1{font-size:clamp(30px,7vw,46px);font-weight:900;font-stretch:125%;text-transform:uppercase;line-height:1}
+  .card h1.rojo{color:var(--rojo)} .card h1.azul{color:var(--azul)}
+  .card p{font-size:15px;font-weight:500;line-height:1.5;margin-top:12px}
+  .teclas{display:flex;justify-content:center;gap:8px;margin-top:16px;flex-wrap:wrap}
+  .tecla{border:3px solid var(--tinta);padding:6px 10px;font-size:12px;font-weight:800;font-stretch:125%;text-transform:uppercase}
+  .tecla b{display:inline-block;width:18px;height:18px;line-height:18px;margin-right:6px;color:var(--papel);background:var(--tinta)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+  .btn{cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:800;font-stretch:125%;text-transform:uppercase;
+    border:3px solid var(--tinta);padding:11px 18px;background:var(--papel);color:var(--tinta);box-shadow:4px 4px 0 var(--tinta)}
+  .btn.prim{background:var(--rojo);color:#fff}
+  .btn:active{transform:translate(4px,4px);box-shadow:none}
+  .pie{font-size:12px;font-weight:600;margin-top:14px;opacity:.7}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="lienzo"></canvas></div>
+<div id="conn"><span id="connTxt">Sin placa</span><span id="connDot"></span></div>
+
+<div id="ovInicio" class="overlay">
+  <div class="card">
+    <div class="formas"><i class="c"></i><i class="q"></i><i class="t"></i></div>
+    <h1>Arkanoid</h1>
+    <p>Cada cristal que rompes es una nota de la pentatónica menor de La.</p>
+    <div class="teclas">
+      <span class="tecla"><b>1</b>Izquierda</span>
+      <span class="tecla"><b>3</b>Disparo</span>
+      <span class="tecla"><b>5</b>Derecha</span>
+    </div>
+    <div class="row">
+      <button class="btn prim" id="btnConectar">Conectar PercuSynth</button>
+      <button class="btn" id="btnJugar">Jugar con teclado</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="btnFirmware" style="font-size:11px;padding:7px 12px">Firmware .ino</button>
+    </div>
+    <div class="pie" id="pieInicio">Teclado: ← → para moverte · espacio dispara</div>
+  </div>
+</div>
+
+<div id="ovMsg" class="overlay hide">
+  <div class="card">
+    <div class="formas"><i class="c"></i><i class="q"></i><i class="t"></i></div>
+    <h1 id="msgTitulo">—</h1>
+    <p id="msgTexto">—</p>
+    <div class="row"><button class="btn prim" id="msgBtn">Continuar</button></div>
+    <div class="pie">Botón 3 o espacio</div>
+  </div>
+</div>
+
+<!-- ═══ FIRMWARE EMBEBIDO (descargable) — el mismo de Tilt Maze, NO se ejecuta ═══ -->
+<script type="text/plain" id="firmwareCode">// ==============================================================================================================================================
+// PERCU-SYNTH — IMU Telemetry (GC Lab Chile) — sirve para Tilt Maze y para Arkanoid
+// ==============================================================================================================================================
+// Lee el IMU (accel ±2g + gyro) + 4 pots + 5 botones y los envía por USB-Serial a 115200,
+// una linea CSV por frame (~60 Hz):
+//   A,accelX,accelY,accelZ,gyroX,gyroY,gyroZ,pot1,pot2,pot3,pot4,btn1,btn2,btn3,btn4,btn5
+// Arkanoid usa btn1 (izquierda), btn5 (derecha) y btn3 (disparo).
+// ----------------------------------------------------------------------------------------------------------------------------------------------
+// ARDUINO IDE: Board=ESP32S3 Dev Module · USB CDC On Boot=Enabled · Flash Mode=DIO · PSRAM=OPI PSRAM
+// LIBRERIAS: ESP32 core >=3.x + Wire.h (incluida)
+// ==============================================================================================================================================
+#include <Arduino.h>
+#include <Wire.h>
+
+#define SDA_PIN 21
+#define SCL_PIN 38
+#define ACCEL_LSB_PER_G  16384.0f   // +-2g
+#define GYRO_LSB_PER_DPS 131.0f     // +-250 dps
+
+#define NUM_BTN 5
+const uint8_t BTN_PINS[NUM_BTN] = {44, 42, 0, 45, 47};
+const uint8_t POT_PINS[4] = {1, 2, 8, 10};
+const unsigned long TELEMETRY_MS = 16;
+
+uint8_t imuAddr = 0x68;
+float accX=0,accY=0,accZ=0, gyrX=0,gyrY=0,gyrZ=0;
+
+int readPot(uint8_t pin){ uint32_t s=0; for(int i=0;i<8;i++) s+=analogRead(pin); return (int)(s>>3); }
+
+bool imuPing(uint8_t a){ Wire.beginTransmission(a); return (Wire.endTransmission(true)==0); }
+
+void imuBegin(){
+  Wire.begin(SDA_PIN,SCL_PIN); Wire.setClock(400000); delay(50);
+  if(imuPing(0x68)) imuAddr=0x68; else if(imuPing(0x69)) imuAddr=0x69; else imuAddr=0x68;
+  Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // wake
+  Wire.beginTransmission(imuAddr); Wire.write(0x1A); Wire.write(0x03); Wire.endTransmission(true); // DLPF
+  Wire.beginTransmission(imuAddr); Wire.write(0x1B); Wire.write(0x00); Wire.endTransmission(true); // gyro +-250
+  Wire.beginTransmission(imuAddr); Wire.write(0x1C); Wire.write(0x00); Wire.endTransmission(true); // accel +-2g
+  delay(100);
+}
+
+void readImu(){
+  Wire.beginTransmission(imuAddr); Wire.write(0x3B); Wire.endTransmission(false);
+  Wire.requestFrom((int)imuAddr,14,true);
+  if(Wire.available()>=14){
+    int16_t ax=(Wire.read()<<8)|Wire.read(); int16_t ay=(Wire.read()<<8)|Wire.read(); int16_t az=(Wire.read()<<8)|Wire.read();
+    Wire.read(); Wire.read();
+    int16_t gx=(Wire.read()<<8)|Wire.read(); int16_t gy=(Wire.read()<<8)|Wire.read(); int16_t gz=(Wire.read()<<8)|Wire.read();
+    accX=ax/ACCEL_LSB_PER_G; accY=ay/ACCEL_LSB_PER_G; accZ=az/ACCEL_LSB_PER_G;
+    gyrX=gx/GYRO_LSB_PER_DPS; gyrY=gy/GYRO_LSB_PER_DPS; gyrZ=gz/GYRO_LSB_PER_DPS;
+  }
+}
+
+void setup(){
+  Serial.begin(115200); delay(300);
+  for(int i=0;i<NUM_BTN;i++) pinMode(BTN_PINS[i], INPUT_PULLUP);
+  analogReadResolution(12); analogSetAttenuation(ADC_11db);
+  imuBegin();
+}
+
+void loop(){
+  static unsigned long last=0;
+  readImu();
+  unsigned long now=millis();
+  if(now-last>=TELEMETRY_MS){
+    last=now;
+    int p1=readPot(POT_PINS[0]),p2=readPot(POT_PINS[1]),p3=readPot(POT_PINS[2]),p4=readPot(POT_PINS[3]);
+    int b1=(digitalRead(BTN_PINS[0])==LOW)?1:0, b2=(digitalRead(BTN_PINS[1])==LOW)?1:0;
+    int b3=(digitalRead(BTN_PINS[2])==LOW)?1:0, b4=(digitalRead(BTN_PINS[3])==LOW)?1:0, b5=(digitalRead(BTN_PINS[4])==LOW)?1:0;
+    char line[160];
+    snprintf(line,sizeof(line),"A,%.2f,%.2f,%.2f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+      accX,accY,accZ,gyrX,gyrY,gyrZ,p1,p2,p3,p4,b1,b2,b3,b4,b5);
+    Serial.println(line);
+  }
+}
+</script>
+
+<script>
+"use strict";
+// ════════════════════════════════════════════════════════════════════════════
+//  ARKANOID — PercuSynth (GC Lab Chile)
+//  BTN1 izquierda · BTN5 derecha · BTN3 dispara (y lanza la bola / continúa)
+//  Cada cristal roto suena una nota de La menor pentatónica: la COLUMNA del
+//  cristal decide la nota (10 columnas = 2 octavas exactas, grave a la izquierda).
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Niveles: una fila por string, 10 columnas ──────────────────────────────
+//  .  vacío      r b y  cristal de un golpe (rojo/azul/amarillo)
+//  k  cristal negro de dos golpes (el primero lo triza)
+//  x  bloque que no se rompe (no cuenta para pasar el nivel)
+const NIVELES = [
+  { nombre:'Primeras filas', filas:[
+    'rrrrrrrrrr',
+    'bbbbbbbbbb',
+    'yyyyyyyyyy',
+    'rrrrrrrrrr' ]},
+  { nombre:'Pirámide', filas:[
+    '....kk....',
+    '...rrrr...',
+    '..bbbbbb..',
+    '.yyyyyyyy.',
+    'rrrrrrrrrr' ]},
+  { nombre:'Damero', filas:[
+    'r.b.y.r.b.',
+    '.y.r.b.y.r',
+    'k.k.k.k.k.',
+    '.r.b.y.r.b',
+    'y.b.r.y.b.' ]},
+  { nombre:'Composición', filas:[
+    'kkkkkkkkkk',
+    'rrr.bbbbbb',
+    'rrr.bbbbbb',
+    '....yy....',
+    'yyyy..rrrr' ]},
+  { nombre:'Muralla', filas:[
+    'xx......xx',
+    'kkkkkkkkkk',
+    'rbyrbyrbyr',
+    'x.x....x.x',
+    'yyyyyyyyyy' ]},
+  { nombre:'Círculo', filas:[
+    '...rrrr...',
+    '..r.bb.r..',
+    '.r.byyb.r.',
+    '.r.byyb.r.',
+    '..r.bb.r..',
+    '...rrrr...' ]},
+];
+
+// ── Escala: La menor pentatónica, dos octavas desde A3 ─────────────────────
+const SEMITONOS = [0,3,5,7,10,12,15,17,19,22];          // A C D E G · A C D E G
+const NOTA_BASE = 220;                                   // A3
+const freqColumna = c => NOTA_BASE*Math.pow(2,SEMITONOS[c]/12);
+
+// ── Medidas del tablero (unidades lógicas) ─────────────────────────────────
+const W=600, H=780, HUD=70, MARGEN=20, GAP=6, COLS=10, LADO_H=24;
+const LADO_W=(W-2*MARGEN-(COLS-1)*GAP)/COLS;
+const FILA0=HUD+50;
+const PALETA={ w:100, h:14, y:H-60, vmax:620 };
+const BOLA_R=7, VEL0=380, VEL_MAX=640, VEL_POR_GOLPE=5;
+const BALA_V=760, BALA_ESPERA=0.28;                     // s entre disparos
+
+const COLOR={ papel:'#F3EDE0', papel2:'#E9E0CC', tinta:'#1A1A1A',
+  r:'#D7442E', b:'#1F4E9C', y:'#F2B630', k:'#1A1A1A', x:'#F3EDE0' };
+
+// ── Estado ─────────────────────────────────────────────────────────────────
+const juego={ estado:'menu', nivel:0, vuelta:0, vidas:3, puntos:0,
+  record:leerRecord(), cristales:[], bola:null, paleta:{x:W/2,v:0},
+  balas:[], espera:0, temblor:0 };
+let esquirlas=[], aros=[], tAnim=0, accionMsg=null;
+
+function leerRecord(){ try{ return +(localStorage.getItem('arkanoid_record')||0); }catch(e){ return 0; } }
+function guardarRecord(){ try{ localStorage.setItem('arkanoid_record',juego.record); }catch(e){} }
+
+function cargarNivel(i){
+  const nv=NIVELES[i%NIVELES.length];
+  juego.cristales=[];
+  nv.filas.forEach((fila,f)=>{ [...fila].forEach((ch,c)=>{
+    if(ch==='.') return;
+    juego.cristales.push({ x:MARGEN+c*(LADO_W+GAP), y:FILA0+f*(LADO_H+GAP), w:LADO_W, h:LADO_H,
+      tipo:ch, col:c, vida:ch==='k'?2:1, vivo:true, golpe:0 });
+  }); });
+  juego.balas=[]; nuevaBola();
+}
+function nuevaBola(){
+  juego.bola={ x:juego.paleta.x, y:PALETA.y-BOLA_R-1, vx:0, vy:0, vel:VEL0*(1+0.08*juego.vuelta), pegada:true };
+}
+function quedanCristales(){ return juego.cristales.some(c=>c.vivo && c.tipo!=='x'); }
+
+// ── Audio: pluck de dos sierras + triángulo, filtro que se cierra ──────────
+let ac=null, salida=null, voces=[];
+function audioIniciar(){
+  if(ac){ if(ac.state==='suspended') ac.resume(); return; }
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  const techo=ac.createBiquadFilter(); techo.type='lowpass'; techo.frequency.value=12000;
+  const comp=ac.createDynamicsCompressor(); comp.threshold.value=-12; comp.ratio.value=6;
+  comp.attack.value=0.003; comp.release.value=0.15;
+  salida=ac.createGain(); salida.gain.value=0.55;
+  // eco fijo (no sigue a nada): 0.27 s, poca realimentación
+  const eco=ac.createDelay(1); eco.delayTime.value=0.27;
+  const fb=ac.createGain(); fb.gain.value=0.28; const envioEco=ac.createGain(); envioEco.gain.value=0.18;
+  const ecoLP=ac.createBiquadFilter(); ecoLP.type='lowpass'; ecoLP.frequency.value=2800;
+  salida.connect(techo); salida.connect(envioEco); envioEco.connect(eco); eco.connect(ecoLP);
+  ecoLP.connect(fb); fb.connect(eco); ecoLP.connect(techo);
+  techo.connect(comp); comp.connect(ac.destination);
+}
+function tocarNota(f,vel=0.32){
+  if(!ac) return;
+  const t=ac.currentTime;
+  const g=ac.createGain(); g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(vel,t+0.004); g.gain.setTargetAtTime(0,t+0.004,0.30);
+  const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=2.2;
+  lp.frequency.setValueAtTime(Math.min(f*9,9000),t); lp.frequency.setTargetAtTime(f*1.6,t+0.002,0.09);
+  const os=[];
+  for(const [tipo,det,niv] of [['sawtooth',-7,0.5],['sawtooth',7,0.5],['triangle',0,0.8]]){
+    const o=ac.createOscillator(); o.type=tipo; o.frequency.value=f; o.detune.value=det;
+    const n=ac.createGain(); n.gain.value=niv; o.connect(n); n.connect(lp); o.start(t); o.stop(t+1.8); os.push(o);
+  }
+  lp.connect(g); g.connect(salida);
+  const v={g,os,fin:t+1.8}; voces.push(v);
+  voces=voces.filter(x=>x.fin>t);
+  if(voces.length>14){ const vieja=voces.shift(); vieja.g.gain.cancelScheduledValues(t); vieja.g.gain.setTargetAtTime(0,t,0.006); }
+}
+// golpe que NO rompe (trizar el cristal negro, rebotar en el bloque fijo): un toque seco de ruido
+function tocarGolpe(){
+  if(!ac) return;
+  const t=ac.currentTime, n=Math.floor(ac.sampleRate*0.04);
+  const buf=ac.createBuffer(1,n,ac.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(n*0.18));
+  const s=ac.createBufferSource(); s.buffer=buf;
+  const bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1400; bp.Q.value=1.2;
+  const g=ac.createGain(); g.gain.value=0.22; s.connect(bp); bp.connect(g); g.connect(salida); s.start(t);
+}
+// nivel superado: la escala completa hacia arriba
+function arpegioFinal(){ if(!ac) return; SEMITONOS.forEach((s,i)=>setTimeout(()=>tocarNota(NOTA_BASE*Math.pow(2,s/12),0.24),i*85)); }
+
+// ── Entrada: PercuSynth por Web Serial + teclado ───────────────────────────
+const tieneSerial=('serial' in navigator);
+let puerto=null, leyendo=false;
+const placa={b1:0,b3:0,b5:0};
+const teclas={};
+async function conectar(){
+  audioIniciar();
+  if(!tieneSerial){ alert('Usa Chrome o Edge de escritorio (Web Serial).'); return; }
+  try{
+    puerto=await navigator.serial.requestPort(); await puerto.open({baudRate:115200});
+    leyendo=true; marcarConexion(true); leer(); empezar();
+  }catch(e){ marcarConexion(false); }
+}
+async function leer(){
+  const dec=new TextDecoderStream(); puerto.readable.pipeTo(dec.writable).catch(()=>{});
+  const lector=dec.readable.getReader(); let buf='';
+  try{ while(leyendo){ const {value,done}=await lector.read(); if(done) break;
+    buf+=value; const l=buf.split('\n'); buf=l.pop(); for(const ln of l) parsear(ln.trim()); } }
+  catch(e){} finally{ leyendo=false; marcarConexion(false); }
+}
+function parsear(linea){
+  if(!linea || linea[0]!=='A') return;
+  const p=linea.split(','); if(p.length!==16) return;
+  const b1=+p[11], b3=+p[13], b5=+p[15];          // A,ax,ay,az,gx,gy,gz,p1..p4,b1..b5
+  if(b3===1 && placa.b3===0) accion();          // disparo en el flanco de presión
+  placa.b1=b1; placa.b3=b3; placa.b5=b5;
+}
+function marcarConexion(ok){
+  document.getElementById('connDot').classList.toggle('ok',ok);
+  document.getElementById('connTxt').textContent=ok?'PercuSynth':'Sin placa';
+}
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k===' '||k==='arrowup'||k==='w'||k==='enter'){ e.preventDefault(); if(!e.repeat){ audioIniciar(); accion(); } }
+  if(k==='arrowleft'||k==='arrowright') e.preventDefault();
+  teclas[k]=true;
+});
+window.addEventListener('keyup',e=>{ teclas[e.key.toLowerCase()]=false; });
+function direccion(){
+  let d=0;
+  if(placa.b1||teclas['arrowleft']||teclas['a']) d-=1;
+  if(placa.b5||teclas['arrowright']||teclas['d']) d+=1;
+  return d;
+}
+
+// BTN3 / espacio: según el momento empieza, lanza la bola, dispara o continúa
+function accion(){
+  if(juego.estado==='menu'){ empezar(); return; }
+  if(juego.estado==='msg'){ cerrarMsg(); return; }
+  if(juego.estado!=='juego') return;
+  const b=juego.bola;
+  if(b.pegada){ lanzar(); return; }
+  disparar();
+}
+function lanzar(){
+  const b=juego.bola, ang=(Math.random()*0.5-0.25);
+  b.pegada=false; b.vx=b.vel*Math.sin(ang); b.vy=-b.vel*Math.cos(ang);
+}
+function disparar(){
+  if(juego.espera>0) return;
+  juego.espera=BALA_ESPERA;
+  const px=juego.paleta.x, mitad=PALETA.w/2-8;
+  juego.balas.push({x:px-mitad,y:PALETA.y-4},{x:px+mitad,y:PALETA.y-4});
+}
+
+// ── Flujo de partida ───────────────────────────────────────────────────────
+function empezar(){
+  audioIniciar();
+  juego.nivel=0; juego.vuelta=0; juego.vidas=3; juego.puntos=0; juego.paleta.x=W/2;
+  cargarNivel(0); esquirlas=[]; aros=[];
+  document.getElementById('ovInicio').classList.add('hide');
+  juego.estado='juego';
+}
+function mostrarMsg(titulo,texto,clase,despues){
+  const t=document.getElementById('msgTitulo'); t.textContent=titulo; t.className=clase||'';
+  document.getElementById('msgTexto').textContent=texto;
+  document.getElementById('ovMsg').classList.remove('hide');
+  juego.estado='msg'; accionMsg=despues;
+}
+function cerrarMsg(){
+  document.getElementById('ovMsg').classList.add('hide');
+  const f=accionMsg; accionMsg=null; juego.estado='juego'; if(f) f();
+}
+function nivelSuperado(){
+  arpegioFinal();
+  const sig=juego.nivel+1, vuelta=Math.floor(sig/NIVELES.length);
+  const texto = vuelta>juego.vuelta ? 'Vuelta '+(vuelta+1)+': la bola va más rápido.' : 'Sigue: '+NIVELES[sig%NIVELES.length].nombre+'.';
+  mostrarMsg('Nivel '+(juego.nivel+1),texto,'azul',()=>{ juego.nivel=sig; juego.vuelta=vuelta; cargarNivel(sig); });
+}
+function bolaPerdida(){
+  juego.vidas--; juego.temblor=0.35; juego.balas=[];
+  if(juego.vidas<=0){
+    const nuevo=juego.puntos>juego.record; if(nuevo){ juego.record=juego.puntos; guardarRecord(); }
+    mostrarMsg('Fin',(nuevo?'Récord nuevo: ':'Puntos: ')+juego.puntos,'rojo',()=>empezar());
+    return;
+  }
+  nuevaBola();
+}
+
+// ── Física ─────────────────────────────────────────────────────────────────
+function golpear(c,x,y){
+  if(c.tipo==='x'){ tocarGolpe(); c.golpe=1; return; }
+  c.vida--; c.golpe=1;
+  if(c.vida>0){ tocarGolpe(); return; }          // el negro queda trizado
+  c.vivo=false;
+  juego.puntos+= c.tipo==='k' ? 20 : 10;
+  tocarNota(freqColumna(c.col));
+  romper(c);
+  const b=juego.bola; b.vel=Math.min(VEL_MAX*(1+0.08*juego.vuelta), b.vel+VEL_POR_GOLPE);
+  if(!quedanCristales()){ juego.balas=[]; juego.estado='limpio'; setTimeout(()=>{ if(juego.estado==='limpio') nivelSuperado(); },450); }
+}
+function romper(c){
+  const col= c.tipo==='k' ? COLOR.tinta : COLOR[c.tipo];
+  for(let i=0;i<8;i++){
+    const a=Math.random()*Math.PI*2, v=120+Math.random()*220;
+    esquirlas.push({ x:c.x+Math.random()*c.w, y:c.y+Math.random()*c.h, vx:Math.cos(a)*v, vy:Math.sin(a)*v-160,
+      rot:Math.random()*6, vr:(Math.random()*2-1)*12, s:5+Math.random()*7, col, vida:0.9 });
+  }
+  aros.push({ x:c.x+c.w/2, y:c.y+c.h/2, r:6, vida:0.45, col });
+}
+function actualizar(dt){
+  // paleta: velocidad objetivo con un suavizado corto (~40 ms) para que responda al toque
+  const p=juego.paleta, dir=direccion();
+  p.v += (dir*PALETA.vmax - p.v)*Math.min(1,dt/0.04);
+  p.x = Math.max(MARGEN+PALETA.w/2, Math.min(W-MARGEN-PALETA.w/2, p.x+p.v*dt));
+  juego.espera=Math.max(0,juego.espera-dt);
+  juego.temblor=Math.max(0,juego.temblor-dt);
+  for(const c of juego.cristales) c.golpe=Math.max(0,c.golpe-dt*6);
+  if(juego.estado!=='juego') return;
+
+  const b=juego.bola;
+  if(b.pegada){ b.x=p.x; b.y=PALETA.y-BOLA_R-1; }
+  else{
+    const pasos=Math.ceil(b.vel*dt/3), h=dt/pasos;
+    for(let s=0;s<pasos;s++){ moverBola(b,h); if(juego.estado!=='juego' || juego.bola!==b) break; }
+  }
+
+  // balas
+  for(const bl of juego.balas){
+    bl.y-=BALA_V*dt;
+    for(const c of juego.cristales){
+      if(!c.vivo) continue;
+      if(bl.x>c.x && bl.x<c.x+c.w && bl.y<c.y+c.h && bl.y>c.y-12){ golpear(c,bl.x,bl.y); bl.muerta=true; break; }
+    }
+    if(bl.y<HUD) bl.muerta=true;
+  }
+  juego.balas=juego.balas.filter(bl=>!bl.muerta);
+}
+function moverBola(b,h){
+  b.x+=b.vx*h; b.y+=b.vy*h;
+  // paredes
+  if(b.x<MARGEN+BOLA_R){ b.x=MARGEN+BOLA_R; b.vx=Math.abs(b.vx); }
+  if(b.x>W-MARGEN-BOLA_R){ b.x=W-MARGEN-BOLA_R; b.vx=-Math.abs(b.vx); }
+  if(b.y<HUD+BOLA_R){ b.y=HUD+BOLA_R; b.vy=Math.abs(b.vy); }
+  // paleta: el punto de impacto decide el ángulo (±60°)
+  const p=juego.paleta;
+  if(b.vy>0 && b.y+BOLA_R>=PALETA.y && b.y-BOLA_R<=PALETA.y+PALETA.h &&
+     b.x>=p.x-PALETA.w/2-BOLA_R && b.x<=p.x+PALETA.w/2+BOLA_R){
+    const rel=Math.max(-1,Math.min(1,(b.x-p.x)/(PALETA.w/2)));
+    const ang=rel*Math.PI/3;
+    b.vx=b.vel*Math.sin(ang); b.vy=-b.vel*Math.cos(ang); b.y=PALETA.y-BOLA_R;
+  }
+  // cristales: un solo choque por paso, se rebota por el eje de menor penetración
+  for(const c of juego.cristales){
+    if(!c.vivo) continue;
+    const nx=Math.max(c.x,Math.min(b.x,c.x+c.w)), ny=Math.max(c.y,Math.min(b.y,c.y+c.h));
+    const dx=b.x-nx, dy=b.y-ny;
+    if(dx*dx+dy*dy>=BOLA_R*BOLA_R) continue;
+    const penX=Math.min(b.x+BOLA_R-c.x, c.x+c.w-(b.x-BOLA_R));
+    const penY=Math.min(b.y+BOLA_R-c.y, c.y+c.h-(b.y-BOLA_R));
+    if(penX<penY){ b.vx = b.x<c.x+c.w/2 ? -Math.abs(b.vx) : Math.abs(b.vx); b.x += b.x<c.x+c.w/2 ? -penX : penX; }
+    else          { b.vy = b.y<c.y+c.h/2 ? -Math.abs(b.vy) : Math.abs(b.vy); b.y += b.y<c.y+c.h/2 ? -penY : penY; }
+    golpear(c,b.x,b.y);
+    break;
+  }
+  // nunca casi horizontal (la bola quedaría rebotando de pared a pared)
+  const v=Math.hypot(b.vx,b.vy)||1, min=0.32*b.vel;
+  if(Math.abs(b.vy)<min){ b.vy=Math.sign(b.vy||-1)*min; }
+  const k=b.vel/Math.hypot(b.vx,b.vy); b.vx*=k; b.vy*=k;
+  if(b.y>H+BOLA_R*2) bolaPerdida();
+}
+function actualizarEfectos(dt){
+  for(const e of esquirlas){ e.vy+=900*dt; e.x+=e.vx*dt; e.y+=e.vy*dt; e.rot+=e.vr*dt; e.vida-=dt; }
+  esquirlas=esquirlas.filter(e=>e.vida>0 && e.y<H+20);
+  for(const a of aros){ a.r+=160*dt; a.vida-=dt; }
+  aros=aros.filter(a=>a.vida>0);
+}
+
+// ── Dibujo ─────────────────────────────────────────────────────────────────
+const lienzo=document.getElementById('lienzo'), g=lienzo.getContext('2d');
+let escala=1;
+function ajustar(){
+  const dpr=window.devicePixelRatio||1;
+  escala=Math.min((innerWidth-40)/W,(innerHeight-40)/H);
+  lienzo.style.width=(W*escala)+'px'; lienzo.style.height=(H*escala)+'px';
+  lienzo.width=Math.round(W*escala*dpr); lienzo.height=Math.round(H*escala*dpr);
+  g.setTransform(escala*dpr,0,0,escala*dpr,0,0);
+}
+addEventListener('resize',ajustar);
+
+function fuente(peso,px){ g.font=peso+' '+px+'px Archivo, "Arial Black", sans-serif'; try{ g.fontStretch='expanded'; }catch(e){} }
+function sombraDura(x,y,w,h,d){ g.fillStyle=COLOR.tinta; g.fillRect(x+d,y+d,w,h); }
+
+function dibujar(){
+  g.save();
+  if(juego.temblor>0){ const m=juego.temblor*14; g.translate((Math.random()-0.5)*m,(Math.random()-0.5)*m); }
+  // fondo con formas Bauhaus de bajo contraste
+  g.fillStyle=COLOR.papel; g.fillRect(-20,-20,W+40,H+40);
+  g.fillStyle=COLOR.papel2;
+  g.beginPath(); g.arc(W-40,H-120,200,Math.PI,Math.PI*1.5); g.lineTo(W-40,H-120); g.fill();
+  g.beginPath(); g.arc(70,H*0.55,90,0,Math.PI*2); g.fill();
+  g.fillRect(MARGEN,H-26,W-2*MARGEN,6);
+
+  // HUD
+  g.fillStyle=COLOR.tinta; g.fillRect(0,HUD-4,W,4);
+  fuente(900,30); g.textBaseline='middle'; g.textAlign='left';
+  g.fillText(String(juego.puntos).padStart(5,'0'),MARGEN,HUD/2);
+  fuente(800,13); g.textAlign='center';
+  g.fillText('NIVEL '+(juego.nivel+1),W/2,HUD/2-9);
+  g.fillStyle='#6b665c'; g.fillText('RÉCORD '+juego.record,W/2,HUD/2+10);
+  for(let i=0;i<3;i++){
+    const cx=W-MARGEN-12-i*30, cy=HUD/2;
+    g.beginPath(); g.arc(cx,cy,10,0,Math.PI*2);
+    if(i<juego.vidas){ g.fillStyle=COLOR.r; g.fill(); }
+    g.lineWidth=3; g.strokeStyle=COLOR.tinta; g.stroke();
+  }
+
+  // cristales
+  for(const c of juego.cristales){
+    if(!c.vivo) continue;
+    const dy=c.golpe*3;
+    sombraDura(c.x,c.y+dy,c.w,c.h,4);
+    if(c.tipo==='x'){
+      g.fillStyle=COLOR.papel; g.fillRect(c.x,c.y+dy,c.w,c.h);
+      g.save(); g.beginPath(); g.rect(c.x,c.y+dy,c.w,c.h); g.clip();
+      g.strokeStyle=COLOR.tinta; g.lineWidth=2.5;
+      for(let s=-c.h;s<c.w;s+=9){ g.beginPath(); g.moveTo(c.x+s,c.y+dy+c.h); g.lineTo(c.x+s+c.h,c.y+dy); g.stroke(); }
+      g.restore(); g.lineWidth=3; g.strokeRect(c.x+1.5,c.y+dy+1.5,c.w-3,c.h-3);
+    } else {
+      g.fillStyle=COLOR[c.tipo]; g.fillRect(c.x,c.y+dy,c.w,c.h);
+      if(c.tipo==='k' && c.vida===1){     // trizadura
+        g.strokeStyle=COLOR.papel; g.lineWidth=2.5; g.beginPath();
+        g.moveTo(c.x+c.w*0.18,c.y+dy+2); g.lineTo(c.x+c.w*0.45,c.y+dy+c.h*0.55);
+        g.lineTo(c.x+c.w*0.38,c.y+dy+c.h-2); g.moveTo(c.x+c.w*0.45,c.y+dy+c.h*0.55);
+        g.lineTo(c.x+c.w*0.8,c.y+dy+c.h*0.35); g.stroke();
+      }
+      if(c.golpe>0){ g.fillStyle='rgba(243,237,224,'+(c.golpe*0.7)+')'; g.fillRect(c.x,c.y+dy,c.w,c.h); }
+    }
+  }
+
+  // aros y esquirlas
+  for(const a of aros){
+    g.globalAlpha=Math.max(0,a.vida/0.45); g.strokeStyle=a.col; g.lineWidth=4;
+    g.beginPath(); g.arc(a.x,a.y,a.r,0,Math.PI*2); g.stroke();
+  }
+  g.globalAlpha=1;
+  for(const e of esquirlas){
+    g.save(); g.translate(e.x,e.y); g.rotate(e.rot); g.globalAlpha=Math.min(1,e.vida*2);
+    g.fillStyle=e.col; g.beginPath(); g.moveTo(-e.s/2,e.s/2); g.lineTo(e.s/2,e.s/2); g.lineTo(0,-e.s/2); g.closePath(); g.fill();
+    g.restore();
+  }
+  g.globalAlpha=1;
+
+  // balas
+  for(const bl of juego.balas){ g.fillStyle=COLOR.tinta; g.fillRect(bl.x-2,bl.y-10,4,12); }
+
+  // paleta: barra roja con sombra dura y las dos bocas de disparo
+  const p=juego.paleta, px=p.x-PALETA.w/2;
+  sombraDura(px,PALETA.y,PALETA.w,PALETA.h,4);
+  g.fillStyle=COLOR.r; g.fillRect(px,PALETA.y,PALETA.w,PALETA.h);
+  g.fillStyle=COLOR.tinta;
+  g.fillRect(px+6,PALETA.y-5,6,5); g.fillRect(px+PALETA.w-12,PALETA.y-5,6,5);
+  g.fillStyle=COLOR.y; g.fillRect(p.x-10,PALETA.y+4,20,PALETA.h-8);
+
+  // bola
+  const b=juego.bola;
+  if(b){
+    g.fillStyle='rgba(26,26,26,.25)'; g.beginPath(); g.arc(b.x+3,b.y+3,BOLA_R,0,Math.PI*2); g.fill();
+    g.fillStyle=COLOR.tinta; g.beginPath(); g.arc(b.x,b.y,BOLA_R,0,Math.PI*2); g.fill();
+    if(b.pegada && juego.estado==='juego'){
+      fuente(800,12); g.textAlign='center'; g.fillStyle=COLOR.tinta;
+      g.globalAlpha=0.55+0.45*Math.sin(tAnim*5);
+      g.fillText('BOTÓN 3 PARA LANZAR',W/2,PALETA.y-60); g.globalAlpha=1;
+    }
+  }
+  g.restore();
+}
+
+// ── Bucle ──────────────────────────────────────────────────────────────────
+let antes=performance.now();
+function bucle(ahora){
+  let dt=(ahora-antes)/1000; antes=ahora; if(dt>1/30) dt=1/30;
+  tAnim+=dt; actualizar(dt); actualizarEfectos(dt); dibujar();
+  requestAnimationFrame(bucle);
+}
+
+// ── Arranque ───────────────────────────────────────────────────────────────
+document.getElementById('btnConectar').onclick=conectar;
+document.getElementById('btnJugar').onclick=empezar;
+document.getElementById('msgBtn').onclick=()=>{ audioIniciar(); cerrarMsg(); };
+document.getElementById('btnFirmware').onclick=()=>{
+  const code=document.getElementById('firmwareCode').textContent;
+  const url=URL.createObjectURL(new Blob([code],{type:'text/plain'}));
+  const a=document.createElement('a'); a.href=url; a.download='percusynth_imu_telemetry.ino';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+if(!tieneSerial){ document.getElementById('btnConectar').style.display='none';
+  document.getElementById('pieInicio').textContent='Sin Web Serial (usa Chrome o Edge): ← → para moverte · espacio dispara'; }
+ajustar(); cargarNivel(0); requestAnimationFrame(bucle);
+</script>
+</body>
+</html>

@@ -34,6 +34,10 @@
 // ==============================================================================================================================================
 // DESCRIPCIÓN
 // ==============================================================================================================================================
+// Campanas que suenan al golpear el piso: apoyas el PercuSynth en el suelo, golpeas cerca
+// y cada golpe dispara una nota de una escala mágica (Do lidio) y un destello en una tira
+// de 68 LEDs. Eliges el instrumento (campana, marimba o guitarra eléctrica) y el efecto de luz.
+//
 // Hermano de `impact_chimes` con LUZ y TIMBRES: se apoya el PercuSynth en el PISO y, al
 // golpear el piso cerca, la vibración llega al acelerómetro como un pico → se dispara una
 // nota de la escala C LYDIA (mágica, soñadora) y un EFECTO DE LUZ reactivo sobre una tira
@@ -50,29 +54,42 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// GOLPE (acelerómetro): apoya el equipo en el piso y golpea cerca → suena una nota + luz.
-//   Golpe más fuerte = nota más fuerte y luz más brillante.
+// - IMU → Golpea el piso cerca del equipo: suena una nota y se enciende la luz.
+//   Usa el acelerómetro: golpe más fuerte = nota más fuerte y luz más brillante.
 //
-// BOTONES:
-// - BTN1 (44) → EFECTO de luz ANTERIOR  (estando en APAGADO salta al último, Barrido)
-// - BTN5 (47) → EFECTO de luz SIGUIENTE (estando en Barrido vuelve a APAGADO)
+// Botones (BTN1 y BTN5 = luz · BTN2, BTN3 y BTN4 = instrumento):
+// - BTN1 (44) → Efecto de luz anterior. Estando en APAGADO salta al último, Barrido.
+// - BTN5 (47) → Efecto de luz siguiente. Estando en Barrido vuelve a APAGADO.
 //   6 estados en ciclo circular: APAGADO · Onda · Cometa · Pulso · Chispas · Barrido
 //   ARRANCA EN APAGADO: al encender la tira queda negra hasta que elijas un efecto.
-// - BTN2 (42) → TIMBRE 1: CAMPANA  (el clásico: morph seno→sierra, cola larga)
-// - BTN3 (0)  → TIMBRE 2: MARIMBA  (fundamental + 4º armónico, ataque seco, cola corta leñosa)
-// - BTN4 (45) → TIMBRE 3: GUITARRA ELÉCTRICA (sierra + overdrive + vibrato, sostenido largo)
+// - BTN2 (42) → Timbre campana (el de partida). El clásico: morph seno→sierra, cola larga.
+// - BTN3 (0)  → Timbre marimba. Fundamental + 4º armónico, ataque seco, cola corta leñosa.
+// - BTN4 (45) → Timbre guitarra eléctrica. Sierra + overdrive + vibrato, sostenido largo.
 //   (el flash que confirma el timbre se distingue por BRILLO: tenue / medio / fuerte)
 //
-// POTENCIÓMETROS (igual que impact_chimes, contextual por timbre):
-// - POT1 (ADC1)  → Ataque
-// - POT2 (ADC2)  → Decay (cola)   [la marimba lo recorta, la guitarra lo alarga]
-// - POT3 (ADC8)  → Brillo (cutoff del filtro paso-bajos)
-// - POT4 (ADC10) → Timbre: morph (campana) · dureza del mazo (marimba) · drive (guitarra)
+// Perillas (igual que impact_chimes, contextual por timbre):
+// - POT1 (ADC1)  → Ataque: de golpe seco a entrada suave. De 0.5 ms a 150 ms (la marimba
+//                  tiene ataque fijo de ~1.5 ms y no lo usa).
+// - POT2 (ADC2)  → Decay: largo de la cola. De 0.15 s a 5 s [la marimba lo recorta, la
+//                  guitarra lo alarga].
+// - POT3 (ADC8)  → Brillo: abre el filtro paso-bajos. Cutoff de 150 Hz a 9 kHz.
+// - POT4 (ADC10) → Timbre: cambia según el instrumento. Morph seno→sierra (campana) ·
+//                  dureza del mazo (marimba) · drive (guitarra).
 //
 // DIAGNÓSTICO (sin USB):
 // - Al encender: barrido de luz + ACORDE de arranque → confirma firmware/audio/LEDs OK.
 //   El barrido dura ~0.4 s y termina en negro; después la tira queda APAGADA (efecto 0).
 // - Si NO se detecta el IMU: "latido" grave cada ~1.2 s + parpadeo magenta tenue de la tira.
+//   El firmware lo sigue buscando cada segundo y el latido se calla solo cuando aparece.
+//   Por Serial (115200) dice "IMU OK en 0x68 (WHO_AM_I = 0x..)" o "IMU NO responde".
+//   En la V2.0 el IMU y la OLED comparten conector: con la OLED puesta no hay IMU.
+//
+// MODO DE USO:
+// 1. Apoya el equipo en el piso y golpea el piso cerca: cada golpe es una nota (en el
+//    simulador, tecla G o el botón «golpe al piso»).
+// 2. Enciende la luz con BTN5 (la tira parte apagada) y recorre los efectos con BTN1 y BTN5.
+// 3. Cambia de instrumento: BTN2 campana, BTN3 marimba, BTN4 guitarra eléctrica.
+// 4. Sube POT2 para colas largas y mueve POT4 para cambiar el carácter del instrumento.
 // ==============================================================================================================================================
 
 #include <Arduino.h>
@@ -309,41 +326,90 @@ void onImpact(float sh) {
   ledOnNote(vel);                                 // siempre magenta: la nota cambia el brillo, no el color
 }
 
-// ─── IMU: detección de dirección (0x68 / 0x69) ─────────────
-bool detectIMU(uint8_t addr) {
+// ─── IMU: despertar, detectar y leer ───────────────────────
+// El IMU se da por VIVO si entrega los 6 bytes del acelerómetro, NO por su WHO_AM_I:
+// muchos MPU6050 clones contestan 0x70 / 0x72 / 0x98 en vez de 0x68 y funcionan igual
+// (la versión anterior exigía 0x68, daba "sin IMU" y quedaba tocando el latido grave
+// cada 1.2 s sin reaccionar a nada). Tampoco se mira el retorno de endTransmission(false):
+// en el core del ESP32 ese repeated-start puede dar != 0 con el IMU presente.
+// Y nunca se decide con una sola lectura en frío: setup() reintenta y loop() vuelve a
+// buscarlo cada IMU_REINTENTO_MS mientras no esté (sin delay, para no cortar el audio).
+const unsigned long IMU_REINTENTO_MS = 1000;
+unsigned long lastImuProbe = 0;
+uint8_t imuFallos = 0;             // lecturas fallidas seguidas (si se suelta el IMU)
+bool    imuBaseNueva = true;       // la primera lectura fija la línea base (sin golpe falso)
+
+void imuConfigurar(uint8_t addr) {
+  Wire.beginTransmission(addr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // despertar
+  Wire.beginTransmission(addr); Wire.write(0x1A); Wire.write(0x00); Wire.endTransmission(true); // DLPF off
+  Wire.beginTransmission(addr); Wire.write(0x1C); Wire.write(0x10); Wire.endTransmission(true); // ±8g
+}
+
+// Lee los 6 bytes del acelerómetro. Devuelve false si el IMU no contestó.
+bool imuLeer(uint8_t addr, int16_t &ax, int16_t &ay, int16_t &az) {
   Wire.beginTransmission(addr);
-  Wire.write(0x75);
-  if (Wire.endTransmission(false) != 0) return false;
+  Wire.write(0x3B);
+  Wire.endTransmission(false);                 // retorno ignorado a propósito (ver arriba)
+  Wire.requestFrom((int)addr, 6, true);
+  if (Wire.available() < 6) { while (Wire.available()) Wire.read(); return false; }
+  ax = (Wire.read() << 8) | Wire.read();
+  ay = (Wire.read() << 8) | Wire.read();
+  az = (Wire.read() << 8) | Wire.read();
+  return true;
+}
+
+uint8_t imuWhoAmI(uint8_t addr) {             // solo informativo (Serial)
+  Wire.beginTransmission(addr); Wire.write(0x75); Wire.endTransmission(false);
   Wire.requestFrom((int)addr, 1, true);
-  return (Wire.available() && (Wire.read() == 0x68));
+  return Wire.available() ? Wire.read() : 0xFF;
+}
+
+void imuAviso() {
+  char msg[96];
+  if (imuOK) snprintf(msg, sizeof msg, "IMU OK en 0x%02X (WHO_AM_I = 0x%02X)", imuAddr, imuWhoAmI(imuAddr));
+  else       snprintf(msg, sizeof msg, "IMU NO responde (0x68/0x69): suena el latido grave y se sigue buscando");
+  Serial.println(msg);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial0.println(msg);        // la DevKitC-1 tiene dos conectores USB: se imprime en los dos
+#endif
+}
+
+// Despierta el MPU en sus dos direcciones posibles y se queda con la que entrega datos.
+bool imuBuscar() {
+  const uint8_t dirs[2] = {0x68, 0x69};        // 0x69 = AD0 en alto
+  for (int k = 0; k < 2; k++) {
+    imuConfigurar(dirs[k]);
+    int16_t ax, ay, az;
+    if (imuLeer(dirs[k], ax, ay, az)) {
+      imuAddr = dirs[k]; imuOK = true; imuFallos = 0; imuBaseNueva = true;
+      return true;
+    }
+  }
+  imuOK = false;
+  return false;
 }
 
 void initIMU() {
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
-  if      (detectIMU(0x68)) { imuAddr = 0x68; imuOK = true; }
-  else if (detectIMU(0x69)) { imuAddr = 0x69; imuOK = true; }
-  else                       imuOK = false;
-  Wire.beginTransmission(imuAddr); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission(true); // wake
-  Wire.beginTransmission(imuAddr); Wire.write(0x1A); Wire.write(0x00); Wire.endTransmission(true); // DLPF off
-  Wire.beginTransmission(imuAddr); Wire.write(0x1C); Wire.write(0x10); Wire.endTransmission(true); // ±8g
-  delay(100);
+  Wire.setTimeOut(5);                          // ms: un bus colgado no frena el audio mucho rato
+  for (int intento = 0; intento < 10 && !imuBuscar(); intento++) delay(20);
+  delay(50);                                   // deja asentar el acelerómetro recién despierto
+  imuAviso();
 }
 
 void readAccel() {
-  Wire.beginTransmission(imuAddr);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
-  Wire.requestFrom((int)imuAddr, 6, true);
-  if (Wire.available() >= 6) {
-    int16_t ax = (Wire.read() << 8) | Wire.read();
-    int16_t ay = (Wire.read() << 8) | Wire.read();
-    int16_t az = (Wire.read() << 8) | Wire.read();
-    float x = ax / ACCEL_LSB_PER_G, y = ay / ACCEL_LSB_PER_G, z = az / ACCEL_LSB_PER_G;
-    float mag = sqrtf(x * x + y * y + z * z);
-    accelBaseline += 0.01f * (mag - accelBaseline);
-    shock = fabsf(mag - accelBaseline);
+  int16_t ax, ay, az;
+  if (!imuLeer(imuAddr, ax, ay, az)) {
+    if (++imuFallos >= 50) { imuOK = false; lastImuProbe = millis(); imuAviso(); }  // se soltó
+    return;
   }
+  imuFallos = 0;
+  float x = ax / ACCEL_LSB_PER_G, y = ay / ACCEL_LSB_PER_G, z = az / ACCEL_LSB_PER_G;
+  float mag = sqrtf(x * x + y * y + z * z);
+  if (imuBaseNueva) { accelBaseline = mag; imuBaseNueva = false; }
+  accelBaseline += 0.01f * (mag - accelBaseline);
+  shock = fabsf(mag - accelBaseline);
 }
 
 // ─── Filtro LPF (Q suave fijo) ─────────────────────────────
@@ -498,6 +564,11 @@ void i2s_init() {
 // ─── Setup ─────────────────────────────────────────────────
 void setup() {
   esp_log_level_set("*", ESP_LOG_NONE);
+  Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  Serial.setTxTimeoutMs(0);    // sin PC conectado, un print por USB CDC nunca bloquea el audio
+  Serial0.begin(115200);
+#endif
 
   for (int i = 0; i < NUM_BTN; i++) { pinMode(BTN_PINS[i], INPUT_PULLUP); btnLast[i] = HIGH; }
   analogReadResolution(12);
@@ -560,8 +631,13 @@ void loop() {
       trigFloor = shock * RETRIG_RATIO;
     }
   } else {
-    // — Sin IMU: "latido" grave + parpadeo magenta tenue —
-    if (t - lastBeat > 1200) {
+    // — Sin IMU: se sigue buscando (no se decide nunca con una sola lectura) —
+    if (t - lastImuProbe >= IMU_REINTENTO_MS) {
+      lastImuProbe = t;
+      if (imuBuscar()) imuAviso();
+    }
+    // — y mientras no aparece: "latido" grave + parpadeo magenta tenue —
+    if (!imuOK && t - lastBeat > 1200) {
       triggerNote(BASE_FREQ * 0.5f, 0.5f);
       lastBeat = t;
       fill_solid(leds, NUM_LEDS, magenta(40));

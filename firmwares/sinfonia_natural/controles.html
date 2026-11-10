@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>PercuSynth · Sinfonía Natural — Controles</title>
+<style>
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Archivo Ancha"; src: url("../../../jlcpcb/edit/fuentes/Archivo-Ancha-SemiBold.ttf"); font-weight: 600; }
+  @page { size: A4 landscape; margin: 13mm 14mm; }
+  :root { --tinta: #111; --gris: #555; --linea: #d8d4cc; --ambar: #F5B041; --suave: #f6f3ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; font-size: 9.7pt; line-height: 1.32; color: var(--tinta); background: #fff; }
+  h1, h2, th { font-family: "Archivo Ancha", "Segoe UI", sans-serif; text-transform: uppercase; }
+  h1 { font-weight: 800; font-size: 19pt; margin: 0; letter-spacing: 0; }
+  h1 + .sub { color: var(--gris); margin: 2px 0 10px; font-size: 9.5pt; }
+  h2 { font-weight: 800; font-size: 11pt; margin: 10px 0 5px; padding-left: 8px; border-left: 4px solid var(--ambar); }
+  p { margin: 0 0 6px; }
+  ul, ol { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-weight: 600; font-size: 8.4pt; text-align: left; background: var(--tinta); color: #fff; padding: 5px 7px; }
+  td { padding: 4px 7px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  td:first-child { font-family: "Archivo Ancha", "Segoe UI", sans-serif; font-weight: 600; text-transform: uppercase; font-size: 8.8pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--suave); }
+  .nota { color: var(--gris); font-size: 9pt; margin-top: 6px; }
+  .pagina2 { break-before: page; }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .led { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 1px; vertical-align: 0; border: 1px solid #0003; }
+  b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>PercuSynth · Sinfonía Natural</h1>
+<div class="sub">Qué es y qué hace cada control · GC Lab Chile</div>
+
+<div class="dos">
+  <div>
+    <h2>Qué es</h2>
+    <p>Un bosque que suena solo —agua que corre, aves, campanitas— con una música suave que lo acompaña. Todo, hasta el
+       canto de las aves, está dentro de una misma escala: <b>Mi · Fa# · Sol# · La · Si · Re#</b> (Mi mayor sin el sexto
+       grado). Por eso cualquier combinación suena bien: no hay notas que choquen.</p>
+    <p>La música no está grabada: la placa la compone y la toca en el momento. Lo que sí está grabado son los animales y
+       la vertiente, que van guardados dentro del programa (no necesita tarjeta microSD).</p>
+  </div>
+  <div>
+    <h2>Para empezar</h2>
+    <ol>
+      <li>Deja <b>POT1</b> (volumen) a la mitad, <b>POT2</b> al centro, <b>POT3</b> a un tercio y <b>POT4</b> a la mitad.</li>
+      <li>Aprieta <b>BTN1</b>: entra el agua, la vertiente y la música, con una campanita.</li>
+      <li>Gira <b>POT3</b> de a poco hacia la derecha: van entrando instrumentos.</li>
+      <li>Juega encima con <b>BTN3</b>, <b>BTN4</b> y <b>BTN5</b>. Si quieres otros sonidos, <b>BTN2</b>.</li>
+    </ol>
+  </div>
+</div>
+
+<h2>Botones</h2>
+<table>
+  <tr><th style="width:8%">Botón</th><th style="width:24%">Qué hace</th><th>Detalle</th></tr>
+  <tr><td>BTN1</td><td><b>Play / Stop</b></td><td>Play: entra todo con una campanita en la nota principal. Stop: todo se apaga suave en unos 2 segundos.</td></tr>
+  <tr><td>BTN2</td><td><b>Escena nueva: otros instrumentos</b></td><td>Cambia el conjunto de instrumentos (5 paletas, ver página 2; nunca repite la que sonaba), los acordes, el tempo, la melodía y las aves. Lo anterior se va rápido y lo nuevo entra en el acto.</td></tr>
+  <tr><td>BTN3</td><td><b>Canta un ave</b></td><td>Un ave cercana canta una frase dentro de la escala: un silbido largo, una frase, un trino o un gorjeo. Si la música está sonando, otra ave le contesta desde lejos.</td></tr>
+  <tr><td>BTN4</td><td><b>Cascada de campanitas</b></td><td>Entre 8 y 12 campanitas que caen sobre las notas del acorde que está sonando.</td></tr>
+  <tr><td>BTN5</td><td><b>Un animal grabado</b></td><td>Cada toque, uno distinto: búho, carpintero, chochín, grillo, mirlo, pájaros, paloma, ranas o zorzal.</td></tr>
+</table>
+<div class="nota">BTN3, BTN4 y BTN5 suenan también con la música detenida. Todos los botones suenan en el momento en que se aprietan.</div>
+
+<h2>Perillas</h2>
+<table>
+  <tr><th style="width:8%">Perilla</th><th style="width:24%">Qué hace</th><th>Detalle</th></tr>
+  <tr><td>POT1</td><td><b>Volumen</b></td><td>Abajo del todo, silencio.</td></tr>
+  <tr><td>POT2</td><td><b>Música ↔ naturaleza</b></td><td>A la izquierda sólo música; a la derecha sólo bosque (agua, viento y aves). Al centro, las dos completas.</td></tr>
+  <tr><td>POT3</td><td><b>Densidad</b></td><td>Cuántos instrumentos suenan y cuántas notas tocan. Abajo del todo sólo el bosque; al subir van entrando en orden (ver página 2). Subir agrega, nunca cambia lo que ya estaba sonando.</td></tr>
+  <tr><td>POT4</td><td><b>Vertiente</b></td><td>Volumen de una vertiente grabada que suena continua. Abajo del todo, apagada. Tiene su propio volumen: no depende de POT2.</td></tr>
+</table>
+
+<div class="pagina2">
+<div class="dos">
+  <div>
+    <h2>Qué entra al subir la densidad (POT3)</h2>
+    <table>
+      <tr><th style="width:26%">Recorrido</th><th>Qué entra</th></tr>
+      <tr><td>Abajo del todo</td><td>Sólo el bosque: el agua que corre y un viento suave</td></tr>
+      <tr><td>Apenas</td><td>Un colchón de acordes largos (el «pad»)</td></tr>
+      <tr><td>Un décimo</td><td>El bajo: una nota grave por acorde</td></tr>
+      <tr><td>Un quinto</td><td>Algunas campanitas sueltas</td></tr>
+      <tr><td>Un cuarto</td><td>Aves del bosque, a lo lejos</td></tr>
+      <tr><td>Un tercio</td><td>El arpegio: las notas del acorde, una tras otra</td></tr>
+      <tr><td>La mitad</td><td>La melodía: una frase que se repite sobre cada acorde</td></tr>
+      <tr><td>Más de la mitad</td><td>Una percusión aguda y afinada (kalimba u otra, según la escena)</td></tr>
+      <tr><td>Dos tercios</td><td>Un tambor grave y suave</td></tr>
+      <tr><td>Tres cuartos</td><td>Gotas de agua afinadas</td></tr>
+      <tr><td>Casi arriba</td><td>Un coro de aves: más aves a la vez</td></tr>
+    </table>
+    <div class="nota">Los acordes cambian cada 2 compases y vuelven a empezar cada 8; son siempre acordes que caben enteros en la escala, por eso la música flota y no «termina».</div>
+
+    <h2>Para cargarlo (Arduino IDE)</h2>
+    <ul>
+      <li>Todo va en un solo archivo, <b>sinfonia_natural.ino</b>, dentro de una carpeta que se llame <b>sinfonia_natural</b> (el IDE lo pide así). No necesita ningún otro archivo ni tarjeta microSD.</li>
+      <li>Placa ESP32S3 Dev Module · USB CDC On Boot: Enabled · Flash Mode: <b>DIO</b>. Lo demás, como viene.</li>
+      <li>Librería: <b>FastLED</b> (se instala desde el gestor de librerías).</li>
+      <li>Pesa ~2 MB porque lleva adentro los sonidos (grabaciones de campo CC0 de Freesound): el IDE tarda unos segundos en abrirlo.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Las escenas (BTN2)</h2>
+    <table>
+      <tr><th style="width:19%">Escena</th><th>Colchón</th><th>Melodía</th><th>Arpegio</th><th>Percusión aguda</th></tr>
+      <tr><td>Bosque</td><td>Coro suave</td><td>Flauta</td><td>Arpa</td><td>Kalimba</td></tr>
+      <tr><td>Cristal</td><td>Vidrio, agudo</td><td>Celesta</td><td>Caja de música</td><td>Vidrio</td></tr>
+      <tr><td>Nocturno</td><td>Cuerdas oscuras</td><td>Ocarina</td><td>Marimba</td><td>Kalimba</td></tr>
+      <tr><td>Amanecer</td><td>Cuerdas brillantes</td><td>Silbido</td><td>Arpa</td><td>Vibráfono</td></tr>
+      <tr><td>Agua</td><td>Coro suave</td><td>Clarinete</td><td>Vibráfono</td><td>Caja de música</td></tr>
+    </table>
+    <div class="nota">Al encender, la primera escena es siempre Bosque. Con el Monitor Serial abierto (115200) se ve qué escena, acordes y tempo están sonando.</div>
+
+    <h2>Luces</h2>
+    <ul>
+      <li><b>Tira de 49 LEDs</b> (después de los de la placa): luces calmas que no siguen a la música; siete efectos que se turnan solos cada minuto o algo más (aurora, atardecer, olas, luciérnagas, claros del bosque, luna, nubes). Entra con Play, se apaga con Stop.</li>
+      <li><b>Pantalla OLED</b> (opcional): un zorzal en una rama. Tocando parpadea; cuando canta el ave de BTN3 abre el pico y suelta notas. Detenido, duerme.</li>
+      <li><b>LEDs 0 a 4</b>: la densidad. Se van encendiendo <span class="led" style="background:#1e7814"></span>musgo, <span class="led" style="background:#006e50"></span>agua, <span class="led" style="background:#1e50aa"></span>cielo, <span class="led" style="background:#be780a"></span>oro y <span class="led" style="background:#d2b482"></span>crema a medida que entran instrumentos.</li>
+      <li><b>LED 5</b>: <span class="led" style="background:#12a040"></span>verde que late con el pulso cuando suena; blanco tenue cuando está detenido. <span class="led" style="background:#a0008c"></span>Magenta: la placa va al límite de lo que puede calcular (avisar si pasa).</li>
+      <li>Destellos al apretar: <span class="led" style="background:#3c96ff"></span>ave · <span class="led" style="background:#ffaa14"></span>campanitas · <span class="led" style="background:#00c8a0"></span>animal · <span class="led" style="background:#c8c8be"></span>escena nueva.</li>
+    </ul>
+
+  </div>
+</div>
+</div>
+
+</body>
+</html>

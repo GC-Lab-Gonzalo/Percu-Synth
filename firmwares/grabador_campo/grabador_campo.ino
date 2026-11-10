@@ -71,24 +71,29 @@
 // ==============================================================================================================================================
 // FUNCIONAMIENTO
 // ==============================================================================================================================================
-// - BTN1 (GPIO44) -> GRABAR / PARAR. LED 0 rojo parpadeando = grabando.
-// - BTN2 (GPIO42) -> EFECTO siguiente: NATURAL → ECO → CATEDRAL → CHORUS → FLANGER → PHASER → NATURAL
+// - BTN1 (GPIO44) -> Grabar / parar. LED 0 rojo parpadeando = grabando.
+// - BTN2 (GPIO42) -> Efecto siguiente (natural, eco, catedral, chorus…). Ciclo completo:
+//                    NATURAL → ECO → CATEDRAL → CHORUS → FLANGER → PHASER → NATURAL
 //                    (el sonido directo nunca se corta al cambiar: sólo entra y sale el efecto)
-// - BTN3 (GPIO0)  -> CONGELAR on/off: toma los últimos 3 s del ambiente y los sostiene como una
-//                    nube continua (granos al azar de esos 3 s). El filtro, el EQ y el efecto
-//                    siguen actuando sobre la nube: congela y después mueve el filtro.
-// - BTN4, BTN5    -> libres
+// - BTN3 (GPIO0)  -> Congelar on/off: sostiene los últimos 3 s como una nube. Granos al azar
+//                    de esos 3 s del ambiente. El filtro, el EQ y el efecto siguen actuando
+//                    sobre la nube: congela y después mueve el filtro.
+// - BTN4 (GPIO45) -> sin uso
+// - BTN5 (GPIO47) -> sin uso
 //
-// - POT1 (ADC1)   -> GANANCIA del micrófono, +6 … +60 dB. Un ambiente callado necesita mucha.
-// - POT2 (ADC2)   -> FILTRO. Al centro = abierto. A la izquierda cierra un pasa-bajos
-//                    (20 kHz → 120 Hz: el sonido se va lejos, detrás de una pared); a la
-//                    derecha sube un pasa-altos (20 Hz → 5 kHz: sólo queda el aire y los pájaros).
-// - POT3 (ADC8)   -> COLOR (EQ de inclinación). Al centro = plano. Izquierda = cálido y oscuro
-//                    (graves +8 dB, agudos −10 dB); derecha = brillante (agudos +10, graves −8).
-// - POT4 (ADC10)  -> CANTIDAD del efecto (en NATURAL no hace nada). ECO: nivel y repeticiones;
-//                    CATEDRAL: mezcla y tamaño; CHORUS: mezcla; FLANGER: mezcla y realimentación
+// - POT1 (ADC1)   -> Ganancia del micrófono (+6 … +60 dB). Un ambiente callado necesita mucha.
+// - POT2 (ADC2)   -> Filtro: al centro abierto, a la izquierda oscuro, a la derecha fino. A la
+//                    izquierda cierra un pasa-bajos (20 kHz → 120 Hz: el sonido se va lejos, detrás
+//                    de una pared); a la derecha sube un pasa-altos (20 Hz → 5 kHz: sólo queda el
+//                    aire y los pájaros).
+// - POT3 (ADC8)   -> Color (EQ): al centro plano, izquierda cálido, derecha brillante. Izquierda =
+//                    graves +8 dB, agudos −10 dB; derecha = agudos +10, graves −8.
+// - POT4 (ADC10)  -> Cantidad del efecto elegido con BTN2. En NATURAL no hace nada. ECO: nivel y
+//                    repeticiones; CATEDRAL: mezcla y tamaño; CHORUS: mezcla; FLANGER: mezcla y realimentación
 //                    (de suave a metálico); PHASER: profundidad de las muescas y realimentación.
 //                    La velocidad de cada modulación es fija (constantes CHORUS_HZ, FLANGER_HZ, PHASER_HZ).
+// - MICRÓFONO     -> INMP441: lo que capta pasa por toda la cadena y se oye en los audífonos
+// - microSD       -> cada toma deja CAMPO_0001.WAV (procesado) y CAMPO_0001_CRUDO.WAV (mic sin efectos)
 //
 // - LEDs:
 //     LED 0  verde tenue = lista · ROJO parpadeando = grabando · naranjo = se perdió audio
@@ -99,6 +104,13 @@
 //     LED 2  cian = congelado
 //     LED 3–5 nivel de entrada (después de la ganancia): verde > −40 dBFS · amarillo > −18 ·
 //            rojo > −3 (baja el POT1: el limitador está trabajando)
+//
+// MODO DE USO:
+// 1. Conecta el micrófono INMP441 (a 3.3 V, nunca 5 V) y el módulo microSD con los pines de arriba; tarjeta en FAT32.
+// 2. Activa la PSRAM en Herramientas (ver arriba), sube el sketch y conecta AUDÍFONOS (con parlante se acopla).
+// 3. Espera el LED 0 en verde tenue (tarjeta lista) y sube POT1 hasta oír bien el ambiente.
+// 4. Aprieta BTN1 para grabar (LED 0 rojo parpadeando); haz un aplauso al empezar para sincronizar con el video.
+// 5. Mueve el filtro y el color con POT2 y POT3, cambia de efecto con BTN2 y aprieta BTN1 de nuevo para parar.
 // ==============================================================================================================================================
 
 #ifndef SIMULADOR
